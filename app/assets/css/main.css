@@ -1,0 +1,75 @@
+/*app/assets/css/main.css*/
+:root {
+  --vg-red: #E31E24;
+  --vg-dark-blue: #003366;
+  --vg-light-blue: #0066CC;
+  --vg-gold: #FFB612;
+  --vg-gray: #F5F5F5;
+  --vg-dark-gray: #333333;
+  --vg-border: #DDDDDD;
+  --success: #28a745;
+  --warning: #ffc107;
+  --danger: #dc3545;
+  --info: #17a2b8;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+  color: var(--vg-dark-gray);
+}
+
+/* Utility Classes */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: all 0.3s;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--vg-red);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #c01820;
+}
+
+.btn-secondary {
+  background: var(--vg-light-blue);
+  color: white;
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+.card {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
