@@ -5,6 +5,10 @@ export default defineNuxtConfig({
   modules: [
     '@pinia/nuxt'
   ],
+  devServer: {
+    port: parseInt(process.env.PORT || '3130')
+  },
+
 
   css: [
     '@/assets/css/main.css'
