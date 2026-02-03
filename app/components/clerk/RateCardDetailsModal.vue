@@ -3,10 +3,24 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>{{ modalTitle }}</h3>
-        <button type="button" class="modal-close" @click="closeModal">×</button>
+        <button type="button" class="modal-close" @click="closeModal">Ã—</button>
       </div>
       
       <div class="modal-body">
+        <!-- DEBUG INFO (remove in production) -->
+        <div style="background: #f0f0f0; padding: 10px; margin-bottom: 15px; font-size: 12px; border-radius: 4px;">
+          <strong>DEBUG - Rate Card Detection:</strong><br>
+          sizeDimension: "<strong>{{ sizeDimension }}</strong>"<br>
+          selectedRateCard.size_dimension (raw): "{{ selectedRateCard?.size_dimension }}"<br>
+          selectedRateCard.ad_type: "{{ selectedRateCard?.ad_type }}"<br>
+          <br>
+          <strong>Conditions:</strong><br>
+          ✓ sizeDimension === 'per cm col': <strong>{{ sizeDimension === 'per cm col' }}</strong><br>
+          ✓ sizeDimension === 'per column': <strong>{{ sizeDimension === 'per column' }}</strong><br>
+          ✓ sizeDimension === 'per word': <strong>{{ sizeDimension === 'per word' }}</strong><br>
+          ✓ ad_type === 'classified photo/Logo': <strong>{{ selectedRateCard?.ad_type === 'classified photo/Logo' }}</strong>
+        </div>
+        
         <!-- Per cm col -->
         <div v-if="sizeDimension === 'per cm col'" class="input-group">
           <label>Number of Centimeters:</label>
@@ -25,7 +39,7 @@
             placeholder="Enter columns"
             @input="validateInput"
           >
-          <small class="help-text">Total size: {{ totalSize }} cm col ({{ details.cm }}cm × {{ details.columns }}col)</small>
+          <small class="help-text">Total size: {{ totalSize }} cm col ({{ details.cm }}cm Ã— {{ details.columns }}col)</small>
         </div>
         
         <!-- Per column -->
@@ -55,7 +69,7 @@
         </div>
         
         <!-- Classified photo/Logo -->
-        <div v-else-if="adType === 'classified photo/Logo'" class="input-group">
+        <div v-else-if="selectedRateCard?.ad_type === 'classified photo/Logo'" class="input-group">
           <label>Number of Photos/Logos:</label>
           <input 
             type="number" 
@@ -67,13 +81,22 @@
           <small class="help-text">Each photo/logo will be charged separately</small>
         </div>
         
+        <!-- FALLBACK - No condition matched -->
+        <div v-else class="input-group" style="background: #fff3cd; padding: 15px; border-radius: 4px;">
+          <strong style="color: #856404;">⚠️ No matching rate card type detected!</strong>
+          <p style="margin: 10px 0 0 0; color: #856404;">
+            None of the expected conditions matched. This rate card may not require additional details,
+            or there may be a configuration issue.
+          </p>
+        </div>
+        
         <!-- Display selected rate card info -->
         <div class="ratecard-info" v-if="selectedRateCard">
           <div class="info-row">
             <span>Base Rate:</span>
             <strong>{{ formatCurrency(selectedRateCard.basePrice || selectedRateCard.price_fc) }}</strong>
           </div>
-          <div class="info-row" v-if="sizeDimension || adType === 'classified photo/Logo'">
+          <div class="info-row" v-if="sizeDimension || selectedRateCard.ad_type === 'classified photo/Logo'">
             <span>Unit:</span>
             <strong>{{ getUnitDisplay() }}</strong>
           </div>
@@ -134,6 +157,14 @@ const details = ref({
 // Reset details when modal opens/closes
 watch(() => props.showModal, (newVal) => {
   if (newVal) {
+    console.log('[MODAL] ===== RATE CARD DETAILS MODAL OPENED =====')
+    console.log('[MODAL] selectedRateCard:', props.selectedRateCard)
+    console.log('[MODAL] selectedRateCard.size_dimension (raw):', props.selectedRateCard?.size_dimension)
+    console.log('[MODAL] selectedRateCard.ad_type:', props.selectedRateCard?.ad_type)
+    console.log('[MODAL] sizeDimension (normalized):', sizeDimension.value)
+    console.log('[MODAL] adType prop:', props.adType)
+    console.log('[MODAL] ===========================================')
+    
     details.value = {
       cm: null,
       columns: null,
@@ -146,7 +177,9 @@ watch(() => props.showModal, (newVal) => {
 // Computed properties
 const sizeDimension = computed(() => {
   if (!props.selectedRateCard) return ''
-  return props.selectedRateCard.size_dimension || ''
+  const dimension = props.selectedRateCard.size_dimension || ''
+  // Normalize underscore format to space format (e.g., "per_cm_col" -> "per cm col")
+  return dimension.replace(/_/g, ' ')
 })
 
 const modalTitle = computed(() => {
@@ -191,25 +224,46 @@ const isValidInput = computed(() => {
 })
 
 const calculatedPrice = computed(() => {
-  if (!props.selectedRateCard || !isValidInput.value) return null
+  console.log('[MODAL-CALC] === CALCULATING PRICE IN MODAL ===')
+  console.log('[MODAL-CALC] selectedRateCard:', props.selectedRateCard)
+  console.log('[MODAL-CALC] isValidInput:', isValidInput.value)
+  
+  if (!props.selectedRateCard || !isValidInput.value) {
+    console.log('[MODAL-CALC] SKIPPED - Missing rate card or invalid input')
+    return null
+  }
   
   const basePrice = props.selectedRateCard.basePrice || 
                    (props.adType === 'full_color' ? props.selectedRateCard.price_fc : props.selectedRateCard.price_bw) || 0
+  
+  console.log('[MODAL-CALC] adType prop:', props.adType)
+  console.log('[MODAL-CALC] selectedRateCard.basePrice:', props.selectedRateCard.basePrice)
+  console.log('[MODAL-CALC] selectedRateCard.price_fc:', props.selectedRateCard.price_fc)
+  console.log('[MODAL-CALC] selectedRateCard.price_bw:', props.selectedRateCard.price_bw)
+  console.log('[MODAL-CALC] Resolved basePrice:', basePrice)
   
   let unitPrice = basePrice
   
   if (sizeDimension.value === 'per cm col' && details.value.cm && details.value.columns) {
     unitPrice = basePrice * details.value.cm * details.value.columns
+    console.log('[MODAL-CALC] per cm col: basePrice', basePrice, '× cm', details.value.cm, '× columns', details.value.columns, '=', unitPrice)
   } else if (sizeDimension.value === 'per column' && details.value.columns) {
     unitPrice = basePrice * details.value.columns
+    console.log('[MODAL-CALC] per column: basePrice', basePrice, '× columns', details.value.columns, '=', unitPrice)
   } else if (sizeDimension.value === 'per word' && details.value.words) {
     unitPrice = basePrice * details.value.words
+    console.log('[MODAL-CALC] per word: basePrice', basePrice, '× words', details.value.words, '=', unitPrice)
   } else if (props.selectedRateCard.ad_type === 'classified photo/Logo' && details.value.photos) {
     unitPrice = basePrice * details.value.photos
+    console.log('[MODAL-CALC] classified photo: basePrice', basePrice, '× photos', details.value.photos, '=', unitPrice)
   }
   
   // Apply frequency
-  return unitPrice * props.frequency
+  const finalPrice = unitPrice * props.frequency
+  console.log('[MODAL-CALC] Applying frequency: unitPrice', unitPrice, '× frequency', props.frequency, '=', finalPrice)
+  console.log('[MODAL-CALC] FINAL CALCULATED PRICE:', finalPrice)
+  
+  return finalPrice
 })
 
 // Methods
@@ -252,6 +306,11 @@ const closeModal = () => {
 const saveDetails = () => {
   if (!isValidInput.value) return
   
+  console.log('[MODAL-SAVE] === SAVING RATE CARD DETAILS ===')
+  console.log('[MODAL-SAVE] Input values:', details.value)
+  console.log('[MODAL-SAVE] sizeDimension:', sizeDimension.value)
+  console.log('[MODAL-SAVE] calculatedPrice (from modal):', calculatedPrice.value)
+  
   // Prepare the details object with only relevant data
   const detailsToSave = {}
   
@@ -267,13 +326,16 @@ const saveDetails = () => {
     detailsToSave.photos = details.value.photos
   }
   
-  emit('save', {
+  const emitData = {
     rateCardId: props.selectedRateCard.id,
     sizeDimension: sizeDimension.value,
     adType: props.selectedRateCard.ad_type,
     details: detailsToSave,
     calculatedPrice: calculatedPrice.value
-  })
+  }
+  
+  console.log('[MODAL-SAVE] Emitting save event with:', JSON.stringify(emitData, null, 2))
+  emit('save', emitData)
 }
 </script>
 

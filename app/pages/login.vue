@@ -63,7 +63,7 @@
         </form>
 
         <div class="login-footer">
-          <p>© 2024 Vision Group. All rights reserved.</p>
+          <p>© 2026 Vision Group. All rights reserved.</p>
           <!----<p v-if="isDevMode" class="dev-info">API: {{ apiUrl }}/vgams-users/login</p>-->
         </div>
       </div>

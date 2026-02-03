@@ -52,6 +52,7 @@
     </div>
 
     <!-- Statistics Cards -->
+    <!--
     <div class="stats-grid">
       <StatCard 
         icon="💵"
@@ -80,6 +81,7 @@
         color="blue"
       />
     </div>
+    -->
 
     <!-- Main Content -->
     <div class="content-card">

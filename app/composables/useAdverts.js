@@ -226,13 +226,16 @@ const createAdvert = async (advertData) => {
       paymentMethod: advertData.paymentMethod,
       specialInstructions: advertData.specialInstructions || '',
       status: advertData.status || 'draft',
-      
+      discount: parseFloat(advertData.discount) || 0,
       // VGAMS user data
       vgamsUserId: vgamsUser.id,
       vgamsUserName: vgamsUser.name,
       vgamsUserEmail: vgamsUser.email,
-      vgamsUserRole: vgamsUser.role
+      vgamsUserRole: vgamsUser.role,
+      salesAgentId: advertData.salesAgentId
     }
+
+    //console.log(`Data Sent ${data.value}`);
     
     // Add data as JSON string
     formData.append('data', JSON.stringify(data))
@@ -246,10 +249,12 @@ const createAdvert = async (advertData) => {
       })
     }
     
+    /*
     console.log('📤 Sending advert data with files:', {
       hasFiles: advertData.files?.length || 0,
       userId: vgamsUser.id
     })
+    */
     
     const response = await $fetch(`${API_BASE}/adverts`, {
       method: 'POST',
@@ -257,7 +262,7 @@ const createAdvert = async (advertData) => {
       // Don't set Content-Type header - let browser set it with boundary for multipart/form-data
     })
     
-    console.log('✅ API response:', response)
+    //console.log('✅ API response:', response)
     
     // Transform response
     const newAdvert = {

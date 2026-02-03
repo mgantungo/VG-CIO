@@ -1,3 +1,4 @@
+<!-- components/clerk/PriceCalculator.vue -->
 <template>
   <div class="pricing-calculator">
     <h3>Price Calculation</h3>
@@ -12,20 +13,24 @@
         <span>{{ formatCurrency(calculation.basePrice) }}</span>
       </div>
       <div class="price-row">
-        <span>Frequency (× {{ calculation.frequency }}):</span>
+        <span>Frequency (× {{ calculation.frequency || 1 }}):</span>
         <span>{{ formatCurrency(calculation.subtotal) }}</span>
+      </div>
+      <div class="price-row" v-if="calculation.dateCount && calculation.dateCount > 1">
+        <span>Date Count (× {{ calculation.dateCount }}):</span>
+        <span>{{ formatCurrency(calculation.subtotalWithDates || (calculation.subtotal * calculation.dateCount)) }}</span>
       </div>
       <div class="price-row" v-if="calculation.surcharge > 0">
         <span>Special Position Surcharge ({{ calculation.surchargePercentage }}%):</span>
         <span>{{ formatCurrency(calculation.surcharge) }}</span>
       </div>
-      <div class="price-row">
-        <span>Discount:</span>
-        <span>{{ formatCurrency(0) }}</span>
+      <div class="price-row discount-row" v-if="discount > 0">
+        <span>Discount ({{ discount }}%):</span>
+        <span class="discount-amount">-{{ formatCurrency(calculateDiscountAmount()) }}</span>
       </div>
       <div class="price-row total">
         <span>Total Amount:</span>
-        <span>{{ formatCurrency(calculation.total) }}</span>
+        <span>{{ formatCurrency(calculateFinalTotal()) }}</span>
       </div>
     </div>
     
@@ -36,28 +41,9 @@
 </template>
 
 <script setup>
-/*  
-defineProps({
-  calculation: {
-    type: Object,
-    default: null
-  },
-  loading: {
-    type: Boolean,
-    default: false
-  }
-})
+import { computed } from 'vue'
 
-const formatCurrency = (amount) => {
-  if (!amount) return 'UGX 0'
-  return new Intl.NumberFormat('en-UG', {
-    style: 'currency',
-    currency: 'UGX'
-  }).format(amount)
-}
-  */
-
-  defineProps({
+const props = defineProps({
   calculation: {
     type: Object,
     default: null
@@ -73,19 +59,37 @@ const formatCurrency = (amount) => {
   rateCardDetails: {
     type: Object,
     default: null
+  },
+  discount: {
+    type: [String, Number],
+    default: 0
   }
 })
 
+const calculateDiscountAmount = () => {
+  if (!props.calculation || !props.discount) return 0
+  
+  const discountPercentage = parseFloat(props.discount) / 100
+  return props.calculation.total * discountPercentage
+}
+
+const calculateFinalTotal = () => {
+  if (!props.calculation) return 0
+  
+  const discountAmount = calculateDiscountAmount()
+  return props.calculation.total - discountAmount
+}
+
 const formatCurrency = (amount) => {
-  if (!amount) return 'UGX 0'
+  if (!amount && amount !== 0) return `${props.currency} 0`
+  
   return new Intl.NumberFormat('en-UG', {
     style: 'currency',
-    currency: 'UGX',
+    currency: props.currency || 'UGX',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount)
 }
-
 </script>
 
 <style scoped>
@@ -124,6 +128,19 @@ const formatCurrency = (amount) => {
   justify-content: space-between;
   padding: 10px 0;
   border-bottom: 1px solid #DDDDDD;
+}
+
+.price-row.discount-row {
+  background: linear-gradient(135deg, #F0FFF4 0%, #E6FFFA 100%);
+  padding: 10px;
+  border-radius: 6px;
+  margin: 5px 0;
+  border: 1px solid #9AE6B4;
+}
+
+.discount-amount {
+  color: #10B981;
+  font-weight: 700;
 }
 
 .price-row.total {

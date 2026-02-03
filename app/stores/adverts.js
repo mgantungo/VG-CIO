@@ -114,6 +114,9 @@ export const useAdvertsStore = defineStore('adverts', () => {
   const createAdvert = async (advertData) => {
     loading.value = true
     error.value = null
+
+    console.log(`Testing Sales Agent ${advertData.salesAgentId}`)
+
     try {
       const data = {
         data: {
@@ -133,6 +136,7 @@ export const useAdvertsStore = defineStore('adverts', () => {
           paymentMethod: advertData.paymentMethod,
           specialInstructions: advertData.specialInstructions,
           totalAmount: advertData.totalAmount || 0,
+          salesAgentId: advertData.salesAgentId,
           status: 'draft'
         }
       }

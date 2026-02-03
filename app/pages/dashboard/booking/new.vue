@@ -37,350 +37,82 @@
 
       <form @submit.prevent="submitAdvert">
         <!-- Client Information -->
-        <div class="form-section">
-          <h3 class="section-title">Client Information</h3>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>Client Name <span class="required">*</span></label>
-              <input 
-                v-model="form.clientName"
-                type="text" 
-                placeholder="e.g., MTN Uganda" 
-                required
-                :disabled="submitting || categoriesLoading"
-              >
-            </div>
-            <div class="form-group">
-              <label>Contact Person</label>
-              <input 
-                v-model="form.contactPerson"
-                type="text" 
-                placeholder="Contact name"
-                :disabled="submitting || categoriesLoading"
-              >
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Email Address <span class="required">*</span></label>
-              <input 
-                v-model="form.email"
-                type="email" 
-                placeholder="client@company.com" 
-                required
-                :disabled="submitting || categoriesLoading"
-              >
-            </div>
-            <div class="form-group">
-              <label>Phone Number <span class="required">*</span></label>
-              <input 
-                v-model="form.phone"
-                type="tel" 
-                placeholder="+256 700 000 000" 
-                required
-                :disabled="submitting || categoriesLoading"
-              >
-            </div>
-          </div>
-        </div>
+        <ClientInformation
+          v-model:client-name="form.clientName"
+          v-model:contact-person="form.contactPerson"
+          v-model:email="form.email"
+          v-model:phone="form.phone"
+          :disabled="submitting || categoriesLoading"
+          @changed="handleClientInfoChange"
+        />
 
         <!-- Advert Information -->
-        <div class="form-section">
-          <h3 class="section-title">Advert Information</h3>
-          
-          <div class="form-group">
-            <label>Advert Title <span class="required">*</span></label>
-            <input 
-              v-model="form.advertTitle"
-              type="text" 
-              placeholder="e.g., MTN New Year Campaign" 
-              required
-              :disabled="submitting || categoriesLoading"
-            >
-          </div>
-
-          <div class="form-group">
-            <label>Platform Category <span class="required">*</span></label>
-            <div class="select-wrapper">
-              <select 
-                v-model="form.platformCategory" 
-                required 
-                @change="loadProductsForCategory"
-                :disabled="submitting || categoriesLoading"
-              >
-                <option value="">Select platform category</option>
-                <option 
-                  v-for="category in activeCategories" 
-                  :key="category.id" 
-                  :value="category.category_type"
-                  :disabled="!category.is_active"
-                >
-                  {{ category.name }}
-                  <span v-if="!category.is_active">(Inactive)</span>
-                </option>
-              </select>
-              <div v-if="categoriesLoading" class="select-loading">
-                <span class="spinner-small"></span>
-              </div>
-            </div>
-            <small v-if="form.platformCategory && selectedCategory" class="category-description">
-              {{ selectedCategory.description }}
-            </small>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Product/Section <span class="required">*</span></label>
-              <div class="select-wrapper">
-                <select 
-                  v-model="form.product" 
-                  required 
-                  @change="handleProductSelected"
-                  :disabled="!form.platformCategory || submitting || productsLoading"
-                >
-                  <option value="">Select category first</option>
-                  <option 
-                    v-for="product in filteredProducts" 
-                    :key="product.id" 
-                    :value="product.id"
-                    :disabled="!product.is_active"
-                  >
-                    {{ product.name }}
-                    <span v-if="!product.is_active">(Inactive)</span>
-                    <span v-if="product.circulation" class="product-info">
-                      (Circulation: {{ formatNumber(product.circulation) }})
-                    </span>
-                  </option>
-                </select>
-                <div v-if="productsLoading" class="select-loading">
-                  <span class="spinner-small"></span>
-                </div>
-              </div>
-              <small v-if="productsLoading" class="loading-text">Loading products...</small>
-              <small v-if="form.product && selectedProduct" class="product-description">
-                {{ selectedProduct.description }}
-              </small>
-            </div>
-            
-            <div class="form-group">
-              <label>Rate Card <span class="required">*</span></label>
-              <div class="select-wrapper">
-                <select 
-                  v-model="form.rateCardId" 
-                  required 
-                  @change="handleRateCardSelected"
-                  :disabled="!form.product || submitting || rateCardsLoading"
-                >
-                  <option value="">Select product first</option>
-                  <option 
-                    v-for="rateCard in availableRateCards" 
-                    :key="rateCard.id" 
-                    :value="rateCard.id"
-                  >
-                    {{ getRateCardDisplayName(rateCard) }}
-                    <span v-if="!isRateCardActive(rateCard)" class="expired-label">(Expired)</span>
-                  </option>
-                </select>
-                <div v-if="rateCardsLoading" class="select-loading">
-                  <span class="spinner-small"></span>
-                </div>
-              </div>
-              <small v-if="rateCardsLoading" class="loading-text">Loading rate cards...</small>
-              <small v-if="selectedRateCard && selectedRateCard.effectiveDate" class="ratecard-info">
-                Effective: {{ formatDate(selectedRateCard.effectiveDate) }}
-                <span v-if="selectedRateCard.expiryDate">
-                  to {{ formatDate(selectedRateCard.expiryDate) }}
-                </span>
-              </small>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Ad Size</label>
-              <input 
-                v-model="form.adSize"
-                type="text" 
-                placeholder="e.g., Full Page, 30 sec spot"
-                :disabled="submitting || categoriesLoading"
-              >
-            </div>
-            
-            <div class="form-group">
-              <label>Color/Type</label>
-              <select 
-                v-model="form.adType" 
-                @change="handleAdTypeChange"
-                :disabled="!form.rateCardId || submitting || priceLoading"
-              >
-                <option value="full_color">Full Color</option>
-                <option value="black_white">Black & White</option>
-              </select>
-            </div>
-          </div>
-          
-          <!-- Display rate card details if available -->
-          <div v-if="rateCardDetails" class="ratecard-details-summary">
-            <div class="details-header">
-              <h4>Rate Card Details</h4>
-              <button type="button" class="btn-edit-details" @click="editRateCardDetails">
-                Edit
-              </button>
-            </div>
-            <div class="details-content">
-              <template v-if="rateCardDetails.sizeDimension === 'per cm col'">
-                <div class="detail-item">
-                  <span>Size:</span>
-                  <strong>{{ rateCardDetails.details.cm }} cm × {{ rateCardDetails.details.columns }} columns</strong>
-                  <span class="detail-info">(Total: {{ rateCardDetails.details.cm * rateCardDetails.details.columns }} cm col)</span>
-                </div>
-              </template>
-              <template v-else-if="rateCardDetails.sizeDimension === 'per column'">
-                <div class="detail-item">
-                  <span>Columns:</span>
-                  <strong>{{ rateCardDetails.details.columns }} column(s)</strong>
-                </div>
-              </template>
-              <template v-else-if="rateCardDetails.sizeDimension === 'per word'">
-                <div class="detail-item">
-                  <span>Words:</span>
-                  <strong>{{ rateCardDetails.details.words }} words</strong>
-                </div>
-              </template>
-              <template v-else-if="rateCardDetails.adType === 'classified photo/Logo'">
-                <div class="detail-item">
-                  <span>Photos/Logos:</span>
-                  <strong>{{ rateCardDetails.details.photos }} item(s)</strong>
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
+        <AdvertInformation
+          v-model:advert-title="form.advertTitle"
+          v-model:platform-category="form.platformCategory"
+          v-model:product="form.product"
+          v-model:rate-card-id="form.rateCardId"
+          v-model:ad-size="form.adSize"
+          v-model:ad-type="form.adType"
+          :disabled="submitting || categoriesLoading"
+          :categories="categories"
+          :products="products"
+          :rate-cards="rateCards"
+          :rate-card-details="rateCardDetails"
+          :categories-loading="categoriesLoading"
+          :products-loading="productsLoading"
+          :rate-cards-loading="rateCardsLoading"
+          :price-loading="priceLoading"
+          @category-change="loadProductsForCategory"
+          @product-change="handleProductSelected"
+          @ratecard-change="handleRateCardSelected"
+          @adtype-change="handleAdTypeChange"
+          @edit-ratecard-details="editRateCardDetails"
+        />
 
         <!-- Schedule & Pricing -->
-        <div class="form-section">
-          <h3 class="section-title">Schedule & Pricing</h3>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>Start Date <span class="required">*</span></label>
-              <input 
-                v-model="form.startDate"
-                type="date" 
-                required
-                :min="today"
-                :disabled="submitting || categoriesLoading"
-              >
-            </div>
-            <div class="form-group">
-              <label>End Date</label>
-              <input 
-                v-model="form.endDate"
-                type="date"
-                :min="form.startDate || today"
-                :disabled="submitting || categoriesLoading"
-              >
-            </div>
-          </div>
+        <SchedulePricing
+          ref="schedulePricingRef"
+          v-model:start-date="form.startDate"
+          v-model:end-date="form.endDate"
+          v-model:frequency="form.frequency"
+          v-model:payment-method="form.paymentMethod"
+          v-model:discount="form.discount"
+          v-model:dates-list="form.datesList"
+          :disabled="submitting || categoriesLoading"
+          :rate-card-id="form.rateCardId"
+          :price-calculation="priceCalculation"
+          :price-loading="priceLoading"
+          :min-date="today"
+          :rate-card-details="rateCardDetails"
+          :currency="selectedCurrency"
+          :platform-category="form.platformCategory"
+          @frequency-change="handleFrequencyChange"
+          @frequency-adjust="handleFrequencyAdjust"
+          @discount-change="handleDiscountChange"
+          @dates-updated="handleDatesUpdated"
+        />
 
-          <div class="form-row">
-            <div class="form-group">
-              <label>Frequency</label>
-              <div class="input-with-buttons">
-                <input 
-                  v-model.number="form.frequency"
-                  type="number" 
-                  placeholder="Number of insertions/spots" 
-                  min="1" 
-                  @change="handleFrequencyChange"
-                  :disabled="!form.rateCardId || submitting || priceLoading"
-                >
-                <div class="frequency-buttons">
-                  <button 
-                    type="button" 
-                    class="btn-frequency" 
-                    @click="adjustFrequency(-1)"
-                    :disabled="form.frequency <= 1 || !form.rateCardId || submitting"
-                  >-</button>
-                  <button 
-                    type="button" 
-                    class="btn-frequency" 
-                    @click="adjustFrequency(1)"
-                    :disabled="!form.rateCardId || submitting"
-                  >+</button>
-                </div>
-              </div>
-              <small class="help-text">Number of times the advert will run</small>
-            </div>
-            
-            <div class="form-group">
-              <label>Payment Method <span class="required">*</span></label>
-              <select 
-                v-model="form.paymentMethod" 
-                required
-                :disabled="submitting || categoriesLoading"
-              >
-                <option value="">Select payment method</option>
-                <option value="cash">Cash</option>
-                <option value="credit">Credit (Requires Approval)</option>
-                <option value="pdc">Post-Dated Cheque</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="mobile_money">Mobile Money</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Price Calculator -->
-          <div class="price-calculator-section">
-            <PriceCalculator 
-              :calculation="priceCalculation"
-              :loading="priceLoading"
-              :currency="selectedCurrency"
-              :rate-card-details="rateCardDetails"
-            />
-            
-            <div v-if="priceCalculation" class="price-summary">
-              <div class="price-summary-item">
-                <span>Base Price:</span>
-                <strong>{{ formatCurrency(priceCalculation.basePrice) }}</strong>
-              </div>
-              <div class="price-summary-item">
-                <span>Frequency (×{{ form.frequency }}):</span>
-                <strong>{{ formatCurrency(priceCalculation.subtotal) }}</strong>
-              </div>
-              <div v-if="priceCalculation.surcharge > 0" class="price-summary-item">
-                <span>Surcharge ({{ priceCalculation.surchargePercentage }}%):</span>
-                <strong>{{ formatCurrency(priceCalculation.surcharge) }}</strong>
-              </div>
-              <div class="price-summary-item total">
-                <span>Total Amount:</span>
-                <strong>{{ formatPriceWithDetails(priceCalculation.total) }}</strong>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- Sales Agent Assignment -->
+        <SalesAgentSelection
+          v-model="form.salesAgentId"
+          :disabled="submitting || categoriesLoading"
+          @agent-selected="handleAgentSelected"
+        />
 
         <!-- Special Instructions & Files -->
-        <div class="form-section">
-          <h3 class="section-title">Additional Information</h3>
-          
-          <div class="form-group">
-            <label>Special Instructions</label>
-            <textarea 
-              v-model="form.specialInstructions"
-              rows="4" 
-              placeholder="Any special requirements or instructions..."
+        <AdditionalInformation
+          v-model="form.specialInstructions"
+          :disabled="submitting || categoriesLoading"
+          :dates-string="middleDatesString"
+        >
+          <template #file-upload>
+            <FileUpload 
+              @files-updated="handleFilesUpdate"
               :disabled="submitting || categoriesLoading"
-            ></textarea>
-          </div>
-
-          <FileUpload 
-            @files-updated="handleFilesUpdate"
-            :disabled="submitting || categoriesLoading"
-          />
-        </div>
+            />
+          </template>
+        </AdditionalInformation>
 
         <!-- Form Actions -->
         <div class="form-actions">
@@ -393,6 +125,7 @@
             <span v-if="savingDraft">Saving...</span>
             <span v-else>Save as Draft</span>
           </button>
+          <!----
           <button 
             type="submit" 
             class="btn btn-primary" 
@@ -401,6 +134,7 @@
             <span v-if="submitting">Submitting...</span>
             <span v-else>Submit for Review</span>
           </button>
+          -->
         </div>
       </form>
     </div>
@@ -418,12 +152,20 @@
 </template>
 
 <script setup>
-import PriceCalculator from '~/components/clerk/PriceCalculator.vue'
+// Import components
 import FileUpload from '~/components/clerk/FileUpload.vue'
 import RateCardDetailsModal from '~/components/clerk/RateCardDetailsModal.vue'
+
+// Import new form section components
+import ClientInformation from '~/components/clerk/ClientInformation.vue'
+import AdvertInformation from '~/components/clerk/AdvertInformation.vue'
+import SchedulePricing from '~/components/clerk/SchedulePricing.vue'
+import AdditionalInformation from '~/components/clerk/AdditionalInformation.vue'
+import SalesAgentSelection from '~/components/clerk/SalesAgentSelection.vue'
+
 import { useProducts } from '~/composables/useProducts'
 import { useAdverts } from '~/composables/useAdverts'
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from '#imports'
 
 const router = useRouter()
@@ -446,6 +188,9 @@ const { createAdvert } = useAdverts()
 // Today's date for date validation
 const today = ref(new Date().toISOString().split('T')[0])
 
+// Ref to SchedulePricing component to access its exposed methods
+const schedulePricingRef = ref(null)
+
 // Form state
 const form = reactive({
   clientName: '',
@@ -462,8 +207,11 @@ const form = reactive({
   endDate: '',
   frequency: 1,
   paymentMethod: '',
+  discount: 0,
   specialInstructions: '',
-  files: []
+  files: [],
+  datesList: [],
+  salesAgentId: ''
 })
 
 // Loading states
@@ -482,6 +230,54 @@ const rateCardDetails = ref(null)
 // Data
 const priceCalculation = ref(null)
 const selectedCurrency = ref('UGX')
+
+// Check if platform is print media
+const isPrintMedia = computed(() => {
+  return form.platformCategory === 'print'
+})
+
+// Watch platform category changes and lock frequency to 1 for print media
+watch(() => form.platformCategory, (newCategory) => {
+  console.log('[WATCH-CATEGORY] Platform category changed:', newCategory)
+  if (newCategory === 'print') {
+    console.log('[WATCH-CATEGORY] Print media detected, setting frequency to 1')
+    form.frequency = 1
+  }
+})
+
+// Computed property for middle dates string
+const middleDatesString = computed(() => {
+  if (!form.datesList || form.datesList.length <= 2) return ''
+  
+  const sortedDates = [...form.datesList].sort()
+  const middleDates = sortedDates.slice(1, -1)
+  
+  return middleDates.join(', ')
+})
+
+// Helper function to format dates for special instructions
+const formatDatesForInstructions = () => {
+  if (!schedulePricingRef.value) return ''
+  
+  const middleDatesString = schedulePricingRef.value.getMiddleDatesForInstructions()
+  if (!middleDatesString) return ''
+  
+  return `dates[${middleDatesString}]`
+}
+
+// Helper function to build special instructions with dates
+const buildSpecialInstructions = () => {
+  const datesString = formatDatesForInstructions()
+  const userInstructions = form.specialInstructions?.trim() || ''
+  
+  if (datesString && userInstructions) {
+    return `${datesString}\n\n${userInstructions}`
+  } else if (datesString) {
+    return datesString
+  } else {
+    return userInstructions
+  }
+}
 
 // Computed properties
 const activeCategories = computed(() => {
@@ -509,29 +305,30 @@ const selectedProduct = computed(() => {
 const availableRateCards = computed(() => {
   if (!form.product) return []
   return rateCards.value.filter(rateCard => {
-    // Check if rate card is active (not expired)
     return isRateCardActive(rateCard)
   })
 })
 
 const selectedRateCard = computed(() => {
   if (!form.rateCardId) return null
-  return rateCards.value.find(rc => rc.id === form.rateCardId)
+  // Use loose comparison to handle string vs number mismatch
+  return rateCards.value.find(rc => rc.id == form.rateCardId)
 })
 
 const hasRequiredClientInfo = computed(() => {
   return form.clientName && form.email && form.phone && form.advertTitle
 })
 
+// Modified isFormValid to not require sales agent (optional field)
 const isFormValid = computed(() => {
   return (
     hasRequiredClientInfo.value &&
     form.platformCategory &&
     form.product &&
     form.rateCardId &&
-    form.startDate &&
+    form.datesList.length > 0 &&
     form.paymentMethod &&
-    priceCalculation.value?.total
+    schedulePricingRef.value?.calculateFinalTotal() > 0
   )
 })
 
@@ -542,35 +339,41 @@ const loading = computed(() => {
 
 // Lifecycle
 onMounted(async () => {
+  console.log('[MOUNTED] Component mounted, initializing form...')
   await initializeForm()
 })
 
 // Methods
 const initializeForm = async () => {
   try {
+    console.log('[INIT] Starting form initialization...')
     categoriesLoading.value = true
     await loadCategories()
+    console.log('[INIT] SUCCESS - Loaded', categories.value.length, 'categories')
     
     // Set default dates
     form.startDate = today.value
     const endDate = new Date()
-    endDate.setDate(endDate.getDate() + 7) // Default 7 days later
+    endDate.setDate(endDate.getDate() + 7)
     form.endDate = endDate.toISOString().split('T')[0]
+    console.log('[INIT] Default dates set:', form.startDate, 'to', form.endDate)
   } catch (error) {
     categoriesError.value = error.message || 'Failed to load categories'
-    console.error('Failed to initialize form:', error)
+    console.error('[INIT] ERROR - Failed to initialize form:', error)
   } finally {
     categoriesLoading.value = false
   }
 }
 
 const retryLoadCategories = async () => {
+  console.log('[RETRY] Retrying category load...')
   categoriesError.value = null
   await initializeForm()
 }
 
 const loadProductsForCategory = async () => {
   try {
+    console.log('[PRODUCTS] Loading products for category:', form.platformCategory)
     productsLoading.value = true
     // Clear dependent fields
     form.product = ''
@@ -578,21 +381,31 @@ const loadProductsForCategory = async () => {
     form.adSize = ''
     priceCalculation.value = null
     rateCardDetails.value = null
+    console.log('[PRODUCTS] Cleared dependent fields')
     
-    if (!form.platformCategory) return
+    // Set frequency to 1 for print media
+    if (form.platformCategory === 'print') {
+      console.log('[PRODUCTS] Print media detected, locking frequency to 1')
+      form.frequency = 1
+    }
     
-    // Find the selected category to get its ID
-    const category = categories.value.find(cat => cat.category_type === form.platformCategory)
-    if (!category) {
-      console.error('Category not found:', form.platformCategory)
+    if (!form.platformCategory) {
+      console.log('[PRODUCTS] WARNING - No platform category selected')
       return
     }
     
-    // Load products using the category ID
+    const category = categories.value.find(cat => cat.category_type === form.platformCategory)
+    if (!category) {
+      console.error('[PRODUCTS] ERROR - Category not found:', form.platformCategory)
+      return
+    }
+    
+    console.log('[PRODUCTS] Found category ID:', category.id, '- loading products...')
     await loadProductsByCategoryId(category.id)
+    console.log('[PRODUCTS] SUCCESS - Loaded', products.value.length, 'products')
     
   } catch (error) {
-    console.error('Failed to load products:', error)
+    console.error('[PRODUCTS] ERROR - Failed to load products:', error)
     alert('Failed to load products. Please try again.')
   } finally {
     productsLoading.value = false
@@ -601,20 +414,22 @@ const loadProductsForCategory = async () => {
 
 const handleProductSelected = async () => {
   try {
+    console.log('[PRODUCT-SELECT] Product selected:', form.product)
     rateCardsLoading.value = true
-    // Clear dependent fields
     form.rateCardId = ''
     priceCalculation.value = null
     rateCardDetails.value = null
+    console.log('[PRODUCT-SELECT] Cleared rate card and pricing')
     
     await loadRateCards(form.product)
+    console.log('[PRODUCT-SELECT] SUCCESS - Loaded', rateCards.value.length, 'rate cards')
     
-    // Set currency from first rate card
     if (rateCards.value.length > 0) {
       selectedCurrency.value = rateCards.value[0].currency || 'UGX'
+      console.log('[PRODUCT-SELECT] Currency set to:', selectedCurrency.value)
     }
   } catch (error) {
-    console.error('Failed to load rate cards:', error)
+    console.error('[PRODUCT-SELECT] ERROR - Failed to load rate cards:', error)
     alert('Failed to load rate cards. Please try again.')
   } finally {
     rateCardsLoading.value = false
@@ -622,72 +437,237 @@ const handleProductSelected = async () => {
 }
 
 const handleRateCardSelected = async () => {
+  console.log('[RATECARD-SELECT] ========================================')
+  console.log('[RATECARD-SELECT] RATE CARD SELECTION - COMPREHENSIVE DEBUG')
+  console.log('[RATECARD-SELECT] ========================================')
+  console.log('[RATECARD-SELECT] 1. form.rateCardId:', form.rateCardId)
+  console.log('[RATECARD-SELECT] 2. typeof form.rateCardId:', typeof form.rateCardId)
+  console.log('[RATECARD-SELECT] 3. form.rateCardId stringified:', JSON.stringify(form.rateCardId))
+  console.log('[RATECARD-SELECT] 4. Total rate cards available:', rateCards.value.length)
+  
+  // Log each rate card for comparison
+  console.log('[RATECARD-SELECT] 5. All available rate cards:')
+  rateCards.value.forEach((rc, index) => {
+    console.log(`   [${index}] ID: ${rc.id} (${typeof rc.id}), ad_type: "${rc.ad_type}", size_dimension: "${rc.size_dimension}"`)
+  })
+  
   if (!form.rateCardId) {
+    console.log('[RATECARD-SELECT] WARNING - No rate card ID, clearing calculations')
     priceCalculation.value = null
     rateCardDetails.value = null
     return
   }
   
+  // Try both strict and loose comparison
+  console.log('[RATECARD-SELECT] 6. Attempting STRICT comparison (===)...')
+  let rateCard = rateCards.value.find(rc => rc.id === form.rateCardId)
+  console.log('[RATECARD-SELECT]    Result:', rateCard ? 'FOUND' : 'NOT FOUND')
+  
+  if (!rateCard) {
+    console.log('[RATECARD-SELECT] 7. Attempting LOOSE comparison (==)...')
+    rateCard = rateCards.value.find(rc => rc.id == form.rateCardId)
+    console.log('[RATECARD-SELECT]    Result:', rateCard ? 'FOUND' : 'NOT FOUND')
+  }
+  
+  if (!rateCard) {
+    console.log('[RATECARD-SELECT] 8. Attempting STRING comparison...')
+    rateCard = rateCards.value.find(rc => String(rc.id) === String(form.rateCardId))
+    console.log('[RATECARD-SELECT]    Result:', rateCard ? 'FOUND' : 'NOT FOUND')
+  }
+  
+  if (!rateCard) {
+    console.error('[RATECARD-SELECT] ❌ ERROR - Rate card not found with any comparison method!')
+    console.error('[RATECARD-SELECT] Searched for ID:', form.rateCardId, '(type:', typeof form.rateCardId, ')')
+    console.error('[RATECARD-SELECT] Available rate card IDs:', rateCards.value.map(rc => `${rc.id} (${typeof rc.id})`))
+    alert('Error: Selected rate card not found. Please try selecting again.')
+    return
+  }
+  
+  console.log('[RATECARD-SELECT] ✅ SUCCESS - Rate card found!')
+  console.log('[RATECARD-SELECT] Rate card details:', {
+    id: rateCard.id,
+    name: rateCard.name,
+    ad_type: rateCard.ad_type,
+    size_dimension: rateCard.size_dimension,
+    price_fc: rateCard.price_fc,
+    price_bw: rateCard.price_bw
+  })
+  console.log('[RATECARD-SELECT] ========================================')
+  
+  // Directly call calculatePrice - it will handle modal logic
   await calculatePrice()
 }
 
 const handleAdTypeChange = () => {
+  console.log('[ADTYPE-CHANGE] Ad type changed to:', form.adType)
   if (form.rateCardId) {
     calculatePrice()
   }
 }
 
 const handleFrequencyChange = () => {
+  console.log('[FREQUENCY-CHANGE] Frequency change requested')
+  // Don't allow frequency changes for print media
+  if (form.platformCategory === 'print') {
+    console.log('[FREQUENCY-CHANGE] BLOCKED - Print media must have frequency = 1')
+    form.frequency = 1
+    return
+  }
+  
+  console.log('[FREQUENCY-CHANGE] New frequency:', form.frequency)
   if (form.rateCardId) {
     calculatePrice()
   }
 }
 
+const handleDiscountChange = () => {
+  console.log('[DISCOUNT-CHANGE] Discount changed to:', form.discount, '%')
+  if (form.rateCardId) {
+    calculatePrice()
+  }
+}
+
+const handleFrequencyAdjust = (newFrequency) => {
+  console.log('[FREQUENCY-ADJUST] Frequency adjust to:', newFrequency)
+  // Don't allow frequency changes for print media
+  if (form.platformCategory === 'print') {
+    console.log('[FREQUENCY-ADJUST] BLOCKED - Print media must have frequency = 1')
+    form.frequency = 1
+    return
+  }
+  
+  if (rateCardDetails.value && form.rateCardId === rateCardDetails.value.rateCardId) {
+    console.log('[FREQUENCY-ADJUST] Has rate card details, recalculating with details...')
+    performPriceCalculationWithDetails(rateCardDetails.value)
+  } else if (form.rateCardId) {
+    console.log('[FREQUENCY-ADJUST] No details, standard calculation...')
+    calculatePrice()
+  }
+}
+
+const handleDatesUpdated = (datesString) => {
+  if (datesString) {
+    console.log('[DATES-UPDATE] Middle dates updated:', datesString)
+  }
+  // Recalculate price when dates change
+  if (form.rateCardId) {
+    calculatePrice()
+  }
+}
+
+const handleAgentSelected = (agentId) => {
+  console.log('[AGENT-SELECT] Sales agent selected:', agentId)
+}
+
 const calculatePrice = async () => {
+  console.log('[CALCULATE-PRICE] ===== STARTING PRICE CALCULATION =====')
+  console.log('[CALCULATE-PRICE] Current state:', {
+    rateCardId: form.rateCardId,
+    frequency: form.frequency,
+    adType: form.adType,
+    hasDetails: !!rateCardDetails.value
+  })
+  
   if (!form.rateCardId || !form.frequency || !form.adType) {
+    console.log('[CALCULATE-PRICE] WARNING - Missing required fields, clearing calculation')
     priceCalculation.value = null
     return
   }
   
-  // Check if selected rate card requires additional details
-  const rateCard = rateCards.value.find(rc => rc.id === form.rateCardId)
+  // Find rate card with both strict and loose comparison
+  let rateCard = rateCards.value.find(rc => rc.id === form.rateCardId)
+  if (!rateCard) {
+    console.log('[CALCULATE-PRICE] WARNING - Strict comparison failed, trying loose')
+    rateCard = rateCards.value.find(rc => rc.id == form.rateCardId)
+  }
   
-  if (rateCard && 
-      (rateCard.size_dimension === 'per cm col' || 
-       rateCard.size_dimension === 'per column' || 
-       rateCard.size_dimension === 'per word' ||
-       rateCard.ad_type === 'classified photo/Logo')) {
-    
-    // Check if we already have details for this rate card
-    if (rateCardDetails.value && rateCardDetails.value.rateCardId === form.rateCardId) {
-      // Use existing details
-      await performPriceCalculationWithDetails(rateCardDetails.value)
-    } else {
-      // Show modal to collect additional details
-      showRateCardModal.value = true
-    }
+  if (!rateCard) {
+    console.error('[CALCULATE-PRICE] ERROR - Rate card not found!')
+    console.log('[CALCULATE-PRICE] Searched for:', form.rateCardId)
+    console.log('[CALCULATE-PRICE] Available IDs:', rateCards.value.map(rc => rc.id))
     return
   }
   
-  // Regular price calculation (no additional details needed)
-  await performPriceCalculation()
+  console.log('[CALCULATE-PRICE] Rate card found:', {
+    id: rateCard.id,
+    ad_type: rateCard.ad_type,
+    size_dimension: rateCard.size_dimension
+  })
+  
+  // Check if this rate card requires additional details
+  const requiresDetails = rateCard && 
+      (rateCard.size_dimension === 'per cm col' || 
+       rateCard.size_dimension === 'per_cm_col' ||  // Also check underscore format
+       rateCard.size_dimension === 'per column' || 
+       rateCard.size_dimension === 'per_column' ||   // Also check underscore format
+       rateCard.size_dimension === 'per word' ||
+       rateCard.size_dimension === 'per_word' ||     // Also check underscore format
+       rateCard.ad_type === 'classified photo/Logo')
+  
+  console.log('[CALCULATE-PRICE] Checking requirements:', {
+    hasRateCard: !!rateCard,
+    size_dimension: rateCard?.size_dimension,
+    size_dimension_exact: JSON.stringify(rateCard?.size_dimension),
+    ad_type: rateCard?.ad_type,  
+    ad_type_exact: JSON.stringify(rateCard?.ad_type),
+    requiresDetails: requiresDetails
+  })
+  
+  console.log('[CALCULATE-PRICE] Detailed checks:')
+  console.log('   - size_dimension === "per cm col":', rateCard?.size_dimension === 'per cm col')
+  console.log('   - size_dimension === "per_cm_col":', rateCard?.size_dimension === 'per_cm_col')
+  console.log('   - size_dimension === "per column":', rateCard?.size_dimension === 'per column')
+  console.log('   - size_dimension === "per_column":', rateCard?.size_dimension === 'per_column')
+  console.log('   - size_dimension === "per word":', rateCard?.size_dimension === 'per word')
+  console.log('   - size_dimension === "per_word":', rateCard?.size_dimension === 'per_word')
+  console.log('   - ad_type === "classified photo/Logo":', rateCard?.ad_type === 'classified photo/Logo')
+  
+  if (requiresDetails) {
+    console.log('[CALCULATE-PRICE] REQUIRES-DETAILS - This rate card needs additional input')
+    console.log('[CALCULATE-PRICE] Size dimension:', rateCard.size_dimension)
+    console.log('[CALCULATE-PRICE] Ad type:', rateCard.ad_type)
+    
+    // Only calculate if we already have details for this rate card
+    if (rateCardDetails.value && rateCardDetails.value.rateCardId === form.rateCardId) {
+      console.log('[CALCULATE-PRICE] SUCCESS - Details found for this rate card, calculating with details...')
+      await performPriceCalculationWithDetails(rateCardDetails.value)
+    } else {
+      console.log('[CALCULATE-PRICE] MODAL-TRIGGER - No details yet, showing modal...')
+      console.log('[CALCULATE-PRICE] Current rateCardDetails:', rateCardDetails.value)
+      // Show modal to collect details
+      showRateCardModal.value = true
+      console.log('[CALCULATE-PRICE] SUCCESS - Modal should be visible now. showRateCardModal =', showRateCardModal.value)
+    }
+  } else {
+    console.log('[CALCULATE-PRICE] STANDARD - Standard rate card, proceeding with normal calculation...')
+    // Regular rate card - calculate immediately
+    await performPriceCalculation()
+  }
 }
 
 const performPriceCalculation = async () => {
   try {
+    console.log('[CALC-SIMPLE] Starting simple price calculation...')
     priceLoading.value = true
+    
+    const params = {
+      frequency: parseInt(form.frequency) || 1,
+      adType: form.adType
+    }
+    console.log('[CALC-SIMPLE] Request params:', params)
+    
     const data = await calculatePriceApi(
       form.product,
       form.rateCardId,
-      {
-        frequency: parseInt(form.frequency) || 1,
-        adType: form.adType
-      }
+      params
     )
+    
+    console.log('[CALC-SIMPLE] Response received:', data)
     priceCalculation.value = data
     selectedCurrency.value = data.currency || 'UGX'
+    console.log('[CALC-SIMPLE] SUCCESS - Calculation complete. Total:', selectedCurrency.value, data.total)
   } catch (error) {
-    console.error('Price calculation failed:', error)
+    console.error('[CALC-SIMPLE] ERROR - Price calculation failed:', error)
     priceCalculation.value = null
     alert('Failed to calculate price. Please check your selections.')
   } finally {
@@ -697,9 +677,10 @@ const performPriceCalculation = async () => {
 
 const performPriceCalculationWithDetails = async (details) => {
   try {
+    console.log('[CALC-DETAILS] Starting price calculation with details...')
+    console.log('[CALC-DETAILS] Details object:', details)
     priceLoading.value = true
     
-    // Prepare the request body with additional details
     const requestBody = {
       productId: form.product,
       rateCardId: form.rateCardId,
@@ -708,25 +689,63 @@ const performPriceCalculationWithDetails = async (details) => {
       ...details.details
     }
     
-    // Call the API with additional details
-    // Note: You may need to modify your calculatePriceApi function or create a new one
+    // Console log the request body for debugging
+    console.log('[CALC-DETAILS] REQUEST - Sending to calculate-price endpoint')
+    console.log('[CALC-DETAILS] Endpoint:', `${process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'}/adverts/calculate-price`)
+    console.log('[CALC-DETAILS] Request Body:', JSON.stringify(requestBody, null, 2))
+    console.log('[CALC-DETAILS] Full details object:', JSON.stringify(details, null, 2))
+    console.log('[CALC-DETAILS] VERIFY - Request includes cm?', 'cm' in requestBody, '| value:', requestBody.cm)
+    console.log('[CALC-DETAILS] VERIFY - Request includes columns?', 'columns' in requestBody, '| value:', requestBody.columns)
+    console.log('[CALC-DETAILS] VERIFY - Request includes totalSize?', 'totalSize' in requestBody, '| value:', requestBody.totalSize)
+    
     const response = await $fetch(`${process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'}/adverts/calculate-price`, {
       method: 'POST',
       body: requestBody
     })
     
-    // Merge the response with our details
+    // Console log the response
+    console.log('[CALC-DETAILS] RESPONSE - Received from calculate-price endpoint')
+    console.log('[CALC-DETAILS] Response data:', JSON.stringify(response, null, 2))
+    console.log('[CALC-DETAILS] Response.basePrice:', response.basePrice)
+    console.log('[CALC-DETAILS] Response.subtotal:', response.subtotal)
+    console.log('[CALC-DETAILS] Response.surcharge:', response.surcharge)
+    console.log('[CALC-DETAILS] Response.total:', response.total)
+    
+    // Build priceCalculation carefully to avoid overwriting API response values
+    // The `details` object from modal contains: { rateCardId, sizeDimension, adType (rate card type), details: {cm, columns}, calculatedPrice }
+    // The `response` from API contains: { basePrice, subtotal, total, surcharge, currency }
+    
     priceCalculation.value = {
-      ...response,
-      ...details,
+      // API response values (these MUST be preserved)
+      basePrice: response.basePrice,
+      subtotal: response.subtotal,
+      total: response.total,
+      surcharge: response.surcharge || 0,
+      surchargePercentage: response.surchargePercentage || 0,
+      currency: response.currency || 'UGX',
+      frequency: response.frequency || form.frequency,
+      
+      // Modal details metadata (for display purposes)
+      rateCardId: details.rateCardId,
       sizeDimension: details.sizeDimension,
-      adType: details.adType
+      rateCardAdType: details.adType,  // Rate card type (e.g., "Letter of Administration")
+      rateCardDetails: details.details,  // The actual values: {cm: 5, columns: 3}
+      modalEstimate: details.calculatedPrice  // What the modal calculated
     }
     
+    console.log('[CALC-DETAILS] Stored priceCalculation:', priceCalculation.value)
+    console.log('[CALC-DETAILS] priceCalculation.basePrice:', priceCalculation.value.basePrice)
+    console.log('[CALC-DETAILS] priceCalculation.subtotal:', priceCalculation.value.subtotal)
+    console.log('[CALC-DETAILS] priceCalculation.total:', priceCalculation.value.total)
+    console.log('[CALC-DETAILS] Verify - API returned total:', response.total, '| Stored total:', priceCalculation.value.total)
+    
     selectedCurrency.value = response.currency || 'UGX'
+    console.log('[CALC-DETAILS] SUCCESS - Calculation complete. Total:', selectedCurrency.value, response.total)
     
   } catch (error) {
-    console.error('Price calculation with details failed:', error)
+    console.error('[CALC-DETAILS] ERROR - Price calculation with details failed:', error)
+    console.error('[CALC-DETAILS] Error message:', error.message)
+    
     priceCalculation.value = null
     alert('Failed to calculate price. Please try again.')
   } finally {
@@ -734,23 +753,8 @@ const performPriceCalculationWithDetails = async (details) => {
   }
 }
 
-const adjustFrequency = (change) => {
-  const newFrequency = parseInt(form.frequency) + change
-  if (newFrequency >= 1) {
-    form.frequency = newFrequency
-    
-    // If we have rate card details, recalculate with them
-    if (rateCardDetails.value && form.rateCardId === rateCardDetails.value.rateCardId) {
-      performPriceCalculationWithDetails(rateCardDetails.value)
-    } else if (form.rateCardId) {
-      calculatePrice()
-    }
-  }
-}
-
 const getRateCardDisplayName = (rateCard) => {
-  //let displayName = rateCard.name || 'Untitled Rate Card'
-  let displayName ="";
+  let displayName = ""
   const price = form.adType === 'full_color' ? rateCard.price_fc : rateCard.price_bw
   
   if (rateCard.ad_type) {
@@ -775,10 +779,7 @@ const isRateCardActive = (rateCard) => {
   const effectiveDate = rateCard.effectiveDate ? new Date(rateCard.effectiveDate) : null
   const expiryDate = rateCard.expiryDate ? new Date(rateCard.expiryDate) : null
   
-  // Check if today is after effective date (if set)
   if (effectiveDate && today < effectiveDate) return false
-  
-  // Check if today is before expiry date (if set)
   if (expiryDate && today > expiryDate) return false
   
   return true
@@ -786,25 +787,36 @@ const isRateCardActive = (rateCard) => {
 
 // Modal handlers
 const handleModalClose = () => {
+  console.log('[MODAL-CLOSE] Modal closed without saving')
   showRateCardModal.value = false
 }
 
 const handleModalSave = (details) => {
+  console.log('[MODAL-SAVE] Modal saved with details:', details)
   showRateCardModal.value = false
   rateCardDetails.value = details
+  console.log('[MODAL-SAVE] SUCCESS - Details stored, triggering price calculation...')
   
-  // Continue with price calculation using the details
   performPriceCalculationWithDetails(details)
 }
 
 const editRateCardDetails = () => {
+  console.log('[MODAL-EDIT] Edit rate card details requested')
   if (selectedRateCard.value) {
+    console.log('[MODAL-EDIT] SUCCESS - Opening modal for rate card:', selectedRateCard.value.id)
     showRateCardModal.value = true
+  } else {
+    console.log('[MODAL-EDIT] WARNING - No rate card selected')
   }
 }
 
 const handleFilesUpdate = (files) => {
+  console.log('[FILES-UPDATE] Files updated:', files.length, 'file(s)')
   form.files = files
+}
+
+const handleClientInfoChange = ({ field, value }) => {
+  console.log('[CLIENT-INFO] Client info changed:', field, '=', value)
 }
 
 const formatCurrency = (amount) => {
@@ -816,28 +828,6 @@ const formatCurrency = (amount) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount)
-}
-
-const formatPriceWithDetails = (amount) => {
-  if (!amount && amount !== 0) return 'UGX 0'
-  
-  let priceText = formatCurrency(amount)
-  
-  // Add details if available
-  if (rateCardDetails.value && rateCardDetails.value.details) {
-    const details = rateCardDetails.value.details
-    if (details.cm && details.columns) {
-      priceText += ` (${details.cm}cm × ${details.columns}col)`
-    } else if (details.columns) {
-      priceText += ` (${details.columns} col)`
-    } else if (details.words) {
-      priceText += ` (${details.words} words)`
-    } else if (details.photos) {
-      priceText += ` (${details.photos} photos)`
-    }
-  }
-  
-  return priceText
 }
 
 const formatNumber = (number) => {
@@ -861,61 +851,23 @@ const formatDate = (dateString) => {
   }
 }
 
-/*
 const saveDraft = async () => {
+  console.log('[DRAFT-SAVE] Save draft requested')
+  
   if (!hasRequiredClientInfo.value) {
+    console.log('[DRAFT-SAVE] ERROR - Missing required client info')
     alert('Please fill in required client information before saving draft.')
     return
   }
   
+  console.log('[DRAFT-SAVE] Form discount value:', form.discount)
+
   try {
     savingDraft.value = true
     
-    // Create draft advert data
-    const advertData = {
-      clientName: form.clientName,
-      contactPerson: form.contactPerson,
-      email: form.email,
-      phone: form.phone,
-      advertTitle: form.advertTitle,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adType: form.adType,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      frequency: parseInt(form.frequency) || 1,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions,
-      totalAmount: priceCalculation.value?.total || 0,
-      status: 'draft',
-      ...(rateCardDetails.value ? { rateCardDetails: rateCardDetails.value } : {})
-    }
-    
-    const result = await createAdvert(advertData)
-    
-    alert(`Draft saved successfully! Reference: ${result.reference}`)
-    
-    // Redirect to my adverts page
-    router.push('/dashboard/adverts')
-    
-  } catch (error) {
-    console.error('Failed to save draft:', error)
-    alert('Failed to save draft. Please try again.')
-  } finally {
-    savingDraft.value = false
-  }
-}
-*/
-/*
-const saveDraft = async () => {
-  if (!hasRequiredClientInfo.value) {
-    alert('Please fill in required client information before saving draft.')
-    return
-  }
-  
-  try {
-    savingDraft.value = true
+    // Get pricing data from SchedulePricing component
+    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
+    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
     
     const advertData = {
       advertTitle: form.advertTitle,
@@ -931,200 +883,57 @@ const saveDraft = async () => {
       frequency: parseInt(form.frequency) || 1,
       startDate: form.startDate,
       endDate: form.endDate || null,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions || '',
-      totalAmount: priceCalculation.value?.total || 0,
-      status: 'draft',
-      files: form.files
-    }
-    
-    const result = await createAdvert(advertData)
-    
-    alert(`Draft saved successfully! Reference: ${result.reference}`)
-    
-    // Redirect to my adverts page
-    router.push('/dashboard/adverts')
-    
-  } catch (error) {
-    console.error('Failed to save draft:', error)
-    alert(`Failed to save draft: ${error.message}`)
-  } finally {
-    savingDraft.value = false
-  }
-}
-*/
-
-const viewAdvert = (advert) => {
-  // Navigate to the advert details page
-  //router.push(`/dashboard/adverts/${advert.id}`)
-  router.push(`/adverts/${advert.id}`)
-}
-
-
-const saveDraft = async () => {
-  if (!hasRequiredClientInfo.value) {
-    alert('Please fill in required client information before saving draft.')
-    return
-  }
-  
-  try {
-    savingDraft.value = true
-    
-    const advertData = {
-      advertTitle: form.advertTitle,
-      clientName: form.clientName,
-      contactPerson: form.contactPerson || '',
-      email: form.email,
-      phone: form.phone,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adSize: form.adSize || '',
-      adType: form.adType,
-      frequency: parseInt(form.frequency) || 1,
-      startDate: form.startDate,
-      endDate: form.endDate || null,
+      datesList: form.datesList,
+      dateCount: dateCount,
       basePrice: priceCalculation.value?.basePrice || 0,
       surcharge: priceCalculation.value?.surcharge || 0,
-      totalAmount: priceCalculation.value?.total || 0,
+      discount: parseFloat(form.discount) || 0,
+      totalAmount: finalTotal,
       paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions || '',
+      specialInstructions: buildSpecialInstructions(),
       status: 'draft',
-      files: form.files // Make sure this includes files
+      files: form.files,
+      rateCardDetails: rateCardDetails.value,
+      salesAgentId: form.salesAgentId || null
     }
+    
+    console.log('[DRAFT-SAVE] Sending advert data:', advertData)
     
     const result = await createAdvert(advertData)
     
+    console.log('[DRAFT-SAVE] SUCCESS - Draft saved:', result)
     alert(`Draft saved successfully! Reference: ${result.reference}`)
     
-    // Redirect to my adverts page
-    //router.push('/dashboard/adverts')
-    router.push('/dashboard/booking')
+    router.push('/dashboard/booking/')
     
   } catch (error) {
-    console.error('Failed to save draft:', error)
+    console.error('[DRAFT-SAVE] ERROR - Failed to save draft:', error)
     alert(`Failed to save draft: ${error.message}`)
   } finally {
     savingDraft.value = false
   }
 }
 
-/*
 const submitAdvert = async () => {
+  console.log('[SUBMIT] Submit advert requested')
+  
   if (!isFormValid.value) {
+    console.log('[SUBMIT] ERROR - Form validation failed')
     alert('Please fill in all required fields and ensure price is calculated.')
     return
   }
   
   if (!confirm('Submit this advert for review? Once submitted, you cannot make changes until it\'s reviewed.')) {
+    console.log('[SUBMIT] CANCELLED - User cancelled submission')
     return
   }
   
   try {
     submitting.value = true
     
-    // Create advert data
-    const advertData = {
-      clientName: form.clientName,
-      contactPerson: form.contactPerson,
-      email: form.email,
-      phone: form.phone,
-      advertTitle: form.advertTitle,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adType: form.adType,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      frequency: parseInt(form.frequency) || 1,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions,
-      totalAmount: priceCalculation.value?.total || 0,
-      status: 'pending_review',
-      ...(rateCardDetails.value ? { rateCardDetails: rateCardDetails.value } : {})
-    }
-    
-    const result = await createAdvert(advertData)
-    
-    alert(`Advert submitted successfully! Reference: ${result.reference}`)
-    
-    // Reset form
-    resetForm()
-    
-    // Redirect to my adverts page
-    router.push('/dashboard/adverts')
-    
-  } catch (error) {
-    console.error('Submission failed:', error)
-    alert('Failed to submit advert. Please try again.')
-  } finally {
-    submitting.value = false
-  }
-}
-*/
-/*
-const submitAdvert = async () => {
-  if (!isFormValid.value) {
-    alert('Please fill in all required fields and ensure price is calculated.')
-    return
-  }
-  
-  if (!confirm('Submit this advert for review? Once submitted, you cannot make changes until it\'s reviewed.')) {
-    return
-  }
-  
-  try {
-    submitting.value = true
-    
-    // Prepare advert data for Strapi
-    const advertData = {
-      advertTitle: form.advertTitle,
-      clientName: form.clientName,
-      contactPerson: form.contactPerson || '',
-      email: form.email,
-      phone: form.phone,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adSize: form.adSize || '',
-      adType: form.adType,
-      frequency: parseInt(form.frequency) || 1,
-      startDate: form.startDate,
-      endDate: form.endDate || null,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions || '',
-      totalAmount: priceCalculation.value?.total || 0,
-      status: 'pending_review'
-    }
-    
-    const result = await createAdvert(advertData)
-    
-    alert(`Advert submitted successfully! Reference: ${result.reference}`)
-    
-    // Redirect to my adverts page
-    router.push('/dashboard/adverts')
-    
-  } catch (error) {
-    console.error('Submission failed:', error)
-    alert(`Failed to submit advert: ${error.message}`)
-  } finally {
-    submitting.value = false
-  }
-}
-*/
-
-const submitAdvert = async () => {
-  if (!isFormValid.value) {
-    alert('Please fill in all required fields and ensure price is calculated.')
-    return
-  }
-  
-  if (!confirm('Submit this advert for review? Once submitted, you cannot make changes until it\'s reviewed.')) {
-    return
-  }
-  
-  try {
-    submitting.value = true
+    // Get pricing data from SchedulePricing component
+    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
+    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
     
     const advertData = {
       advertTitle: form.advertTitle,
@@ -1140,24 +949,31 @@ const submitAdvert = async () => {
       frequency: parseInt(form.frequency) || 1,
       startDate: form.startDate,
       endDate: form.endDate || null,
+      datesList: form.datesList,
+      dateCount: dateCount,
       basePrice: priceCalculation.value?.basePrice || 0,
       surcharge: priceCalculation.value?.surcharge || 0,
-      totalAmount: priceCalculation.value?.total || 0,
+      discount: parseFloat(form.discount) || 0,
+      totalAmount: finalTotal,
       paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions || '',
+      specialInstructions: buildSpecialInstructions(),
       status: 'pending_review',
-      files: form.files // Make sure this includes files
+      files: form.files,
+      rateCardDetails: rateCardDetails.value,
+      salesAgentId: form.salesAgentId || null
     }
+    
+    console.log('[SUBMIT] Sending advert data:', advertData)
     
     const result = await createAdvert(advertData)
     
+    console.log('[SUBMIT] SUCCESS - Advert submitted:', result)
     alert(`Advert submitted successfully! Reference: ${result.reference}`)
     
-    // Redirect to my adverts page
     router.push('/dashboard/booking')
     
   } catch (error) {
-    console.error('Submission failed:', error)
+    console.error('[SUBMIT] ERROR - Submission failed:', error)
     alert(`Failed to submit advert: ${error.message}`)
   } finally {
     submitting.value = false
@@ -1165,6 +981,7 @@ const submitAdvert = async () => {
 }
 
 const resetForm = () => {
+  console.log('[RESET] Resetting form...')
   Object.keys(form).forEach(key => {
     if (Array.isArray(form[key])) {
       form[key] = []
@@ -1173,9 +990,9 @@ const resetForm = () => {
     }
   })
   
-  // Reset default values
   form.adType = 'full_color'
   form.frequency = 1
+  form.discount = 0
   form.startDate = today.value
   const endDate = new Date()
   endDate.setDate(endDate.getDate() + 7)
@@ -1184,10 +1001,12 @@ const resetForm = () => {
   priceCalculation.value = null
   rateCardDetails.value = null
   selectedCurrency.value = 'UGX'
+  console.log('[RESET] SUCCESS - Form reset complete')
 }
 </script>
 
 <style scoped>
+/* All existing styles remain the same */
 .booking-page {
   width: 100%;
   padding-bottom: 40px;
@@ -1305,287 +1124,6 @@ const resetForm = () => {
   background: #a00;
 }
 
-.form-section {
-  margin-bottom: 40px;
-}
-
-.section-title {
-  color: #003366;
-  font-size: 1.2em;
-  font-weight: 600;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 25px;
-  margin-bottom: 25px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #333;
-  font-weight: 500;
-  font-size: 0.95em;
-}
-
-.required {
-  color: #e31e24;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 12px 15px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 1em;
-  transition: all 0.3s;
-  background-color: white;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #0066cc;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-}
-
-.form-group input:disabled,
-.form-group select:disabled,
-.form-group textarea:disabled {
-  background-color: #f8f9fa;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 100px;
-}
-
-.category-description,
-.product-description {
-  display: block;
-  margin-top: 6px;
-  color: #666;
-  font-size: 0.9em;
-  font-style: italic;
-}
-
-.product-info {
-  font-size: 0.85em;
-  color: #888;
-  margin-left: 5px;
-}
-
-.ratecard-info {
-  display: block;
-  margin-top: 6px;
-  color: #666;
-  font-size: 0.85em;
-}
-
-.expired-label {
-  color: #e31e24;
-  font-weight: 500;
-}
-
-.loading-text {
-  display: block;
-  margin-top: 6px;
-  color: #0066cc;
-  font-size: 0.85em;
-}
-
-.help-text {
-  display: block;
-  margin-top: 6px;
-  color: #666;
-  font-size: 0.85em;
-}
-
-.select-wrapper {
-  position: relative;
-}
-
-.select-loading {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  pointer-events: none;
-}
-
-.spinner-small {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(0, 102, 204, 0.2);
-  border-radius: 50%;
-  border-top-color: #0066cc;
-  animation: spin 1s ease-in-out infinite;
-}
-
-.input-with-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.input-with-buttons input {
-  flex: 1;
-}
-
-.frequency-buttons {
-  display: flex;
-  gap: 2px;
-}
-
-.btn-frequency {
-  width: 40px;
-  height: 46px;
-  padding: 0;
-  border: 1px solid #ddd;
-  background: white;
-  color: #333;
-  font-size: 1.2em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-
-.btn-frequency:hover:not(:disabled) {
-  background: #f0f2f5;
-  border-color: #ccc;
-}
-
-.btn-frequency:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.ratecard-details-summary {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 6px;
-  margin-top: 20px;
-  border: 1px solid #e9ecef;
-}
-
-.details-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.details-header h4 {
-  margin: 0;
-  color: #003366;
-  font-size: 1em;
-  font-weight: 600;
-}
-
-.btn-edit-details {
-  background: #0066cc;
-  color: white;
-  border: none;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.btn-edit-details:hover {
-  background: #0052a3;
-}
-
-.details-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detail-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.9em;
-}
-
-.detail-item span {
-  color: #666;
-}
-
-.detail-item strong {
-  color: #333;
-}
-
-.detail-info {
-  color: #888;
-  font-size: 0.85em;
-}
-
-.price-calculator-section {
-  margin-top: 30px;
-  padding: 25px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
-}
-
-.price-summary {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #e9ecef;
-}
-
-.price-summary-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  font-size: 0.95em;
-}
-
-.price-summary-item.total {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 2px solid #e9ecef;
-  font-size: 1.1em;
-  font-weight: 600;
-  color: #003366;
-}
-
-.price-summary-item span {
-  color: #666;
-}
-
-.price-summary-item strong {
-  color: #333;
-}
-
-.price-summary-item.total strong {
-  color: #003366;
-}
-
 .form-actions {
   display: flex;
   gap: 15px;
@@ -1638,7 +1176,6 @@ const resetForm = () => {
   box-shadow: 0 4px 8px rgba(0, 102, 204, 0.3);
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .page-header,
   .content-card {
@@ -1655,11 +1192,6 @@ const resetForm = () => {
     justify-content: flex-end;
   }
   
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-  
   .form-actions {
     flex-direction: column;
   }
@@ -1668,29 +1200,6 @@ const resetForm = () => {
     width: 100%;
     min-width: unset;
   }
-  
-  .input-with-buttons {
-    flex-direction: column;
-  }
-  
-  .frequency-buttons {
-    width: 100%;
-  }
-  
-  .btn-frequency {
-    flex: 1;
-    height: 44px;
-  }
-  
-  .ratecard-details-summary {
-    padding: 12px;
-  }
-  
-  .detail-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
 }
 
 @media (max-width: 480px) {
@@ -1698,22 +1207,6 @@ const resetForm = () => {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
-  }
-  
-  .price-calculator-section {
-    padding: 15px;
-  }
-  
-  .price-summary-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
-  
-  .price-summary-item span,
-  .price-summary-item strong {
-    width: 100%;
-    text-align: left;
   }
 }
 </style>

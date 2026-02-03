@@ -21,40 +21,39 @@
           </button>
         </div>
       </div>
-      
+
+      <!--Header Section-->
       <div class="header-stats">
-        <div class="stat-card stat-primary">
-          <div class="stat-icon">📅</div>
-          <div class="stat-content">
-            <div class="stat-label">Date Range</div>
-            <div class="stat-value">{{ dateRangeDisplay }}</div>
-          </div>
+          <StatsCard
+            icon="📅"
+            label="Date Range"
+            :value="dateRangeDisplay"
+            type="primary"
+          />
+          
+          <StatsCard
+            icon="📋"
+            label="Total Adverts"
+            :value="statistics.totalAdverts"
+            type="success"
+          />
+          
+          <StatsCard
+            icon="💰"
+            label="Total Value"
+            :value="statistics.totalAmount"
+            :format-currency="true"
+            type="warning"
+          />
+          
+          <StatsCard
+            icon="👥"
+            label="Active Users"
+            :value="statistics.uniqueUsers"
+            type="info"
+          />
         </div>
-        
-        <div class="stat-card stat-success">
-          <div class="stat-icon">📋</div>
-          <div class="stat-content">
-            <div class="stat-label">Total Adverts</div>
-            <div class="stat-value">{{ statistics.totalAdverts }}</div>
-          </div>
-        </div>
-        
-        <div class="stat-card stat-warning">
-          <div class="stat-icon">💰</div>
-          <div class="stat-content">
-            <div class="stat-label">Total Value</div>
-            <div class="stat-value">{{ formatCurrency(statistics.totalAmount) }}</div>
-          </div>
-        </div>
-        
-        <div class="stat-card stat-info">
-          <div class="stat-icon">👥</div>
-          <div class="stat-content">
-            <div class="stat-label">Active Users</div>
-            <div class="stat-value">{{ statistics.uniqueUsers }}</div>
-          </div>
-        </div>
-      </div>
+
     </div>
 
     <!-- Error message display -->
@@ -277,7 +276,7 @@
                   <div class="amount-display">
                     <span class="amount">{{ formatCurrency(advert.totalAmount) }}</span>
                     <span v-if="advert.discount > 0" class="discount-badge">
-                      -{{ formatCurrency(advert.discount) }}
+                      -{{ advert.discount }}%
                     </span>
                   </div>
                 </td>
@@ -372,7 +371,8 @@
 <script setup>
 import { useAdverts } from '~/composables/useAdverts'
 import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRuntimeConfig } from '#imports'
+import { useRouter, useRuntimeConfig } from '#imports';
+import StatsCard from '~/components/clerk/StatsCard.vue';
 
 const router = useRouter()
 const config = useRuntimeConfig()
@@ -419,6 +419,35 @@ const dateRangeDisplay = computed(() => {
   
   return start === end ? start : `${start} - ${end}`
 })
+
+//HeaderStatus
+const statItems = computed(() => [
+      {
+        icon: '📅',
+        label: 'Date Range',
+        value: dateRangeDisplay.value,
+        type: 'primary'
+      },
+      {
+        icon: '📋',
+        label: 'Total Adverts',
+        value: statistics.value.totalAdverts,
+        type: 'success'
+      },
+      {
+        icon: '💰',
+        label: 'Total Value',
+        value: statistics.value.totalAmount,
+        type: 'warning',
+        formatCurrency: true
+      },
+      {
+        icon: '👥',
+        label: 'Active Users',
+        value: statistics.value.uniqueUsers,
+        type: 'info'
+      }
+    ]);
 
 const maxDate = computed(() => {
   const today = new Date()

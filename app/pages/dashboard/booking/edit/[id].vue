@@ -137,7 +137,7 @@
             </div>
             <div class="detail-item full-width" v-if="advert.discount > 0">
               <label>Discount:</label>
-              <div class="detail-value discount">-{{ formatCurrency(advert.discount) }}</div>
+              <div class="detail-value discount">-{{ advert.discount }}%</div>
             </div>
             <div class="detail-item full-width total-amount">
               <label>Total Amount:</label>

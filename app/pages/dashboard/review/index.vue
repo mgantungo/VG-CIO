@@ -4,6 +4,7 @@
       <h1>Schedule Review & Page Management</h1>
       <p>Review scheduled adverts and manage page assignments</p>
     </div>
+    <!----
 
     <div class="stats-grid">
       <StatCard 
@@ -31,6 +32,8 @@
         color="gold"
       />
     </div>
+
+     -->
 
     <div class="filters-card">
       <div class="filter-row">
