@@ -1,592 +1,460 @@
+<!-- pages/editor/index.vue -->
 <template>
-  <div class="schedule-review-page">
-    <div class="page-header">
-      <h1>Schedule Review & Page Management</h1>
-      <p>Review scheduled adverts and manage page assignments</p>
-    </div>
-    <!----
+  <div class="editor-page">
 
-    <div class="stats-grid">
-      <StatCard 
-        icon="📅"
-        :value="todaySchedulesCount"
-        label="Scheduled Today"
-        color="blue"
-      />
-      <StatCard 
-        icon="📰"
-        :value="totalPagesAssigned"
-        label="Pages Assigned"
-        color="green"
-      />
-      <StatCard 
-        icon="✅"
-        :value="publishedCount"
-        label="Published"
-        color="purple"
-      />
-      <StatCard 
-        icon="⏳"
-        :value="pendingPublishCount"
-        label="Pending Publish"
-        color="gold"
-      />
+    <!-- PAGE HEADER -->
+    <div class="page-hd">
+      <div class="page-hd__left">
+        <div class="page-hd__eyebrow">Editor Workspace</div>
+        <h1 class="page-hd__title">Schedule Queue</h1>
+        <p class="page-hd__sub">Assign page/slot numbers, adjust run dates and times, and manage publication status.</p>
+      </div>
     </div>
 
-     -->
-
-    <div class="filters-card">
-      <div class="filter-row">
+    <!-- FILTER / TOOLBAR BAR -->
+    <div class="filter-bar">
+      <div class="filter-bar__left">
+        <!-- Date Range -->
         <div class="filter-group">
-          <label>Date Range:</label>
-          <input type="date" v-model="filters.startDate" />
-          <span>to</span>
-          <input type="date" v-model="filters.endDate" />
+          <label class="filter-lbl">From</label>
+          <input type="date" v-model="filters.dateFrom" class="filter-date" @change="load">
         </div>
-        
         <div class="filter-group">
-          <label>Status:</label>
-          <select v-model="filters.isPublished">
+          <label class="filter-lbl">To</label>
+          <input type="date" v-model="filters.dateTo" class="filter-date" @change="load">
+        </div>
+
+        <!-- Quick range pills -->
+        <div class="range-pills">
+          <button
+            v-for="r in quickRanges"
+            :key="r.label"
+            class="range-pill"
+            :class="{ 'range-pill--active': activeRange === r.label }"
+            @click="applyRange(r)"
+          >{{ r.label }}</button>
+        </div>
+      </div>
+
+      <div class="filter-bar__right">
+        <!-- Status filter -->
+        <div class="filter-group">
+          <label class="filter-lbl">Status</label>
+          <select v-model="filters.status" class="filter-sel" @change="load">
             <option value="">All</option>
-            <option value="true">Published</option>
-            <option value="false">Not Published</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="paged">Page Assigned</option>
+            <option value="published">Published</option>
           </select>
         </div>
-        
+        <!-- Search -->
         <div class="filter-group">
-          <label>Client:</label>
-          <select v-model="filters.clientId">
-            <option value="">All Clients</option>
-            <option v-for="client in clients" :key="client.id" :value="client.id">
-              {{ client.company_name }}
-            </option>
-          </select>
+          <label class="filter-lbl">Search</label>
+          <input type="text" v-model="filters.search" class="filter-search" placeholder="Client or advert title…" @input="applySearch">
         </div>
-        
-        <button class="btn btn-primary" @click="applyFilters">
-          <span v-if="loading">Loading...</span>
-          <span v-else>Apply Filters</span>
-        </button>
-        
-        <button class="btn btn-secondary" @click="resetFilters" :disabled="loading">
-          Reset
+        <button class="filter-refresh-btn" @click="load" title="Refresh">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 3A7 7 0 1 0 14 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 3v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
     </div>
 
-    <div class="content-card">
-      <div class="card-header">
-        <h2>Scheduled Adverts</h2>
-        <div class="header-actions">
-          <button class="btn btn-info" @click="exportToCSV" :disabled="schedules.length === 0">
-            📊 Export CSV
-          </button>
-          <button class="btn btn-success" @click="openBulkPageUpdate" :disabled="schedules.length === 0">
-            📋 Bulk Page Update
-          </button>
-        </div>
+    <!-- STATS BAND -->
+    <div class="stats-band">
+      <div class="stat-cell">
+        <div class="stat-val">{{ stats.total }}</div>
+        <div class="stat-lbl">Total</div>
       </div>
-
-      <div class="tabs">
-        <button 
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="tab"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.label }}
-        </button>
+      <div class="stat-div"></div>
+      <div class="stat-cell stat-cell--amber">
+        <div class="stat-val">{{ stats.noPage }}</div>
+        <div class="stat-lbl">No Page Assigned</div>
       </div>
+      <div class="stat-div"></div>
+      <div class="stat-cell stat-cell--blue">
+        <div class="stat-val">{{ stats.paged }}</div>
+        <div class="stat-lbl">Page Assigned</div>
+      </div>
+      <div class="stat-div"></div>
+      <div class="stat-cell stat-cell--green">
+        <div class="stat-val">{{ stats.published }}</div>
+        <div class="stat-lbl">Published</div>
+      </div>
+      <div class="stat-div"></div>
+      <div class="stat-cell">
+        <div class="stat-val">{{ stats.withMedia }}</div>
+        <div class="stat-lbl">With Media</div>
+      </div>
+    </div>
 
-      <ScheduleReviewQueue 
+    <!-- ERROR BANNER -->
+    <div v-if="pageError" class="err-banner">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      {{ pageError }}
+      <button class="err-dismiss" @click="pageError = ''">×</button>
+    </div>
+
+    <!-- SUCCESS TOAST -->
+    <transition name="toast-fade">
+      <div v-if="toast" class="toast">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {{ toast }}
+      </div>
+    </transition>
+
+    <!-- MAIN PANEL -->
+    <div class="main-panel">
+      <ScheduleReviewQueue
         :schedules="filteredSchedules"
         :loading="loading"
-        @page-update="handlePageUpdate"
-        @publish-toggle="handlePublishToggle"
-        @view-details="handleViewDetails"
-        @refresh="loadSchedules"
+        @page-update="onPageUpdate"
+        @publish-toggle="onPublishToggle"
+        @edit="onEdit"
+        @unschedule="onUnschedule"
+        @bulk-page="onBulkPage"
+        @view-media="onViewMedia"
+        @refresh="load"
       />
     </div>
 
-    <!-- Schedule Details Modal -->
-    <ScheduleDetailsModal 
-      v-if="selectedSchedule"
-      :schedule="selectedSchedule"
-      :show="showDetailsModal"
-      @close="closeDetailsModal"
-      @page-update="handlePageUpdate"
-      @publish-toggle="handlePublishToggle"
+    <!-- EDIT MODAL -->
+    <ScheduleDetailsModal
+      :show="showEditModal"
+      :schedule="editTarget"
+      @close="showEditModal = false"
+      @saved="onSaveSchedule"
     />
 
-    <!-- Bulk Page Update Modal -->
-    <BulkPageUpdateModal 
-      v-if="showBulkUpdateModal"
-      :schedules="schedules"
-      :show="showBulkUpdateModal"
-      @save="handleBulkPageUpdate"
-      @close="closeBulkUpdateModal"
+    <!-- BULK PAGE MODAL -->
+    <BulkPageUpdateModal
+      :show="showBulkModal"
+      :schedules="bulkTargets"
+      @close="showBulkModal = false"
+      @save="onBulkSave"
     />
+
+    <!-- MEDIA VIEWER -->
+    <MediaViewerModal
+      :show="showMediaModal"
+      :schedule="mediaTarget"
+      @close="showMediaModal = false"
+    />
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import StatCard from '~/components/common/StatCard.vue'
-import ScheduleReviewQueue from '~/components/editor/ScheduleReviewQueue.vue'
+import { ref, computed, onMounted } from 'vue'
+import ScheduleReviewQueue  from '~/components/editor/ScheduleReviewQueue.vue'
 import ScheduleDetailsModal from '~/components/editor/ScheduleDetailsModal.vue'
-import BulkPageUpdateModal from '~/components/editor/BulkPageUpdateModal.vue'
+import BulkPageUpdateModal  from '~/components/editor/BulkPageUpdateModal.vue'
+import MediaViewerModal     from '~/components/editor/MediaViewerModal.vue'
 import { useAdverts } from '~/composables/useAdverts'
 
-/**
- * Key Features of the Implementation:
-Complete Schedule Management: View, update, and manage advert daily schedules
-
-Page Assignment: Individual and bulk page assignment capabilities
-
-Publish Control: Toggle publish status for schedules
-
-Filtering: Filter by date range, client, and publish status
-
-Media Preview: View attached media files
-
-Export Functionality: Export schedules to CSV
-
-Bulk Operations: Mass update pages for efficiency
-
-Detailed Views: Comprehensive schedule details modal
-
-Statistics Dashboard: Real-time statistics on schedules
-
-Files Structure:
-text
-components/editor/
-├── ScheduleReviewQueue.vue    # Main schedule list with inline editing
-├── ScheduleDetailsModal.vue   # Detailed view modal
-├── BulkPageUpdateModal.vue    # Bulk page update modal
-└── StatCard.vue              # Reusable stat card component
-The implementation provides a complete solution for managing advert daily schedules with page assignments, media management, and publish controls, all integrated with your existing Strapi backend.
- */
-
-const tabs = [
-  { id: 'all', label: 'All Schedules' },
-  { id: 'today', label: 'Today' },
-  { id: 'published', label: 'Published' },
-  { id: 'unpublished', label: 'Unpublished' },
-  { id: 'no_page', label: 'No Page Assigned' }
-]
-
-const activeTab = ref('all')
-const selectedSchedule = ref(null)
-const showDetailsModal = ref(false)
-const showBulkUpdateModal = ref(false)
-
-// Filters
-const filters = ref({
-  startDate: new Date().toISOString().split('T')[0],
-  endDate: new Date().toISOString().split('T')[0],
-  isPublished: '',
-  clientId: ''
+/*
+definePageMeta({
+  layout: 'default',
+  middleware: ['auth', 'role'],
+  meta: { role: 'editor' },
 })
+*/
 
-const { 
+const {
+  loading,
   getFullSchedules,
   updateSchedulePage,
-  bulkUpdateSchedulePages,
   toggleSchedulePublish,
-  loading,
-  error
+  updateSchedule,
+  unscheduleAdvert,
+  bulkUpdateSchedulePages,
 } = useAdverts()
 
-const schedules = ref([])
-const clients = ref([])
-const todaySchedulesCount = ref(0)
-const totalPagesAssigned = ref(0)
-const publishedCount = ref(0)
-const pendingPublishCount = ref(0)
+// ── STATE ──────────────────────────────────────────────────────────────────
+const schedules     = ref([])
+const pageError     = ref('')
+const toast         = ref('')
+const showEditModal = ref(false)
+const editTarget    = ref(null)
+const showBulkModal = ref(false)
+const bulkTargets   = ref([])
+const showMediaModal  = ref(false)
+const mediaTarget     = ref(null)
 
+const filters = ref({
+  dateFrom: '',
+  dateTo:   '',
+  status:   '',
+  search:   '',
+})
+const activeRange = ref('This Week')
+
+// ── QUICK RANGES ───────────────────────────────────────────────────────────
+const quickRanges = [
+  { label: 'Today',     days: 0 },
+  { label: 'This Week', days: 7 },
+  { label: 'Next 14d',  days: 14 },
+  { label: 'This Month',days: 30 },
+]
+
+const applyRange = (r) => {
+  const today = new Date()
+  const end   = new Date()
+  end.setDate(today.getDate() + r.days)
+  filters.value.dateFrom = today.toISOString().split('T')[0]
+  filters.value.dateTo   = end.toISOString().split('T')[0]
+  activeRange.value       = r.label
+  load()
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────
+const stats = computed(() => ({
+  total:     filteredSchedules.value.length,
+  noPage:    filteredSchedules.value.filter(s => !s.page || s.page === 0).length,
+  paged:     filteredSchedules.value.filter(s => s.page > 0 && !s.is_published).length,
+  published: filteredSchedules.value.filter(s => s.is_published).length,
+  withMedia: filteredSchedules.value.filter(s => s.media?.length > 0).length,
+}))
+
+// ── FILTERED SCHEDULES ─────────────────────────────────────────────────────
 const filteredSchedules = computed(() => {
-  let filtered = schedules.value
-  
-  switch (activeTab.value) {
-    case 'today':
-      const today = new Date().toISOString().split('T')[0]
-      filtered = filtered.filter(s => s.run_date === today)
-      break
-    case 'published':
-      filtered = filtered.filter(s => s.is_published)
-      break
-    case 'unpublished':
-      filtered = filtered.filter(s => !s.is_published)
-      break
-    case 'no_page':
-      filtered = filtered.filter(s => !s.page || s.page === 0)
-      break
+  let s = [...schedules.value]
+
+  if (filters.value.status === 'scheduled')
+    s = s.filter(x => !x.is_published && (!x.page || x.page === 0))
+  else if (filters.value.status === 'paged')
+    s = s.filter(x => x.page > 0 && !x.is_published)
+  else if (filters.value.status === 'published')
+    s = s.filter(x => x.is_published)
+
+  if (filters.value.search) {
+    const q = filters.value.search.toLowerCase()
+    s = s.filter(x =>
+      (x.company_name    || '').toLowerCase().includes(q) ||
+      (x.advert_title    || '').toLowerCase().includes(q) ||
+      (x.contact_person  || '').toLowerCase().includes(q) ||
+      String(x.advert_id || '').includes(q)
+    )
   }
-  
-  return filtered
+
+  return s
 })
 
-onMounted(() => {
-  loadSchedules()
-})
-
-const loadSchedules = async () => {
+// ── LOAD DATA ──────────────────────────────────────────────────────────────
+const load = async () => {
+  pageError.value = ''
   try {
     const params = {}
-    
-    if (filters.value.startDate) params.startDate = filters.value.startDate
-    if (filters.value.endDate) params.endDate = filters.value.endDate
-    if (filters.value.isPublished !== '') params.isPublished = filters.value.isPublished
-    if (filters.value.clientId) params.clientId = filters.value.clientId
-    
-    const response = await getFullSchedules(params)
-    
-    if (response.success) {
-      schedules.value = response.data
-      
-      // Calculate statistics
-      calculateStatistics()
-      
-      // Extract unique clients
-      const clientMap = new Map()
-      schedules.value.forEach(schedule => {
-        if (schedule.client_id && schedule.company_name) {
-          clientMap.set(schedule.client_id, {
-            id: schedule.client_id,
-            company_name: schedule.company_name,
-            contact_person: schedule.contact_person
-          })
-        }
-      })
-      clients.value = Array.from(clientMap.values())
-    }
-  } catch (err) {
-    console.error('Failed to load schedules:', err)
+    if (filters.value.dateFrom) params.startDate = filters.value.dateFrom
+    if (filters.value.dateTo)   params.endDate   = filters.value.dateTo
+    const result  = await getFullSchedules(params)
+    schedules.value = Array.isArray(result) ? result : (result?.data || [])
+  } catch (e) {
+    pageError.value = e.message || 'Failed to load schedules'
   }
 }
 
-const calculateStatistics = () => {
-  const today = new Date().toISOString().split('T')[0]
-  
-  todaySchedulesCount.value = schedules.value.filter(s => s.run_date === today).length
-  totalPagesAssigned.value = schedules.value.filter(s => s.page && s.page > 0).length
-  publishedCount.value = schedules.value.filter(s => s.is_published).length
-  pendingPublishCount.value = schedules.value.filter(s => !s.is_published).length
+// ── SEARCH (debounce) ─────────────────────────────────────────────────────
+let searchTimer = null
+const applySearch = () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {}, 300) // search is client-side, no reload needed
 }
 
-const applyFilters = () => {
-  loadSchedules()
+// ── ACTION HANDLERS ───────────────────────────────────────────────────────
+const showToast = (msg, duration = 2800) => {
+  toast.value = msg
+  setTimeout(() => { toast.value = '' }, duration)
 }
 
-const resetFilters = () => {
-  const today = new Date().toISOString().split('T')[0]
-  filters.value = {
-    startDate: today,
-    endDate: today,
-    isPublished: '',
-    clientId: ''
-  }
-  loadSchedules()
+const patchLocal = (scheduleId, patch) => {
+  const i = schedules.value.findIndex(s => s.schedule_id === scheduleId)
+  if (i !== -1) schedules.value[i] = { ...schedules.value[i], ...patch }
 }
 
-const handlePageUpdate = async (scheduleId, page) => {
+const onPageUpdate = async (scheduleId, page) => {
   try {
     await updateSchedulePage(scheduleId, page)
-    
-    // Update local state
-    const index = schedules.value.findIndex(s => s.schedule_id === scheduleId)
-    if (index !== -1) {
-      schedules.value[index].page = page
-      calculateStatistics()
-    }
-    
-    alert('Page updated successfully!')
-  } catch (err) {
-    console.error('Failed to update page:', err)
-    alert('Failed to update page')
+    patchLocal(scheduleId, { page })
+    showToast(`Page ${page} assigned`)
+  } catch (e) {
+    pageError.value = e.message || 'Failed to update page number'
   }
 }
 
-const handlePublishToggle = async (scheduleId, isPublished) => {
+const onPublishToggle = async (scheduleId, isPublished) => {
+  // Client-side guard mirrors the server guard
+  const s = schedules.value.find(x => x.schedule_id === scheduleId)
+  if (isPublished && s && (!s.page || s.page < 1)) {
+    pageError.value = 'Assign a page / slot number before publishing this schedule.'
+    return
+  }
   try {
     await toggleSchedulePublish(scheduleId, isPublished)
-    
-    // Update local state
-    const index = schedules.value.findIndex(s => s.schedule_id === scheduleId)
-    if (index !== -1) {
-      schedules.value[index].is_published = isPublished
-      calculateStatistics()
-    }
-    
-    alert(`Schedule ${isPublished ? 'published' : 'unpublished'} successfully!`)
-  } catch (err) {
-    console.error('Failed to toggle publish status:', err)
-    alert('Failed to update publish status')
+    patchLocal(scheduleId, { is_published: isPublished })
+    showToast(isPublished ? 'Schedule published' : 'Schedule unpublished')
+  } catch (e) {
+    pageError.value = e.data?.error?.message || e.message || 'Failed to toggle publish status'
   }
 }
 
-const handleViewDetails = (schedule) => {
-  selectedSchedule.value = schedule
-  showDetailsModal.value = true
+const onEdit = (schedule) => {
+  editTarget.value    = schedule
+  showEditModal.value = true
 }
 
-const closeDetailsModal = () => {
-  showDetailsModal.value = false
-  selectedSchedule.value = null
-}
-
-const openBulkPageUpdate = () => {
-  showBulkUpdateModal.value = true
-}
-
-const closeBulkUpdateModal = () => {
-  showBulkUpdateModal.value = false
-}
-
-const handleBulkPageUpdate = async (updates) => {
+const onSaveSchedule = async ({ scheduleId, runDate, runTime, page, isPublished }) => {
   try {
-    await bulkUpdateSchedulePages(updates)
-    
-    // Update local state
-    updates.forEach(update => {
-      const index = schedules.value.findIndex(s => s.schedule_id === update.scheduleId)
-      if (index !== -1) {
-        schedules.value[index].page = update.page
-      }
+    // Update date/time via dedicated endpoint
+    if (runDate || runTime) {
+      await updateSchedule(scheduleId, { runDate, runTime })
+    }
+    // Update page if changed
+    const existing = schedules.value.find(s => s.schedule_id === scheduleId)
+    if (existing && page !== existing.page) {
+      await updateSchedulePage(scheduleId, page)
+    }
+    // Update publish status if changed
+    if (existing && isPublished !== existing.is_published) {
+      await toggleSchedulePublish(scheduleId, isPublished)
+    }
+    // Patch local state
+    patchLocal(scheduleId, {
+      run_date:     runDate     || existing?.run_date,
+      run_time:     runTime     || existing?.run_time,
+      page,
+      is_published: isPublished,
     })
-    
-    calculateStatistics()
-    alert('Bulk page update completed successfully!')
-    closeBulkUpdateModal()
-  } catch (err) {
-    console.error('Failed to bulk update pages:', err)
-    alert('Failed to update pages')
+    showEditModal.value = false
+    showToast('Schedule updated')
+  } catch (e) {
+    pageError.value = e.message || 'Failed to save schedule'
   }
 }
 
-const exportToCSV = () => {
-  const headers = [
-    'Schedule ID',
-    'Run Date',
-    'Page',
-    'Published',
-    'Advert Title',
-    'Client',
-    'Contact Person',
-    'Email',
-    'Ad Size',
-    'Ad Type',
-    'Run Times'
-  ]
-  
-  const data = schedules.value.map(schedule => [
-    schedule.schedule_id,
-    schedule.run_date,
-    schedule.page || 'Not assigned',
-    schedule.is_published ? 'Yes' : 'No',
-    schedule.advert_title,
-    schedule.company_name,
-    schedule.contact_person || 'N/A',
-    schedule.email || 'N/A',
-    schedule.ad_size,
-    schedule.ad_type,
-    schedule.run_time ? schedule.run_time.join(', ') : 'N/A'
-  ])
-  
-  const csvContent = [
-    headers.join(','),
-    ...data.map(row => row.join(','))
-  ].join('\n')
-  
-  const blob = new Blob([csvContent], { type: 'text/csv' })
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `schedules_${new Date().toISOString().split('T')[0]}.csv`
-  a.click()
-  window.URL.revokeObjectURL(url)
+const onUnschedule = async (scheduleId) => {
+  try {
+    await unscheduleAdvert(scheduleId)
+    schedules.value = schedules.value.filter(s => s.schedule_id !== scheduleId)
+    showToast('Schedule removed')
+  } catch (e) {
+    pageError.value = e.message || 'Failed to remove schedule'
+  }
 }
 
+const onBulkPage = (targets) => {
+  bulkTargets.value   = targets
+  showBulkModal.value = true
+}
 
+const onViewMedia = (schedule) => {
+  mediaTarget.value    = schedule
+  showMediaModal.value = true
+}
+
+const onBulkSave = async (changes) => {
+  try {
+    await bulkUpdateSchedulePages(changes)
+    changes.forEach(({ scheduleId, page }) => patchLocal(scheduleId, { page }))
+    showBulkModal.value = false
+    showToast(`${changes.length} page${changes.length !== 1 ? 's' : ''} updated`)
+  } catch (e) {
+    pageError.value = e.message || 'Bulk update failed'
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+onMounted(() => { applyRange({ label: 'This Week', days: 7 }) })
 </script>
 
 <style scoped>
-.schedule-review-page {
-  width: 100%;
-}
-
-.page-header {
-  background: white;
-  padding: 20px 30px;
-  border-radius: 10px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.page-header h1 {
-  color: #003366;
-  margin-bottom: 10px;
-}
-
-.page-header p {
-  color: #666;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.filters-card {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.filter-row {
+.editor-page {
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  font-size: 13px;
   display: flex;
-  align-items: center;
-  gap: 15px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0;
 }
 
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* PAGE HEADER */
+.page-hd {
+  padding: 0 0 16px 0;
+  border-bottom: 2px solid #DEEAF1;
+  margin-bottom: 0;
+}
+.page-hd__eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9DC3E6; }
+.page-hd__title   { font-size: 22px; font-weight: 700; color: #1F3864; margin: 4px 0 4px; }
+.page-hd__sub     { font-size: 12px; color: #888; margin: 0; }
+
+/* FILTER BAR */
+.filter-bar {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 12px; flex-wrap: wrap;
+  background: #fff; border: 1px solid #DEEAF1; border-top: none; padding: 12px 14px;
+}
+.filter-bar__left  { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; flex: 1; }
+.filter-bar__right { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #888; }
+.filter-date, .filter-sel, .filter-search {
+  border: 1px solid #BDD7EE; padding: 6px 10px; font-size: 12px;
+  border-radius: 0; font-family: inherit; background: #fff; color: #222;
+}
+.filter-search { width: 200px; }
+.filter-date:focus, .filter-sel:focus, .filter-search:focus {
+  outline: none; border-color: #1F3864; box-shadow: 0 0 0 2px rgba(31,56,100,.08);
+}
+.range-pills { display: flex; align-items: flex-end; gap: 4px; }
+.range-pill {
+  font-size: 11px; font-weight: 600; padding: 5px 11px;
+  border: 1px solid #BDD7EE; background: #F7FBFE; color: #6081a3; cursor: pointer; font-family: inherit;
+}
+.range-pill:hover { background: #DEEAF1; border-color: #9DC3E6; color: #1F3864; }
+.range-pill--active { background: #1F3864; color: #fff; border-color: #1F3864; }
+.filter-refresh-btn {
+  width: 32px; height: 32px; border: 1px solid #BDD7EE; background: #F7FBFE;
+  color: #6081a3; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.filter-refresh-btn:hover { background: #DEEAF1; color: #1F3864; }
+
+/* STATS BAND */
+.stats-band {
+  display: flex; background: #1F3864; border-bottom: 3px solid #152a4e;
+}
+.stat-cell { flex: 1; padding: 12px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.stat-div  { width: 1px; background: rgba(157,195,230,.2); flex-shrink: 0; }
+.stat-val  { font-size: 22px; font-weight: 700; color: #fff; font-family: 'IBM Plex Mono', monospace; line-height: 1; }
+.stat-lbl  { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: #5B7FAC; }
+.stat-cell--amber .stat-val { color: #FFCC00; }
+.stat-cell--blue  .stat-val { color: #9DC3E6; }
+.stat-cell--green .stat-val { color: #A9D18E; }
+
+/* ERROR / TOAST */
+.err-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: #FCE4D6; border: 1px solid #E31E24; border-left: 4px solid #E31E24;
+  padding: 10px 14px; font-size: 12px; color: #9C0006; margin-top: 8px;
+}
+.err-dismiss { margin-left: auto; background: none; border: none; font-size: 18px; cursor: pointer; color: #9C0006; padding: 0; line-height: 1; }
+
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  background: #1F3864; color: #fff; font-size: 12px; font-weight: 600;
+  padding: 10px 18px; border-left: 4px solid #A9D18E;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+}
+.toast-fade-enter-active, .toast-fade-leave-active { transition: all .25s ease; }
+.toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; transform: translateY(8px); }
+
+/* MAIN PANEL */
+.main-panel {
+  background: #fff;
+  border: 1px solid #DEEAF1;
+  border-top: none;
 }
 
-.filter-group label {
-  font-weight: 600;
-  color: #333;
-  min-width: 80px;
-}
-
-.filter-group input,
-.filter-group select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 0.95em;
-}
-
-.filter-group input {
-  width: 150px;
-}
-
-.filter-group select {
-  min-width: 150px;
-}
-
-.content-card {
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #F5F5F5;
-}
-
-.card-header h2 {
-  color: #003366;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.tabs {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  border-bottom: 2px solid #DDDDDD;
-}
-
-.tab {
-  padding: 12px 24px;
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: #666;
-  font-size: 1em;
-  border-bottom: 3px solid transparent;
-  transition: all 0.3s;
-}
-
-.tab:hover {
-  color: #E31E24;
-}
-
-.tab.active {
-  color: #E31E24;
-  border-bottom-color: #E31E24;
-}
-
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1em;
-  font-weight: 500;
-  transition: all 0.3s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #E31E24;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #c01820;
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #0052a3;
-  transform: translateY(-1px);
-}
-
-.btn-info {
-  background: #17a2b8;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background: #138496;
-  transform: translateY(-1px);
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #218838;
-  transform: translateY(-1px);
+@media (max-width: 768px) {
+  .filter-bar   { flex-direction: column; align-items: stretch; }
+  .stats-band   { flex-wrap: wrap; }
+  .stat-cell    { min-width: 50%; }
 }
 </style>

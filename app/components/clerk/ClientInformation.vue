@@ -7,7 +7,9 @@
     </div>
     <p class="section-description">Enter the client's contact details for this advert</p>
     
+    <!-- First Row: Client Name and Contact Person -->
     <div class="form-grid">
+      <!-- Client Dropdown -->
       <div class="form-group">
         <div class="form-label">
           <label>Client Name</label>
@@ -15,18 +17,24 @@
         </div>
         <div class="input-container">
           <span class="input-icon">🏢</span>
-          <input 
-            :value="clientName"
-            type="text" 
-            placeholder="e.g., MTN Uganda" 
-            required
+          <ClientDropdown
+            :model-value="selectedClientId"
+            :placeholder="'Search or select client...'"
+            :enable-search="true"
+            :clearable="true"
             :disabled="disabled"
-            @input="updateClientName($event.target.value)"
-            class="form-input"
-          >
+            @update:model-value="handleClientIdUpdate"
+            @change="handleClientSelect"
+            @focus="loadClients"
+            ref="clientDropdownRef"
+          />
         </div>
-        <div v-if="!clientName && !disabled" class="input-hint">
-          Enter the company or client name
+        <div v-if="!selectedClient && !disabled && !clientName" class="input-hint">
+          Search for existing client or type new client name
+        </div>
+        <!-- Show manual entry hint when typing new client -->
+        <div v-if="clientName && !selectedClient" class="input-hint new-client-hint">
+          <span class="badge">New client: "{{ clientName }}" will be created</span>
         </div>
       </div>
       
@@ -52,7 +60,8 @@
       </div>
     </div>
 
-    <div class="form-grid">
+    <!-- Second Row: Email, Phone, and Reference Document (all on one line) -->
+    <div class="form-grid three-columns">
       <div class="form-group">
         <div class="form-label">
           <label>Email Address</label>
@@ -99,9 +108,46 @@
           <span v-else class="input-hint">Include country code (e.g., +256)</span>
         </div>
       </div>
+
+      <!-- Reference Document (now in the same row) -->
+      <div class="form-group">
+        <div class="form-label">
+          <label>Reference Document</label>
+          <span class="optional">(Optional)</span>
+        </div>
+        <div class="reference-document-container">
+          <div class="input-container">
+            <span class="input-icon">📄</span>
+            <input 
+              :value="referenceDocument"
+              type="text" 
+              placeholder="e.g., client ref no."
+              :disabled="disabled"
+              @input="updateReferenceDocument($event.target.value)"
+              class="form-input"
+            >
+          </div>
+          <div v-if="referenceDocument" class="document-badge">
+            <span class="badge-icon">📋</span>
+            <span class="badge-text">{{ referenceDocument }}</span>
+            <button 
+              v-if="!disabled" 
+              class="clear-document" 
+              @click="clearReferenceDocument"
+              title="Clear document reference"
+            >✕</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Validation Summary -->
+    <!-- Show selected client info when existing client is chosen -->
+    <div v-if="selectedClient" class="selected-client-info">
+      <span class="info-badge">✓ Existing client selected</span>
+      <span v-if="selectedClient.bc_no" class="info-badge bc-badge">BC: {{ selectedClient.bc_no }}</span>
+    </div>
+
+    <!-- Validation Summary - exactly as original -->
     <div v-if="hasRequiredInfo" class="validation-summary success">
       <span class="summary-icon">✓</span>
       <span class="summary-text">All required client information is complete</span>
@@ -114,7 +160,9 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue'
+import { defineProps, defineEmits, computed, ref, watch, onMounted } from 'vue'
+import ClientDropdown from './ClientDropdown.vue'
+import { useClientDropdownStore } from '~/stores/clientDropdown'
 
 const props = defineProps({
   clientName: {
@@ -133,19 +181,85 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  referenceDocument: {
+    type: String,
+    default: ''
+  },
   disabled: {
     type: Boolean,
     default: false
   }
 })
 
+
+
 const emit = defineEmits([
-  'update:clientName', 
-  'update:contactPerson', 
-  'update:email', 
+  'update:clientName',
+  'update:contactPerson',
+  'update:email',
   'update:phone',
+  'update:referenceDocument',
+  'update:clientId',
   'changed'
 ])
+
+// Store
+const clientStore = useClientDropdownStore()
+
+// Local state
+const selectedClient = ref(null)
+const selectedClientId = ref(null)
+const clientDropdownRef = ref(null)
+
+// Computed
+const isValidEmail = computed(() => {
+  if (!props.email) return false
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(props.email)
+})
+
+const isValidPhone = computed(() => {
+  if (!props.phone) return false
+  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/
+  const cleanPhone = props.phone.replace(/\s+/g, '')
+  return phoneRegex.test(cleanPhone)
+})
+
+const hasRequiredInfo = computed(() => {
+  return props.clientName && isValidEmail.value && isValidPhone.value
+})
+
+// Methods
+const loadClients = () => {
+  // Load clients when dropdown is focused
+  clientStore.loadInitialClients()
+}
+
+const handleClientIdUpdate = (value) => {
+  selectedClientId.value = value
+  emit('update:clientId', value)   // ← bubble the ID to new.vue
+}
+
+const handleClientSelect = (client) => {
+  selectedClient.value = client
+  
+  if (client) {
+    // Existing client selected - update the clientName
+    emit('update:clientName', client.label)
+    
+    // Optionally auto-fill other fields if available
+    if (client.email) emit('update:email', client.email)
+    if (client.phone) emit('update:phone', client.phone)
+    if (client.contact_person) emit('update:contactPerson', client.contact_person)
+    // Don't auto-fill reference document - it's specific to this booking
+  } else {
+    emit('update:clientName', '')
+    emit('update:clientId', null)   // ← clear the ID in parent too
+    selectedClient.value = null
+  }
+  
+  emit('changed', { field: 'client', value: client })
+}
 
 const updateClientName = (value) => {
   emit('update:clientName', value)
@@ -167,28 +281,44 @@ const updatePhone = (value) => {
   emit('changed', { field: 'phone', value })
 }
 
-// Validation computed properties
-const isValidEmail = computed(() => {
-  if (!props.email) return false
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(props.email)
+const updateReferenceDocument = (value) => {
+  emit('update:referenceDocument', value)
+  emit('changed', { field: 'referenceDocument', value })
+}
+
+const clearReferenceDocument = () => {
+  emit('update:referenceDocument', '')
+  emit('changed', { field: 'referenceDocument', value: '' })
+}
+
+// Preload clients when component mounts (optional)
+onMounted(() => {
+  // Start loading clients in background immediately
+  clientStore.loadInitialClients({ background: true }).catch(err => {
+    console.log('Background loading failed, will load on focus', err)
+  })
 })
 
-const isValidPhone = computed(() => {
-  if (!props.phone) return false
-  // Basic phone validation - accepts international format
-  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/
-  const cleanPhone = props.phone.replace(/\s+/g, '')
-  return phoneRegex.test(cleanPhone)
+// Watch for external clientName changes (for new client mode)
+watch(() => props.clientName, (newName) => {
+  if (newName && !selectedClient.value) {
+    // User is typing a new client name, clear any selected client
+    selectedClient.value = null
+    selectedClientId.value = null
+  }
 })
 
-// Expose a computed property to check if required fields are filled
-const hasRequiredInfo = computed(() => {
-  return props.clientName && isValidEmail.value && isValidPhone.value
+// Expose methods
+defineExpose({ 
+  hasRequiredInfo,
+  focusDropdown: () => clientDropdownRef.value?.focus(),
+  clearSelection: () => {
+    clientDropdownRef.value?.clear()
+    selectedClient.value = null
+    selectedClientId.value = null
+  },
+  clearReferenceDocument
 })
-
-// Expose the computed property
-defineExpose({ hasRequiredInfo })
 </script>
 
 <style scoped>
@@ -245,11 +375,18 @@ defineExpose({ hasRequiredInfo })
   line-height: 1.5;
 }
 
+/* Grid layouts */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 30px;
   margin-bottom: 30px;
+}
+
+/* Three-column layout for email, phone, reference */
+.form-grid.three-columns {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
 }
 
 .form-group {
@@ -296,6 +433,7 @@ defineExpose({ hasRequiredInfo })
   font-size: 1.1em;
   color: #0066cc;
   z-index: 1;
+  pointer-events: none;
 }
 
 .form-input {
@@ -336,11 +474,81 @@ defineExpose({ hasRequiredInfo })
   padding-left: 4px;
 }
 
+.new-client-hint {
+  margin-top: 8px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Reference document styles */
+.reference-document-container {
+  width: 100%;
+  position: relative;
+}
+
+.document-badge {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 30px;
+  font-size: 0.8em;
+  color: #0369a1;
+  animation: fadeIn 0.3s ease;
+  z-index: 2;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge-icon {
+  font-size: 1em;
+}
+
+.badge-text {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clear-document {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 50%;
+  transition: all 0.2s;
+  margin-left: 2px;
+}
+
+.clear-document:hover {
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+
 .input-validation {
   margin-top: 6px;
   padding-left: 4px;
   font-size: 0.85em;
-  height: 20px;
+  min-height: 20px;
 }
 
 .validation-text {
@@ -367,6 +575,30 @@ defineExpose({ hasRequiredInfo })
 .input-validation.valid .validation-text::before {
   content: "✓";
   margin-right: 4px;
+}
+
+/* Selected client info */
+.selected-client-info {
+  margin: 10px 0 0 0;
+  padding-left: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.info-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #38a169;
+  color: white;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease;
+}
+
+.info-badge.bc-badge {
+  background: #3b82f6;
 }
 
 .validation-summary {
@@ -423,14 +655,29 @@ defineExpose({ hasRequiredInfo })
 }
 
 /* Responsive adjustments */
+@media (max-width: 992px) {
+  .form-grid.three-columns {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .form-grid.three-columns .form-group:last-child {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 768px) {
   .form-section {
     padding: 20px;
   }
   
-  .form-grid {
+  .form-grid,
+  .form-grid.three-columns {
     grid-template-columns: 1fr;
     gap: 20px;
+  }
+  
+  .form-grid.three-columns .form-group:last-child {
+    grid-column: auto;
   }
   
   .section-header {
@@ -452,6 +699,13 @@ defineExpose({ hasRequiredInfo })
   .form-input {
     padding: 12px 16px 12px 44px;
   }
+  
+  .document-badge {
+    position: relative;
+    top: 0;
+    margin-top: 8px;
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -468,6 +722,10 @@ defineExpose({ hasRequiredInfo })
     flex-direction: column;
     text-align: center;
     gap: 8px;
+  }
+  
+  .selected-client-info {
+    flex-direction: column;
   }
 }
 </style>

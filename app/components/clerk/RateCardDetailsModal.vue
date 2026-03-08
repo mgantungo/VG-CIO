@@ -3,11 +3,12 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>{{ modalTitle }}</h3>
-        <button type="button" class="modal-close" @click="closeModal">Ã—</button>
+        <button type="button" class="modal-close" @click="closeModal">X</button>
       </div>
       
       <div class="modal-body">
         <!-- DEBUG INFO (remove in production) -->
+        <!----
         <div style="background: #f0f0f0; padding: 10px; margin-bottom: 15px; font-size: 12px; border-radius: 4px;">
           <strong>DEBUG - Rate Card Detection:</strong><br>
           sizeDimension: "<strong>{{ sizeDimension }}</strong>"<br>
@@ -20,6 +21,7 @@
           ✓ sizeDimension === 'per word': <strong>{{ sizeDimension === 'per word' }}</strong><br>
           ✓ ad_type === 'classified photo/Logo': <strong>{{ selectedRateCard?.ad_type === 'classified photo/Logo' }}</strong>
         </div>
+      -->
         
         <!-- Per cm col -->
         <div v-if="sizeDimension === 'per cm col'" class="input-group">

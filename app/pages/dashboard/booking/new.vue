@@ -39,14 +39,16 @@
         <!-- Client Information -->
         <ClientInformation
           v-model:client-name="form.clientName"
+          v-model:client-id="form.clientId" 
           v-model:contact-person="form.contactPerson"
           v-model:email="form.email"
           v-model:phone="form.phone"
+          v-model:reference-document="form.referenceDocument"
           :disabled="submitting || categoriesLoading"
           @changed="handleClientInfoChange"
         />
 
-        <!-- Advert Information -->
+        <!-- Advert Information - WITH OFFICE LOCATIONS FROM STORE -->
         <AdvertInformation
           v-model:advert-title="form.advertTitle"
           v-model:platform-category="form.platformCategory"
@@ -54,6 +56,8 @@
           v-model:rate-card-id="form.rateCardId"
           v-model:ad-size="form.adSize"
           v-model:ad-type="form.adType"
+          v-model:office-location="form.officeLocation"
+          v-model:publish-on-web="form.publishOnWeb"
           :disabled="submitting || categoriesLoading"
           :categories="categories"
           :products="products"
@@ -63,11 +67,14 @@
           :products-loading="productsLoading"
           :rate-cards-loading="rateCardsLoading"
           :price-loading="priceLoading"
+          :office-locations="officeLocations"
+          :office-locations-loading="officeLocationsLoading"
           @category-change="loadProductsForCategory"
           @product-change="handleProductSelected"
           @ratecard-change="handleRateCardSelected"
           @adtype-change="handleAdTypeChange"
           @edit-ratecard-details="editRateCardDetails"
+          @office-location-selected="handleOfficeLocationSelected"
         />
 
         <!-- Schedule & Pricing -->
@@ -156,21 +163,24 @@
 import FileUpload from '~/components/clerk/FileUpload.vue'
 import RateCardDetailsModal from '~/components/clerk/RateCardDetailsModal.vue'
 
-// Import new form section components
+// Import form section components
 import ClientInformation from '~/components/clerk/ClientInformation.vue'
 import AdvertInformation from '~/components/clerk/AdvertInformation.vue'
 import SchedulePricing from '~/components/clerk/SchedulePricing.vue'
 import AdditionalInformation from '~/components/clerk/AdditionalInformation.vue'
 import SalesAgentSelection from '~/components/clerk/SalesAgentSelection.vue'
 
+// Import composables and stores
 import { useProducts } from '~/composables/useProducts'
 import { useAdverts } from '~/composables/useAdverts'
+import { useOfficeLocationsStore } from '~/stores/officeLocation'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from '#imports'
+import { storeToRefs } from 'pinia'
 
 const router = useRouter()
 
-// Use the composable
+// Use the composables
 const { 
   categories,
   products,
@@ -185,6 +195,10 @@ const {
 
 const { createAdvert } = useAdverts()
 
+// Use office locations store
+const officeLocationsStore = useOfficeLocationsStore()
+const { locations: officeLocations, loading: officeLocationsLoading } = storeToRefs(officeLocationsStore)
+
 // Today's date for date validation
 const today = ref(new Date().toISOString().split('T')[0])
 
@@ -197,12 +211,16 @@ const form = reactive({
   contactPerson: '',
   email: '',
   phone: '',
+  referenceDocument: '',
+  clientId: '', 
   advertTitle: '',
   platformCategory: '',
   product: '',
   rateCardId: '',
   adSize: '',
   adType: 'full_color',
+  publishOnWeb: false,
+  officeLocation: '',
   startDate: '',
   endDate: '',
   frequency: 1,
@@ -245,38 +263,16 @@ watch(() => form.platformCategory, (newCategory) => {
   }
 })
 
-// Computed property for middle dates string
-const middleDatesString = computed(() => {
-  if (!form.datesList || form.datesList.length <= 2) return ''
-  
-  const sortedDates = [...form.datesList].sort()
-  const middleDates = sortedDates.slice(1, -1)
-  
-  return middleDates.join(', ')
-})
+// Publishing dates are stored in the publishing_dates field — no longer embedded in special_instructions
 
-// Helper function to format dates for special instructions
-const formatDatesForInstructions = () => {
-  if (!schedulePricingRef.value) return ''
-  
-  const middleDatesString = schedulePricingRef.value.getMiddleDatesForInstructions()
-  if (!middleDatesString) return ''
-  
-  return `dates[${middleDatesString}]`
-}
-
-// Helper function to build special instructions with dates
-const buildSpecialInstructions = () => {
-  const datesString = formatDatesForInstructions()
-  const userInstructions = form.specialInstructions?.trim() || ''
-  
-  if (datesString && userInstructions) {
-    return `${datesString}\n\n${userInstructions}`
-  } else if (datesString) {
-    return datesString
-  } else {
-    return userInstructions
-  }
+// Build the publishing_dates JSON: all selected dates + startDate + endDate, deduped, sorted asc
+const buildPublishingDates = () => {
+  const datesSet = new Set([
+    ...(form.datesList || []),
+    ...(form.startDate ? [form.startDate] : []),
+    ...(form.endDate   ? [form.endDate]   : [])
+  ].filter(Boolean))
+  return [...datesSet].sort()
 }
 
 // Computed properties
@@ -311,15 +307,13 @@ const availableRateCards = computed(() => {
 
 const selectedRateCard = computed(() => {
   if (!form.rateCardId) return null
-  // Use loose comparison to handle string vs number mismatch
   return rateCards.value.find(rc => rc.id == form.rateCardId)
 })
 
 const hasRequiredClientInfo = computed(() => {
-  return form.clientName && form.email && form.phone && form.advertTitle
+  return form.clientName && form.email && form.phone && form.advertTitle && form.officeLocation
 })
 
-// Modified isFormValid to not require sales agent (optional field)
 const isFormValid = computed(() => {
   return (
     hasRequiredClientInfo.value &&
@@ -334,13 +328,14 @@ const isFormValid = computed(() => {
 
 const loading = computed(() => {
   return categoriesLoading.value || productsLoading.value || 
-         rateCardsLoading.value || priceLoading.value
+         rateCardsLoading.value || priceLoading.value || officeLocationsLoading.value
 })
 
 // Lifecycle
 onMounted(async () => {
   console.log('[MOUNTED] Component mounted, initializing form...')
   await initializeForm()
+  await loadOfficeLocations()
 })
 
 // Methods
@@ -362,6 +357,16 @@ const initializeForm = async () => {
     console.error('[INIT] ERROR - Failed to initialize form:', error)
   } finally {
     categoriesLoading.value = false
+  }
+}
+
+const loadOfficeLocations = async () => {
+  try {
+    console.log('[OFFICE] Loading office locations...')
+    await officeLocationsStore.fetchOfficeLocations()
+    console.log('[OFFICE] SUCCESS - Loaded', officeLocations.value.length, 'locations')
+  } catch (error) {
+    console.error('[OFFICE] ERROR - Failed to load office locations:', error)
   }
 }
 
@@ -559,6 +564,18 @@ const handleAgentSelected = (agentId) => {
   console.log('[AGENT-SELECT] Sales agent selected:', agentId)
 }
 
+const handleOfficeLocationSelected = (locationCode) => {
+  console.log('[OFFICE-LOCATION] Office location selected:', locationCode)
+  const location = officeLocations.value.find(loc => loc.code === locationCode)
+  if (location) {
+    officeLocationsStore.setSelectedLocation(location)
+  }
+}
+
+const handleClientInfoChange = ({ field, value }) => {
+  console.log('[CLIENT-INFO] Client info changed:', field, '=', value)
+}
+
 const calculatePrice = async () => {
   console.log('[CALCULATE-PRICE] ===== STARTING PRICE CALCULATION =====')
   console.log('[CALCULATE-PRICE] Current state:', {
@@ -597,11 +614,11 @@ const calculatePrice = async () => {
   // Check if this rate card requires additional details
   const requiresDetails = rateCard && 
       (rateCard.size_dimension === 'per cm col' || 
-       rateCard.size_dimension === 'per_cm_col' ||  // Also check underscore format
+       rateCard.size_dimension === 'per_cm_col' ||
        rateCard.size_dimension === 'per column' || 
-       rateCard.size_dimension === 'per_column' ||   // Also check underscore format
+       rateCard.size_dimension === 'per_column' ||
        rateCard.size_dimension === 'per word' ||
-       rateCard.size_dimension === 'per_word' ||     // Also check underscore format
+       rateCard.size_dimension === 'per_word' ||
        rateCard.ad_type === 'classified photo/Logo')
   
   console.log('[CALCULATE-PRICE] Checking requirements:', {
@@ -612,15 +629,6 @@ const calculatePrice = async () => {
     ad_type_exact: JSON.stringify(rateCard?.ad_type),
     requiresDetails: requiresDetails
   })
-  
-  console.log('[CALCULATE-PRICE] Detailed checks:')
-  console.log('   - size_dimension === "per cm col":', rateCard?.size_dimension === 'per cm col')
-  console.log('   - size_dimension === "per_cm_col":', rateCard?.size_dimension === 'per_cm_col')
-  console.log('   - size_dimension === "per column":', rateCard?.size_dimension === 'per column')
-  console.log('   - size_dimension === "per_column":', rateCard?.size_dimension === 'per_column')
-  console.log('   - size_dimension === "per word":', rateCard?.size_dimension === 'per word')
-  console.log('   - size_dimension === "per_word":', rateCard?.size_dimension === 'per_word')
-  console.log('   - ad_type === "classified photo/Logo":', rateCard?.ad_type === 'classified photo/Logo')
   
   if (requiresDetails) {
     console.log('[CALCULATE-PRICE] REQUIRES-DETAILS - This rate card needs additional input')
@@ -689,34 +697,19 @@ const performPriceCalculationWithDetails = async (details) => {
       ...details.details
     }
     
-    // Console log the request body for debugging
     console.log('[CALC-DETAILS] REQUEST - Sending to calculate-price endpoint')
     console.log('[CALC-DETAILS] Endpoint:', `${process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'}/adverts/calculate-price`)
     console.log('[CALC-DETAILS] Request Body:', JSON.stringify(requestBody, null, 2))
-    console.log('[CALC-DETAILS] Full details object:', JSON.stringify(details, null, 2))
-    console.log('[CALC-DETAILS] VERIFY - Request includes cm?', 'cm' in requestBody, '| value:', requestBody.cm)
-    console.log('[CALC-DETAILS] VERIFY - Request includes columns?', 'columns' in requestBody, '| value:', requestBody.columns)
-    console.log('[CALC-DETAILS] VERIFY - Request includes totalSize?', 'totalSize' in requestBody, '| value:', requestBody.totalSize)
     
     const response = await $fetch(`${process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'}/adverts/calculate-price`, {
       method: 'POST',
       body: requestBody
     })
     
-    // Console log the response
     console.log('[CALC-DETAILS] RESPONSE - Received from calculate-price endpoint')
     console.log('[CALC-DETAILS] Response data:', JSON.stringify(response, null, 2))
-    console.log('[CALC-DETAILS] Response.basePrice:', response.basePrice)
-    console.log('[CALC-DETAILS] Response.subtotal:', response.subtotal)
-    console.log('[CALC-DETAILS] Response.surcharge:', response.surcharge)
-    console.log('[CALC-DETAILS] Response.total:', response.total)
-    
-    // Build priceCalculation carefully to avoid overwriting API response values
-    // The `details` object from modal contains: { rateCardId, sizeDimension, adType (rate card type), details: {cm, columns}, calculatedPrice }
-    // The `response` from API contains: { basePrice, subtotal, total, surcharge, currency }
     
     priceCalculation.value = {
-      // API response values (these MUST be preserved)
       basePrice: response.basePrice,
       subtotal: response.subtotal,
       total: response.total,
@@ -724,28 +717,19 @@ const performPriceCalculationWithDetails = async (details) => {
       surchargePercentage: response.surchargePercentage || 0,
       currency: response.currency || 'UGX',
       frequency: response.frequency || form.frequency,
-      
-      // Modal details metadata (for display purposes)
       rateCardId: details.rateCardId,
       sizeDimension: details.sizeDimension,
-      rateCardAdType: details.adType,  // Rate card type (e.g., "Letter of Administration")
-      rateCardDetails: details.details,  // The actual values: {cm: 5, columns: 3}
-      modalEstimate: details.calculatedPrice  // What the modal calculated
+      rateCardAdType: details.adType,
+      rateCardDetails: details.details,
+      modalEstimate: details.calculatedPrice
     }
     
     console.log('[CALC-DETAILS] Stored priceCalculation:', priceCalculation.value)
-    console.log('[CALC-DETAILS] priceCalculation.basePrice:', priceCalculation.value.basePrice)
-    console.log('[CALC-DETAILS] priceCalculation.subtotal:', priceCalculation.value.subtotal)
-    console.log('[CALC-DETAILS] priceCalculation.total:', priceCalculation.value.total)
-    console.log('[CALC-DETAILS] Verify - API returned total:', response.total, '| Stored total:', priceCalculation.value.total)
-    
     selectedCurrency.value = response.currency || 'UGX'
     console.log('[CALC-DETAILS] SUCCESS - Calculation complete. Total:', selectedCurrency.value, response.total)
     
   } catch (error) {
     console.error('[CALC-DETAILS] ERROR - Price calculation with details failed:', error)
-    console.error('[CALC-DETAILS] Error message:', error.message)
-    
     priceCalculation.value = null
     alert('Failed to calculate price. Please try again.')
   } finally {
@@ -815,10 +799,6 @@ const handleFilesUpdate = (files) => {
   form.files = files
 }
 
-const handleClientInfoChange = ({ field, value }) => {
-  console.log('[CLIENT-INFO] Client info changed:', field, '=', value)
-}
-
 const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return 'UGX 0'
   
@@ -871,10 +851,14 @@ const saveDraft = async () => {
     
     const advertData = {
       advertTitle: form.advertTitle,
+      clientId: form.clientId || null,
       clientName: form.clientName,
       contactPerson: form.contactPerson || '',
       email: form.email,
       phone: form.phone,
+      referenceDocument: form.referenceDocument || '',
+      officeLocation: form.officeLocation,
+      publishOnWeb: form.publishOnWeb,
       platformCategory: form.platformCategory,
       product: form.product,
       rateCard: form.rateCardId,
@@ -884,13 +868,16 @@ const saveDraft = async () => {
       startDate: form.startDate,
       endDate: form.endDate || null,
       datesList: form.datesList,
+      publishingDates: buildPublishingDates(),
       dateCount: dateCount,
       basePrice: priceCalculation.value?.basePrice || 0,
       surcharge: priceCalculation.value?.surcharge || 0,
       discount: parseFloat(form.discount) || 0,
       totalAmount: finalTotal,
       paymentMethod: form.paymentMethod,
-      specialInstructions: buildSpecialInstructions(),
+      specialInstructions: form.specialInstructions?.trim() || '',
+      contactEmail: form.email,
+      contactNumber: form.phone,
       status: 'draft',
       files: form.files,
       rateCardDetails: rateCardDetails.value,
@@ -937,10 +924,14 @@ const submitAdvert = async () => {
     
     const advertData = {
       advertTitle: form.advertTitle,
+      clientId: form.clientId || null,
       clientName: form.clientName,
       contactPerson: form.contactPerson || '',
       email: form.email,
       phone: form.phone,
+      referenceDocument: form.referenceDocument || '',
+      officeLocation: form.officeLocation,
+      publishOnWeb: form.publishOnWeb,
       platformCategory: form.platformCategory,
       product: form.product,
       rateCard: form.rateCardId,
@@ -950,13 +941,16 @@ const submitAdvert = async () => {
       startDate: form.startDate,
       endDate: form.endDate || null,
       datesList: form.datesList,
+      publishingDates: buildPublishingDates(),
       dateCount: dateCount,
       basePrice: priceCalculation.value?.basePrice || 0,
       surcharge: priceCalculation.value?.surcharge || 0,
       discount: parseFloat(form.discount) || 0,
       totalAmount: finalTotal,
       paymentMethod: form.paymentMethod,
-      specialInstructions: buildSpecialInstructions(),
+      specialInstructions: form.specialInstructions?.trim() || '',
+      contactEmail: form.email,
+      contactNumber: form.phone,
       status: 'pending_review',
       files: form.files,
       rateCardDetails: rateCardDetails.value,
@@ -985,12 +979,15 @@ const resetForm = () => {
   Object.keys(form).forEach(key => {
     if (Array.isArray(form[key])) {
       form[key] = []
+    } else if (typeof form[key] === 'boolean') {
+      form[key] = false
     } else {
       form[key] = ''
     }
   })
   
   form.adType = 'full_color'
+  form.publishOnWeb = false
   form.frequency = 1
   form.discount = 0
   form.startDate = today.value
@@ -1006,7 +1003,6 @@ const resetForm = () => {
 </script>
 
 <style scoped>
-/* All existing styles remain the same */
 .booking-page {
   width: 100%;
   padding-bottom: 40px;

@@ -1,98 +1,97 @@
 <!--components/design/FileList.vue-->
 <template>
   <div class="file-list">
-    <div v-if="loading" class="loading-state">
-      <div class="loading-spinner"></div>
-      <div>Loading files...</div>
+
+    <!-- ── LOADING ── -->
+    <div v-if="loading" class="state-box">
+      <div class="spinner"></div>
+      <p>Loading files…</p>
     </div>
 
-    <div v-else-if="files.length === 0" class="empty-state">
-      <div class="empty-icon">📁</div>
-      <h4>No Files Available</h4>
+    <!-- ── EMPTY ── -->
+    <div v-else-if="files.length === 0" class="state-box">
+      <div class="state-box__icon">&#128193;</div>
+      <div class="state-box__title">No Files Available</div>
       <p>No files have been uploaded yet.</p>
     </div>
 
-    <div v-else class="files-scroll-container">
-      <div class="files-container">
-        <div v-for="file in files" :key="file.id" class="file-item">
-          <div class="file-info" @click="$emit('preview', file)">
-            <div class="file-icon" :class="getFileIconClass(file)">
-              {{ getFileIcon(file) }}
-            </div>
-            
-            <div class="file-details">
-              <div class="file-name">{{ file.name }}</div>
-              
-              <div class="file-meta">
-                <span class="file-size">{{ formatFileSize(file.size) }}</span>
-                <span class="file-type">{{ getFileType(file) }}</span>
-                <span class="file-date" v-if="file.createdAt">
-                  {{ formatRelativeTime(file.createdAt) }}
-                </span>
+    <!-- ── TABLE ── -->
+    <div v-else class="tbl-wrap">
+      <table class="xl-tbl">
+        <thead>
+          <tr>
+            <th class="tc-file">File</th>
+            <th class="tc-type">Type</th>
+            <th class="tc-size">Size</th>
+            <th class="tc-date">Uploaded</th>
+            <th class="tc-ref" v-if="hasRefs">Reference</th>
+            <th class="tc-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="file in files" :key="file.id" class="xl-row">
+            <td class="tc-file">
+              <div class="file-name-cell" @click="$emit('preview', file)" style="cursor:pointer;">
+                <span :class="`file-icon-box file-icon-box--${getFileIconClass(file)}`">{{ getFileIcon(file) }}</span>
+                <div class="file-name-info">
+                  <div class="file-name">{{ file.name }}</div>
+                </div>
               </div>
-              
-              <div v-if="file.advertReference" class="file-context">
-                <span class="ref-badge">{{ file.advertReference }}</span>
+            </td>
+            <td class="tc-type"><span class="type-chip">{{ getFileType(file) }}</span></td>
+            <td class="tc-size num-cell">{{ formatFileSize(file.size) }}</td>
+            <td class="tc-date num-cell">{{ file.createdAt ? formatRelativeTime(file.createdAt) : '—' }}</td>
+            <td class="tc-ref" v-if="hasRefs">
+              <span v-if="file.advertReference" class="ref-chip">{{ file.advertReference }}</span>
+              <span v-else class="muted">—</span>
+            </td>
+            <td class="tc-actions">
+              <div class="act-group">
+                <a v-if="file.url" :href="resolveUrl(file.url)" target="_blank" class="act-btn act-btn--view" title="Preview" @click.stop>
+                  &#128065; View
+                </a>
+                <a v-if="file.url" :href="resolveUrl(file.url)" :download="file.name" class="act-btn act-btn--dl" title="Download" @click.stop="$emit('download', file)">
+                  &#8659; DL
+                </a>
+                <button v-if="showDelete" class="act-btn act-btn--del" @click.stop="$emit('delete', file)" title="Delete">
+                  &#128465;
+                </button>
               </div>
-            </div>
-          </div>
-
-          <div class="file-actions">
-            <a 
-              v-if="file.url"
-              :href="file.url"
-              target="_blank"
-              class="btn btn-info btn-sm"
-              title="Preview"
-              @click.stop
-            >
-              👁️
-            </a>
-            
-            <a 
-              v-if="file.url"
-              :href="file.url"
-              :download="file.name"
-              class="btn btn-success btn-sm"
-              title="Download"
-              @click.stop="$emit('download', file)"
-            >
-              ⬇️
-            </a>
-            
-            <button 
-              v-if="showDelete"
-              class="btn btn-danger btn-sm"
-              @click.stop="$emit('delete', file)"
-              title="Delete"
-            >
-              🗑️
-            </button>
-          </div>
-        </div>
-      </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <div v-if="files.length > 0 && showStats" class="file-stats">
-      <div class="stat-item">
-        <span class="stat-label">Total Files:</span>
-        <span class="stat-value">{{ files.length }}</span>
-      </div>
-      
-      <div class="stat-item">
-        <span class="stat-label">Total Size:</span>
-        <span class="stat-value">{{ formatFileSize(totalSize) }}</span>
-      </div>
-      
-      <div v-if="latestUpload" class="stat-item">
-        <span class="stat-label">Latest:</span>
-        <span class="stat-value">{{ formatRelativeTime(latestUpload.createdAt) }}</span>
-      </div>
+    <!-- ── STATS BAR ── -->
+    <div v-if="files.length > 0 && showStats" class="stats-bar">
+      <span class="stats-bar__stat">
+        <span class="stats-bar__lbl">Total Files</span>
+        <span class="stats-bar__val">{{ files.length }}</span>
+      </span>
+      <span class="stats-bar__div">|</span>
+      <span class="stats-bar__stat">
+        <span class="stats-bar__lbl">Total Size</span>
+        <span class="stats-bar__val">{{ formatFileSize(totalSize) }}</span>
+      </span>
+      <span v-if="latestUpload" class="stats-bar__div">|</span>
+      <span v-if="latestUpload" class="stats-bar__stat">
+        <span class="stats-bar__lbl">Latest Upload</span>
+        <span class="stats-bar__val">{{ formatRelativeTime(latestUpload.createdAt) }}</span>
+      </span>
     </div>
+
   </div>
 </template>
 
 <script setup>
+import { useRuntimeConfig } from '#app'
+const { public: { uploadBase = '' } } = useRuntimeConfig()
+const resolveUrl = (url) => {
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  return `${uploadBase}${url}`
+}
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -135,6 +134,8 @@ const latestUpload = computed(() => {
   }, null)
 })
 
+const hasRefs = computed(() => props.files.some(f => f.advertReference))
+
 // Utility Functions
 const formatFileSize = (bytes) => {
   if (!bytes || bytes === 0) return '0 B'
@@ -156,7 +157,7 @@ const formatRelativeTime = (dateString) => {
     
     if (diffInSeconds < 60) return 'just now'
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hrs ago`
     if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`
     
     // More than a week, show actual date
@@ -175,29 +176,13 @@ const getFileIcon = (file) => {
   const ext = name.split('.').pop().toLowerCase()
   
   const iconMap = {
-    'doc': '📄',
-    'docx': '📄',
+    'doc': '📄', 'docx': '📄',
     'pdf': '📕',
-    'jpg': '🖼️',
-    'jpeg': '🖼️',
-    'png': '🖼️',
-    'gif': '🖼️',
-    'bmp': '🖼️',
-    'psd': '🎨',
-    'ai': '🎨',
-    'eps': '🎨',
-    'svg': '🎨',
-    'indd': '🎨',
-    'mp4': '🎬',
-    'mov': '🎬',
-    'avi': '🎬',
-    'wmv': '🎬',
-    'mp3': '🎵',
-    'wav': '🎵',
-    'aac': '🎵',
-    'zip': '🗜️',
-    'rar': '🗜️',
-    '7z': '🗜️'
+    'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'bmp': '🖼️',
+    'psd': '🎨', 'ai': '🎨', 'eps': '🎨', 'svg': '🎨', 'indd': '🎨',
+    'mp4': '🎬', 'mov': '🎬', 'avi': '🎬', 'wmv': '🎬',
+    'mp3': '🎵', 'wav': '🎵', 'aac': '🎵',
+    'zip': '🗜️', 'rar': '🗜️', '7z': '🗜️'
   }
   
   return iconMap[ext] || '📎'
@@ -208,24 +193,14 @@ const getFileIconClass = (file) => {
   const ext = name.split('.').pop().toLowerCase()
   
   const iconClasses = {
-    'doc': 'icon-doc',
-    'docx': 'icon-doc',
-    'pdf': 'icon-pdf',
-    'jpg': 'icon-image',
-    'jpeg': 'icon-image',
-    'png': 'icon-image',
-    'gif': 'icon-image',
-    'psd': 'icon-design',
-    'ai': 'icon-design',
-    'eps': 'icon-design',
-    'svg': 'icon-design',
-    'indd': 'icon-design',
-    'mp4': 'icon-video',
-    'mov': 'icon-video',
-    'avi': 'icon-video'
+    'doc': 'doc', 'docx': 'doc',
+    'pdf': 'pdf',
+    'jpg': 'image', 'jpeg': 'image', 'png': 'image', 'gif': 'image',
+    'psd': 'design', 'ai': 'design', 'eps': 'design', 'svg': 'design', 'indd': 'design',
+    'mp4': 'video', 'mov': 'video', 'avi': 'video'
   }
   
-  return iconClasses[ext] || 'icon-default'
+  return iconClasses[ext] || 'default'
 }
 
 const getFileType = (file) => {
@@ -233,23 +208,13 @@ const getFileType = (file) => {
   const ext = name.split('.').pop().toLowerCase()
   
   const typeMap = {
-    'doc': 'Word',
-    'docx': 'Word',
+    'doc': 'DOCX', 'docx': 'DOCX',
     'pdf': 'PDF',
-    'jpg': 'JPEG',
-    'jpeg': 'JPEG',
-    'png': 'PNG',
-    'gif': 'GIF',
-    'psd': 'Photoshop',
-    'ai': 'Illustrator',
-    'eps': 'EPS',
-    'svg': 'SVG',
-    'indd': 'InDesign',
-    'mp4': 'MP4',
-    'mov': 'QuickTime',
+    'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG', 'gif': 'GIF',
+    'psd': 'PSD', 'ai': 'AI', 'eps': 'EPS', 'svg': 'SVG', 'indd': 'INDD',
+    'mp4': 'MP4', 'mov': 'MOV',
     'mp3': 'MP3',
-    'zip': 'ZIP',
-    'rar': 'RAR'
+    'zip': 'ZIP', 'rar': 'RAR'
   }
   
   return typeMap[ext] || ext.toUpperCase()
@@ -259,339 +224,130 @@ const getFileType = (file) => {
 <style scoped>
 .file-list {
   width: 100%;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  font-size: 13px;
 }
 
-.loading-state {
+/* ── STATE BOXES ── */
+.state-box {
   text-align: center;
-  padding: 60px 20px;
+  padding: 48px 20px;
+  background: #F7FBFE;
+  border: 1px dashed #BDD7EE;
 }
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #DDDDDD;
-  border-top-color: #0066CC;
+.state-box__icon  { font-size: 32px; margin-bottom: 10px; opacity: .45; }
+.state-box__title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }
+.state-box p      { font-size: 12px; color: #999; margin: 0; }
+.spinner {
+  width: 30px; height: 30px;
+  border: 3px solid #DEEAF1; border-top-color: #1F3864;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
+  animation: spin 0.9s linear infinite;
+  margin: 0 auto 12px;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  background: #F9F9F9;
-  border-radius: 8px;
-  border: 2px dashed #DDDDDD;
-}
-
-.empty-icon {
-  font-size: 3em;
-  color: #0066CC;
-  margin-bottom: 20px;
-}
-
-.empty-state h4 {
-  color: #666;
-  margin-bottom: 10px;
-  font-weight: 500;
-}
-
-.empty-state p {
-  color: #999;
-  margin-bottom: 0;
-}
-
-/* FileList Horizontal Scroll Container */
-.files-scroll-container {
+/* ── TABLE ── */
+.tbl-wrap { overflow-x: auto; }
+.xl-tbl {
   width: 100%;
-  overflow-x: auto;
-  padding-bottom: 10px;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 560px;
 }
-
-.files-container {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  min-width: min-content; /* Allow container to be wider than parent */
-}
-
-.file-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background: white;
-  border: 1px solid #DDDDDD;
-  border-radius: 8px;
-  transition: all 0.3s;
-  min-width: 600px; /* Minimum width for file items */
-}
-
-.file-item:hover {
-  border-color: #0066CC;
-  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.1);
-  transform: translateY(-2px);
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex: 1;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.file-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.8em;
-  flex-shrink: 0;
-}
-
-.icon-doc {
-  background: linear-gradient(135deg, #185abd, #1e6feb);
-  color: white;
-}
-
-.icon-pdf {
-  background: linear-gradient(135deg, #e63946, #ff6b6b);
-  color: white;
-}
-
-.icon-image {
-  background: linear-gradient(135deg, #2a9d8f, #2ec4b6);
-  color: white;
-}
-
-.icon-design {
-  background: linear-gradient(135deg, #f4a261, #ff9f1c);
-  color: white;
-}
-
-.icon-video {
-  background: linear-gradient(135deg, #9d4edd, #c77dff);
-  color: white;
-}
-
-.icon-default {
-  background: linear-gradient(135deg, #6c757d, #adb5bd);
-  color: white;
-}
-
-.file-details {
-  flex: 1;
-  min-width: 300px; /* Minimum width for file details */
-}
-
-.file-name {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-  font-size: 1.1em;
-  word-break: break-word;
-}
-
-.file-meta {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  flex-wrap: nowrap; /* Prevent wrapping */
-  margin-bottom: 8px;
-  font-size: 0.85em;
-  color: #666;
-}
-
-.file-size {
-  font-weight: 500;
-  color: #0066CC;
-}
-
-.file-type {
-  background: #F5F5F5;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 0.8em;
-}
-
-.file-date {
-  color: #999;
-}
-
-.file-context {
-  margin-top: 5px;
-}
-
-.ref-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  background: #E31E24;
-  color: white;
-  border-radius: 12px;
-  font-size: 0.8em;
-  font-weight: 600;
-}
-
-.file-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-  min-width: 150px; /* Minimum width for action buttons */
-  justify-content: flex-end;
-}
-
-.btn {
+.xl-tbl thead tr { background: #DEEAF1; }
+.xl-tbl thead th {
+  color: #1F3864; font-weight: 600; font-size: 10px;
+  text-transform: uppercase; letter-spacing: .4px;
   padding: 8px 12px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 0.9em;
-  transition: all 0.3s;
+  border-bottom: 2px solid #9DC3E6;
+  border-right: 1px solid #BDD7EE;
+  text-align: left; white-space: nowrap;
+}
+.xl-tbl thead th:last-child { border-right: none; }
+.xl-tbl tbody tr.xl-row:nth-child(even) { background: #F7FBFE; }
+.xl-tbl tbody tr.xl-row:hover { background: #EBF4FF; }
+.xl-tbl tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #DEEAF1;
+  border-right: 1px solid #EBF4FF;
+  vertical-align: middle;
+}
+.xl-tbl tbody td:last-child { border-right: none; }
+
+/* ── COL WIDTHS ── */
+.tc-file    { min-width: 200px; }
+.tc-type    { width: 64px; }
+.tc-size    { width: 80px; }
+.tc-date    { width: 100px; }
+.tc-ref     { width: 110px; }
+.tc-actions { width: 120px; }
+
+/* ── CELL CONTENTS ── */
+.file-name-cell { display: flex; align-items: center; gap: 8px; }
+.file-icon-box {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+  border: 1px solid #BDD7EE;
+  background: #F7FBFE;
+}
+.file-icon-box--image   { background: #FFF2CC; border-color: #FFD966; }
+.file-icon-box--video   { background: #FCE4D6; border-color: #F4B183; }
+.file-icon-box--pdf     { background: #FCE4D6; border-color: #FF7043; }
+.file-icon-box--design  { background: #E2EFDA; border-color: #92D050; }
+.file-icon-box--doc     { background: #DEEAF1; border-color: #9DC3E6; }
+
+.file-name-info { min-width: 0; }
+.file-name { font-weight: 500; color: #222; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+
+.type-chip {
+  display: inline-block;
+  background: #DEEAF1; color: #1F3864;
+  border: 1px solid #9DC3E6;
+  font-size: 9px; font-weight: 700;
+  padding: 1px 6px;
+}
+.num-cell { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #555; }
+.ref-chip {
+  display: inline-block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; font-weight: 700;
+  color: #1F3864; background: #DEEAF1;
+  border: 1px solid #9DC3E6;
+  padding: 1px 6px;
+}
+.muted { color: #bbb; font-size: 12px; }
+
+/* ── ACTION BUTTONS ── */
+.act-group { display: flex; gap: 4px; }
+.act-btn {
+  display: inline-block;
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  cursor: pointer; border-radius: 0;
   text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  white-space: nowrap; font-family: inherit;
+  transition: opacity .15s;
 }
+.act-btn--view { background: #DEEAF1; color: #1F3864; border-color: #9DC3E6; }
+.act-btn--view:hover { background: #c5d9ec; }
+.act-btn--dl   { background: #E2EFDA; color: #375623; border-color: #92D050; }
+.act-btn--dl:hover { background: #c8e3b4; }
+.act-btn--del  { background: #FCE4D6; color: #9C0006; border-color: #FF7043; }
+.act-btn--del:hover { background: #f4c7b4; }
 
-.btn-info {
-  background: #17a2b8;
-  color: white;
+/* ── STATS BAR ── */
+.stats-bar {
+  background: #DEEAF1;
+  border-top: 1px solid #9DC3E6;
+  padding: 7px 14px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 11px;
 }
-
-.btn-info:hover {
-  background: #138496;
-  transform: translateY(-1px);
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover {
-  background: #218838;
-  transform: translateY(-1px);
-}
-
-.btn-danger {
-  background: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #c82333;
-  transform: translateY(-1px);
-}
-
-.btn-sm {
-  padding: 6px 10px;
-  font-size: 0.85em;
-}
-
-.file-stats {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 2px solid #F5F5F5;
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.stat-label {
-  color: #666;
-  font-size: 0.9em;
-  font-weight: 500;
-}
-
-.stat-value {
-  color: #003366;
-  font-weight: 600;
-}
-
-/* Scrollbar styling */
-.files-scroll-container::-webkit-scrollbar {
-  height: 8px;
-}
-
-.files-scroll-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.files-scroll-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.files-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Hide scrollbar for IE, Edge and Firefox */
-.files-scroll-container {
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .file-item {
-    min-width: 500px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 15px;
-  }
-  
-  .file-info {
-    flex-direction: column;
-    text-align: center;
-    gap: 15px;
-  }
-  
-  .file-details {
-    min-width: 250px;
-  }
-  
-  .file-meta {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  
-  .file-actions {
-    width: 100%;
-    justify-content: center;
-    min-width: auto;
-  }
-  
-  .file-stats {
-    flex-direction: column;
-    text-align: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .file-item {
-    min-width: 400px;
-  }
-  
-  .file-details {
-    min-width: 200px;
-  }
-}
+.stats-bar__stat { display: flex; align-items: center; gap: 6px; }
+.stats-bar__lbl  { color: #6081a3; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; font-size: 9px; }
+.stats-bar__val  { font-weight: 700; color: #1F3864; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+.stats-bar__div  { color: #9DC3E6; }
 </style>

@@ -1,227 +1,301 @@
 <!-- components/design/AdvertScheduler.vue -->
 <template>
-  <div v-if="show" class="scheduler-modal-overlay" @click.self="close">
-    <div class="scheduler-modal">
-      <div class="modal-header">
-        <h2>Schedule Advert</h2>
-        <button class="modal-close" @click="close">×</button>
+  <div v-if="show" class="modal-overlay" @click.self="close">
+    <div class="sched-modal">
+
+      <!-- ── MODAL HEADER ── -->
+      <div class="sched-modal__head">
+        <div class="sched-modal__head-left">
+          <div class="sched-modal__title">Schedule Advert</div>
+          <div v-if="advert" class="sched-modal__ref">{{ advert.reference }} — {{ advert.clientName }}</div>
+        </div>
+        <button class="sched-modal__close" @click="close">×</button>
       </div>
 
-      <div class="modal-body">
-        <div v-if="advert" class="advert-info">
-          <div class="info-row">
-            <strong>Advert:</strong>
-            <span>{{ advert.reference }}</span>
-          </div>
-          <div class="info-row">
-            <strong>Client:</strong>
-            <span>{{ advert.clientName }}</span>
-          </div>
-          <div class="info-row">
-            <strong>Title:</strong>
-            <span>{{ advert.advertTitle }}</span>
-          </div>
-          <div class="info-row">
-            <strong>Platform:</strong>
-            <span>{{ advert.platform }}</span>
-          </div>
+      <!-- ── ADVERT INFO BAND ── -->
+      <div v-if="advert" class="info-band">
+        <div class="info-band__cell">
+          <div class="info-band__lbl">Client</div>
+          <div class="info-band__val">{{ advert.clientName }}</div>
         </div>
+        <div class="info-band__div"></div>
+        <div class="info-band__cell">
+          <div class="info-band__lbl">Title</div>
+          <div class="info-band__val">{{ advert.advertTitle }}</div>
+        </div>
+        <div class="info-band__div"></div>
+        <div class="info-band__cell">
+          <div class="info-band__lbl">Platform</div>
+          <div class="info-band__val"><span class="plat-chip">{{ advert.platform }}</span></div>
+        </div>
+        <div class="info-band__div"></div>
+        <div class="info-band__cell">
+          <div class="info-band__lbl">Reference</div>
+          <div class="info-band__val ref-mono">{{ advert.reference }}</div>
+        </div>
+      </div>
 
+      <!-- ── PUBLISHING DATES BAND ── -->
+      <div v-if="advert && advert.publishingDates && advert.publishingDates.length > 0" class="pub-band">
+        <div class="pub-band__lbl">
+          Publishing Dates
+          <span class="pub-band__count">{{ advert.publishingDates.length }} day{{ advert.publishingDates.length !== 1 ? 's' : '' }}</span>
+        </div>
+        <div class="pub-band__dates">
+          <span
+            v-for="d in advert.publishingDates"
+            :key="d"
+            class="pub-chip"
+            :class="{
+              'pub-chip--scheduled': advert.scheduledDates?.includes(d),
+              'pub-chip--today':     d === todayStr && !advert.scheduledDates?.includes(d),
+              'pub-chip--past':      d < todayStr,
+              'pub-chip--match':     scheduleDate === d && !advert.scheduledDates?.includes(d)
+            }"
+            @click="selectDate(d)"
+            :title="advert.scheduledDates && advert.scheduledDates.includes(d) ? `Already scheduled for ${d} — click to reschedule` : `Click to set schedule date to ${d}`"
+          >
+            {{ fmtShortDate(d) }}
+          </span>
+        </div>
+      </div>
+
+      <!-- ── BODY ── -->
+      <div class="sched-modal__body">
         <form @submit.prevent="submitSchedule">
-          <!-- 1. Date to Run -->
-          <div class="form-section">
-            <h3>Schedule Details</h3>
-            
-            <div class="form-group">
-              <label>Date to Run *</label>
-              <input 
-                type="date" 
-                v-model="scheduleDate"
-                :min="minDate"
-                :max="maxDate"
-                class="date-input"
-                required
-                :class="{ 'error': errors.scheduleDate }"
-                @input="clearError('scheduleDate')"
-              >
-              <div v-if="errors.scheduleDate" class="error-message">
-                {{ errors.scheduleDate }}
-              </div>
-            </div>
 
-            <!-- 2. Run Time (only show if not Print Media) -->
-            <div v-if="advert?.platform !== 'Print Media'" class="form-group">
-              <label>Run Time *</label>
-              <div class="time-input-group">
-                <select v-model="runHour" class="time-select" required>
-                  <option value="">Hour</option>
-                  <option v-for="h in 12" :key="h" :value="h">{{ h }}</option>
-                </select>
-                <span>:</span>
-                <select v-model="runMinute" class="time-select" required>
-                  <option value="">Minute</option>
-                  <option v-for="m in 60" :key="m" :value="m">{{ m.toString().padStart(2, '0') }}</option>
-                </select>
-                <select v-model="runPeriod" class="period-select" required>
-                  <option value="">AM/PM</option>
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-              </div>
-              <div v-if="errors.runTime" class="error-message">
-                {{ errors.runTime }}
+          <!-- ── SECTION 1: Schedule Details ── -->
+          <div class="xl-section">
+            <div class="xl-section__head">
+              <span class="xl-section__num">01</span>
+              <span class="xl-section__title">Schedule Details</span>
+            </div>
+            <div class="xl-section__body">
+              <div class="form-row">
+                <!-- Date to Run -->
+                <div class="fgroup">
+                  <label class="flabel">Date to Run <span class="req">*</span></label>
+                  <input
+                    type="date"
+                    v-model="scheduleDate"
+                    :min="minDate"
+                    :max="maxDate"
+                    class="xl-input"
+                    :class="{ 'xl-input--error': errors.scheduleDate }"
+                    required
+                    @input="clearError('scheduleDate')"
+                  >
+                  <div v-if="errors.scheduleDate" class="ferror">{{ errors.scheduleDate }}</div>
+                  <div v-if="scheduleDate && advert?.publishingDates?.length && !advert.publishingDates.includes(scheduleDate)" class="fwarn">
+                    This date is not in the advert's publishing dates list
+                  </div>
+                </div>
+
+                <!-- Run Time (non-Print only) -->
+                <div v-if="advert?.platform !== 'Print Media'" class="fgroup">
+                  <label class="flabel">Run Time <span class="req">*</span></label>
+                  <div class="time-row">
+                    <select v-model="runHour" class="xl-select time-sel" required>
+                      <option value="">Hr</option>
+                      <option v-for="h in 12" :key="h" :value="h">{{ h }}</option>
+                    </select>
+                    <span class="time-colon">:</span>
+                    <select v-model="runMinute" class="xl-select time-sel" required>
+                      <option value="">Min</option>
+                      <option v-for="m in 60" :key="m-1" :value="m-1">{{ (m-1).toString().padStart(2, '0') }}</option>
+                    </select>
+                    <select v-model="runPeriod" class="xl-select period-sel" required>
+                      <option value="">—</option>
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                  <div v-if="errors.runTime" class="ferror">{{ errors.runTime }}</div>
+                </div>
+
+                <div v-if="advert?.platform === 'Print Media'" class="fgroup fgroup--note">
+                  <label class="flabel">Run Time</label>
+                  <div class="note-box">Not required for Print Media</div>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- 3. Upload Media with Preview -->
-          <div class="form-section">
-            <h3>Media Files</h3>
-            
-            <div class="upload-section">
-              <div 
-                class="upload-area"
-                :class="{ 'dragover': isDragging, 'has-files': mediaFiles.length > 0 }"
+          <!-- ── SECTION 2: Existing Attachments from CMS ── -->
+          <div v-if="advert?.attachments?.length > 0" class="xl-section">
+            <div class="xl-section__head">
+              <span class="xl-section__num">02</span>
+              <span class="xl-section__title">Design Files on CMS</span>
+              <span class="xl-section__badge--green">{{ advert.attachments.length }} file{{ advert.attachments.length !== 1 ? 's' : '' }} available</span>
+              <span class="xl-section__limits">Select files already uploaded to the CMS to use for this schedule</span>
+            </div>
+            <div class="xl-section__body att-body">
+              <div class="att-select-all">
+                <label class="att-check-lbl">
+                  <input type="checkbox" :checked="allAttachmentsSelected" @change="toggleSelectAll" class="att-check">
+                  <span>{{ allAttachmentsSelected ? 'Deselect All' : 'Select All' }}</span>
+                </label>
+                <span class="att-sel-count" v-if="selectedAttachmentIds.length > 0">
+                  {{ selectedAttachmentIds.length }} selected
+                </span>
+              </div>
+              <div class="att-table-wrap">
+                <table class="att-tbl">
+                  <thead>
+                    <tr>
+                      <th class="att-tc-chk"></th>
+                      <th>File Name</th>
+                      <th class="att-tc-type">Type</th>
+                      <th class="att-tc-size">Size</th>
+                      <th class="att-tc-prev">Preview</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="att in advert.attachments" :key="att.id"
+                      class="att-row"
+                      :class="{ 'att-row--selected': selectedAttachmentIds.includes(att.id) }"
+                      @click="toggleAttachment(att.id)"
+                    >
+                      <td class="att-tc-chk">
+                        <input type="checkbox"
+                          :checked="selectedAttachmentIds.includes(att.id)"
+                          @click.stop="toggleAttachment(att.id)"
+                          class="att-check"
+                        >
+                      </td>
+                      <td>
+                        <div class="att-fname">
+                          <span class="att-icon">{{ getFileIcon(att.name) }}</span>
+                          <span class="att-name-text">{{ att.name }}</span>
+                        </div>
+                      </td>
+                      <td class="att-tc-type">
+                        <span class="att-ext">{{ att.name?.split('.').pop().toUpperCase() }}</span>
+                      </td>
+                      <td class="att-tc-size mono">{{ att.size ? formatFileSize(att.size) : '—' }}</td>
+                      <td class="att-tc-prev">
+                        <a v-if="att.url" :href="att.url" target="_blank" class="att-prev-link" @click.stop title="Preview">
+                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/></svg>
+                        </a>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── SECTION 3: Upload Additional Media ── -->
+          <div class="xl-section">
+            <div class="xl-section__head">
+              <span class="xl-section__num">{{ advert?.attachments?.length > 0 ? '03' : '02' }}</span>
+              <span class="xl-section__title">Upload Additional Files</span>
+              <span v-if="selectedAttachmentIds.length > 0" class="xl-section__optional">(Optional — CMS files selected above)</span>
+              <span class="xl-section__limits">Max {{ maxFileSizeMB }}MB per file &nbsp;|&nbsp; {{ maxTotalSizeMB }}MB total &nbsp;|&nbsp; Supported: {{ supportedFileTypes }}</span>
+            </div>
+            <div class="xl-section__body">
+              <div
+                class="drop-zone"
+                :class="{ 'drop-zone--over': isDragging, 'drop-zone--filled': mediaFiles.length > 0 }"
                 @dragover.prevent="handleDragOver"
                 @dragleave="handleDragLeave"
                 @drop.prevent="handleDrop"
               >
-                <input 
-                  type="file" 
-                  ref="fileInput"
-                  multiple 
-                  style="display: none;" 
-                  :accept="acceptedFileTypes"
-                  @change="handleFileSelect"
-                >
-                
-                <div v-if="mediaFiles.length === 0" class="upload-prompt">
-                  <div class="upload-icon">📤</div>
-                  <h4>Drop media files here or click to browse</h4>
-                  <p>Supported: {{ supportedFileTypes }}</p>
-                  <button 
-                    type="button" 
-                    class="btn btn-primary"
-                    @click="triggerFileInput"
-                  >
-                    Browse Files
-                  </button>
+                <input type="file" ref="fileInput" multiple style="display:none;" :accept="acceptedFileTypes" @change="handleFileSelect">
+
+                <div v-if="mediaFiles.length === 0" class="drop-zone__empty">
+                  <div class="drop-zone__icon">&#8679;</div>
+                  <div class="drop-zone__msg">Drop media files here or <button type="button" class="drop-zone__browse" @click="triggerFileInput">Browse Files</button></div>
+                  <div class="drop-zone__sub">Images, Videos, PDF, Design files (.jpg .png .mp4 .pdf .psd .ai …)</div>
                 </div>
-                
-                <div v-else class="files-preview">
-                  <div class="files-header">
-                    <h4>{{ mediaFiles.length }} file(s) selected</h4>
-                    <button 
-                      type="button" 
-                      class="btn btn-secondary btn-sm"
-                      @click="triggerFileInput"
-                    >
-                      Add More
-                    </button>
+
+                <div v-else class="drop-zone__list">
+                  <div class="drop-zone__list-head">
+                    <span class="drop-zone__list-count">{{ mediaFiles.length }} file(s) selected &nbsp;·&nbsp; {{ formatFileSize(totalFileSize) }} total</span>
+                    <button type="button" class="act-btn act-btn--dl" @click="triggerFileInput">+ Add More</button>
                   </div>
-                  
-                  <div class="files-list">
-                    <div v-for="(file, index) in mediaFiles" :key="index" class="file-preview">
-                      <div class="file-info">
-                        <div class="file-icon">{{ getFileIcon(file.name) }}</div>
-                        <div>
-                          <div class="file-name">{{ file.name }}</div>
-                          <div class="file-size">{{ formatFileSize(file.size) }}</div>
-                        </div>
+                  <div class="file-rows">
+                    <div v-for="(file, index) in mediaFiles" :key="index" class="file-row">
+                      <span class="file-row__icon">{{ getFileIcon(file.name) }}</span>
+                      <div class="file-row__info">
+                        <div class="file-row__name">{{ file.name }}</div>
+                        <div class="file-row__meta">{{ formatFileSize(file.size) }} &nbsp;·&nbsp; {{ getFileExtension(file.name) }}</div>
                       </div>
-                      <button 
-                        type="button" 
-                        class="btn btn-danger btn-sm"
-                        @click="removeFile(index)"
-                      >
-                        Remove
-                      </button>
+                      <button type="button" class="act-btn act-btn--remove" @click="removeFile(index)">Remove</button>
                     </div>
                   </div>
                 </div>
               </div>
-              
-              <div class="upload-limits">
-                <span>Max file size: {{ maxFileSizeMB }}MB per file</span>
-                <span>Total limit: {{ maxTotalSizeMB }}MB</span>
-              </div>
             </div>
           </div>
 
-          <!-- Preview section for media files -->
-          <div v-if="mediaFiles.length > 0" class="form-section">
-            <h3>Media Preview</h3>
-            <div class="media-preview-container">
-              <div v-for="(file, index) in mediaFiles" :key="index" class="media-preview">
-                <div class="preview-header">
-                  <span class="preview-title">{{ file.name }}</span>
-                  <span class="preview-size">{{ formatFileSize(file.size) }}</span>
-                </div>
-                <div class="preview-content">
-                  <div v-if="isImage(file)" class="image-preview">
-                    <img :src="getObjectURL(file)" :alt="file.name" class="preview-image">
+          <!-- ── SECTION 3: Media Preview ── -->
+          <div v-if="mediaFiles.length > 0" class="xl-section">
+            <div class="xl-section__head">
+              <span class="xl-section__num">{{ advert?.attachments?.length > 0 ? '04' : '03' }}</span>
+              <span class="xl-section__title">New Files Preview</span>
+            </div>
+            <div class="xl-section__body">
+              <div class="preview-grid">
+                <div v-for="(file, index) in mediaFiles" :key="index" class="preview-card">
+                  <div class="preview-card__head">
+                    <span class="preview-card__name">{{ file.name }}</span>
+                    <span class="preview-card__size">{{ formatFileSize(file.size) }}</span>
                   </div>
-                  <div v-else-if="isVideo(file)" class="video-preview">
-                    <video controls class="preview-video">
+                  <div class="preview-card__body">
+                    <img v-if="isImage(file)" :src="getObjectURL(file)" :alt="file.name" class="preview-card__img">
+                    <video v-else-if="isVideo(file)" controls class="preview-card__video">
                       <source :src="getObjectURL(file)" :type="file.type">
-                      Your browser does not support the video tag.
                     </video>
-                  </div>
-                  <div v-else class="file-preview-icon">
-                    <div class="icon-large">{{ getFileIcon(file.name) }}</div>
-                    <span class="file-type">{{ getFileExtension(file.name) }}</span>
+                    <div v-else class="preview-card__file">
+                      <div class="preview-card__file-icon">{{ getFileIcon(file.name) }}</div>
+                      <div class="preview-card__file-type">{{ getFileExtension(file.name) }}</div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div v-if="scheduling" class="scheduling-progress">
-            <h4>Scheduling Advert...</h4>
-            <div class="progress-bar">
-              <div class="progress-fill indeterminate"></div>
+          <!-- ── PROGRESS ── -->
+          <div v-if="scheduling" class="sched-progress">
+            <div class="sched-progress__label">Scheduling Advert…</div>
+            <div class="prog-bar"><div class="prog-fill prog-fill--indeterminate"></div></div>
+            <div class="sched-progress__sub">Please wait while we schedule your advert</div>
+          </div>
+
+          <!-- ── ERROR ── -->
+          <div v-if="scheduleError" class="xl-error-box">
+            <span class="xl-error-box__icon">&#9888;</span>
+            <span>{{ scheduleError }}</span>
+          </div>
+
+          <!-- ── FOOTER ── -->
+          <div class="sched-footer">
+            <div class="sched-footer__stats">
+              <span v-if="selectedAttachmentIds.length > 0" class="sfd-cms">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:3px"><path d="M2 8l4 4 8-8" stroke="#375623" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {{ selectedAttachmentIds.length }} CMS file{{ selectedAttachmentIds.length !== 1 ? 's' : '' }}
+              </span>
+              <span v-if="selectedAttachmentIds.length > 0 && mediaFiles.length > 0" class="sfd-div">+</span>
+              <span v-if="mediaFiles.length > 0">{{ mediaFiles.length }} new file{{ mediaFiles.length !== 1 ? 's' : '' }}</span>
+              <span v-if="mediaFiles.length === 0 && selectedAttachmentIds.length === 0" class="sfd-empty">No files selected</span>
+              <span v-if="mediaFiles.length > 0" class="sfd-div">|</span>
+              <span v-if="mediaFiles.length > 0">{{ formatFileSize(totalFileSize) }}</span>
             </div>
-            <div class="progress-info">
-              Please wait while we schedule your advert...
+            <div class="sched-footer__actions">
+              <button type="button" class="act-btn act-btn--dl" @click="close" :disabled="scheduling">Cancel</button>
+              <button
+                type="submit"
+                class="act-btn act-btn--submit"
+                :disabled="scheduling || !scheduleDate || (mediaFiles.length === 0 && selectedAttachmentIds.length === 0)"
+              >
+                <span v-if="scheduling"><span class="btn-spinner"></span> Scheduling…</span>
+                <span v-else>Schedule Advert</span>
+              </button>
             </div>
           </div>
 
-          <div v-if="scheduleError" class="error-alert">
-            <div class="error-icon">⚠️</div>
-            <div class="error-message">{{ scheduleError }}</div>
-          </div>
-
-          <div class="modal-footer">
-            <div class="footer-actions">
-              <button 
-                type="button" 
-                class="btn btn-secondary"
-                @click="close"
-                :disabled="scheduling"
-              >
-                Cancel
-              </button>
-              
-              <button 
-                type="submit" 
-                class="btn btn-primary"
-                :disabled="scheduling || !scheduleDate || mediaFiles.length === 0"
-              >
-                <span v-if="scheduling">
-                  <span class="processing-spinner"></span>
-                  Scheduling...
-                </span>
-                <span v-else>
-                  Schedule Advert
-                </span>
-              </button>
-            </div>
-            
-            <div class="upload-stats">
-              <span>Total size: {{ formatFileSize(totalFileSize) }}</span>
-              <span v-if="mediaFiles.length > 0">{{ mediaFiles.length }} file(s)</span>
-            </div>
-          </div>
         </form>
       </div>
     </div>
@@ -259,12 +333,16 @@ const isDragging = ref(false)
 const errors = ref({})
 const scheduling = ref(false)
 const scheduleError = ref('')
+const selectedAttachmentIds = ref([])
 
 // Constants
 const acceptedFileTypes = '.jpg,.jpeg,.png,.gif,.mp4,.mov,.avi,.wmv,.pdf,.psd,.ai,.eps,.svg'
 const supportedFileTypes = 'Images, Videos, PDF, Design Files'
 const maxFileSizeMB = 100
 const maxTotalSizeMB = 1000
+
+// Today string for publishing dates highlight
+const todayStr = new Date().toISOString().split('T')[0]
 
 // Computed
 const totalFileSize = computed(() => {
@@ -284,11 +362,47 @@ const maxDate = computed(() => {
 })
 
 const formattedRunTime = computed(() => {
-  if (!runHour.value || !runMinute.value || !runPeriod.value) return ''
-  const hour = runHour.value.padStart(2, '0')
-  const minute = runMinute.value.padStart(2, '0')
+  if (!runHour.value || runMinute.value === '' || !runPeriod.value) return ''
+  const hour   = String(runHour.value).padStart(2, '0')
+  const minute = String(runMinute.value).padStart(2, '0')
   return `${hour}:${minute} ${runPeriod.value}`
 })
+
+// Attachment selection helpers
+const allAttachmentsSelected = computed(() => {
+  const atts = props.advert?.attachments || []
+  return atts.length > 0 && atts.every(a => selectedAttachmentIds.value.includes(a.id))
+})
+
+const toggleAttachment = (id) => {
+  const idx = selectedAttachmentIds.value.indexOf(id)
+  if (idx === -1) selectedAttachmentIds.value.push(id)
+  else selectedAttachmentIds.value.splice(idx, 1)
+}
+
+const toggleSelectAll = () => {
+  const atts = props.advert?.attachments || []
+  if (allAttachmentsSelected.value) {
+    selectedAttachmentIds.value = []
+  } else {
+    selectedAttachmentIds.value = atts.map(a => a.id)
+  }
+}
+
+// Click a publishing date chip to pre-fill the schedule date
+const selectDate = (d) => {
+  if (d >= minDate.value) {
+    scheduleDate.value = d
+    clearError('scheduleDate')
+  }
+}
+
+// Short date formatter for publishing date chips
+const fmtShortDate = (s) => {
+  if (!s) return '—'
+  try { return new Date(s + 'T00:00:00').toLocaleDateString('en-UG', { month: 'short', day: 'numeric' }) }
+  catch { return s }
+}
 
 // Methods
 const triggerFileInput = () => {
@@ -395,8 +509,8 @@ const validateForm = () => {
     }
   }
   
-  if (mediaFiles.value.length === 0) {
-    alert('Please select at least one media file')
+  if (mediaFiles.value.length === 0 && selectedAttachmentIds.value.length === 0) {
+    alert('Please select at least one file — either choose from existing CMS attachments or upload new files')
     return false
   }
   
@@ -424,7 +538,8 @@ const submitSchedule = async () => {
     const scheduleData = {
       advertId: props.advert.id,
       runDate: scheduleDate.value,
-      mediaFiles: mediaFiles.value, // This should be an array of File objects
+      mediaFiles: mediaFiles.value,
+      existingAttachmentIds: selectedAttachmentIds.value,
       isPublished: false
     }
     
@@ -440,8 +555,9 @@ const submitSchedule = async () => {
       type: f.type
     })))
     
-    // Call the scheduleAdvert function
-    const result = await scheduleAdvert(scheduleData)
+    // Call the scheduleAdvert function — composable expects (advertId, scheduleData)
+    const { advertId: _id, ...restScheduleData } = scheduleData
+    const result = await scheduleAdvert(_id, restScheduleData)
     
     console.log('✅ Schedule response:', result)
     
@@ -489,6 +605,7 @@ const resetForm = () => {
   runPeriod.value = ''
   errors.value = {}
   scheduleError.value = ''
+  selectedAttachmentIds.value = []
 }
 
 const close = () => {
@@ -558,587 +675,352 @@ watch(mediaFiles, (newFiles, oldFiles) => {
     }
   })
 })
-
-// Watch for modal visibility changes
-watch(() => props.show, (newValue) => {
-  if (!newValue) {
-    resetForm()
-  } else {
-    // Set default date to tomorrow
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    scheduleDate.value = tomorrow.toISOString().split('T')[0]
-    
-    // Set default time to 12:00 PM for non-print media
-    if (props.advert?.platform !== 'Print Media') {
-      runHour.value = '12'
-      runMinute.value = '00'
-      runPeriod.value = 'PM'
-    }
-    
-    console.log('📅 Modal opened for advert:', props.advert)
-  }
-})
 </script>
 
 <style scoped>
-.scheduler-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 20px;
-  animation: fadeIn 0.3s ease;
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.72);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 4000; padding: 20px;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/* ── MODAL SHELL ── */
+.sched-modal {
+  background: #fff;
+  width: 100%; max-width: 720px;
+  max-height: 92vh;
+  display: flex; flex-direction: column;
+  border-top: 4px solid #1F3864;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  font-size: 13px;
 }
-
-.scheduler-modal {
-  background: white;
-  border-radius: 10px;
-  width: 100%;
-  max-width: 800px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-  from { 
-    transform: translateY(20px); 
-    opacity: 0; 
-  }
-  to { 
-    transform: translateY(0); 
-    opacity: 1; 
-  }
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 25px 30px;
-  border-bottom: 2px solid #F5F5F5;
-}
-
-.modal-header h2 {
-  color: #003366;
-  margin: 0;
-  font-size: 1.5em;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 1.8em;
-  color: #999;
-  cursor: pointer;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.3s;
-}
-
-.modal-close:hover {
-  background: #F5F5F5;
-  color: #E31E24;
-}
-
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 30px;
-}
-
-.advert-info {
-  background: #F9F9F9;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 30px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #E5E5E5;
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-row strong {
-  color: #666;
-  font-weight: 500;
-  min-width: 80px;
-}
-
-.info-row span {
-  color: #333;
-  text-align: right;
-  flex: 1;
-  font-weight: 500;
-}
-
-.form-section {
-  margin-bottom: 30px;
-}
-
-.form-section h3 {
-  color: #003366;
-  margin-bottom: 15px;
-  font-size: 1.2em;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #F5F5F5;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #333333;
-  font-weight: 500;
-}
-
-.date-input {
-  width: 100%;
-  max-width: 250px;
-  padding: 12px 15px;
-  border: 1px solid #DDDDDD;
-  border-radius: 5px;
-  font-size: 1em;
-  transition: border-color 0.3s, box-shadow 0.3s;
-}
-
-.date-input:focus {
-  outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-}
-
-.date-input.error {
-  border-color: #dc3545;
-  background-color: rgba(220, 53, 69, 0.05);
-}
-
-.time-input-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.time-select,
-.period-select {
-  padding: 12px 15px;
-  border: 1px solid #DDDDDD;
-  border-radius: 5px;
-  background: white;
-  font-size: 1em;
-  min-width: 100px;
-}
-
-.time-select:focus,
-.period-select:focus {
-  outline: none;
-  border-color: #0066CC;
-}
-
-.upload-section {
-  margin-top: 15px;
-}
-
-.upload-area {
-  border: 2px dashed #DDDDDD;
-  border-radius: 8px;
-  padding: 30px;
-  text-align: center;
-  transition: all 0.3s;
-  background: #FAFAFA;
-  margin-bottom: 15px;
-}
-
-.upload-area.dragover {
-  border-color: #0066CC;
-  background: rgba(0, 102, 204, 0.05);
-}
-
-.upload-area.has-files {
-  border-style: solid;
-  border-color: #28a745;
-  background: rgba(40, 167, 69, 0.05);
-}
-
-.upload-prompt {
-  padding: 20px;
-}
-
-.upload-icon {
-  font-size: 3em;
-  margin-bottom: 15px;
-  color: #0066CC;
-}
-
-.upload-prompt h4 {
-  color: #333;
-  margin-bottom: 10px;
-  font-size: 1.1em;
-}
-
-.upload-prompt p {
-  color: #666;
-  margin-bottom: 20px;
-  font-size: 0.9em;
-}
-
-.files-preview {
-  text-align: left;
-}
-
-.files-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #E5E5E5;
-}
-
-.files-header h4 {
-  color: #333;
-  margin: 0;
-  font-size: 1.1em;
-}
-
-.files-list {
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.file-preview {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  background: #F9F9F9;
-  border-radius: 5px;
-  margin-bottom: 8px;
-}
-
-.file-preview:last-child {
-  margin-bottom: 0;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.file-icon {
-  width: 36px;
-  height: 36px;
-  background: #0066CC;
-  color: white;
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2em;
+.sched-modal__head {
+  background: #1F3864;
+  padding: 14px 20px;
+  display: flex; justify-content: space-between; align-items: flex-start;
   flex-shrink: 0;
 }
-
-.file-name {
-  font-weight: 500;
-  color: #333;
-  font-size: 0.95em;
-  word-break: break-word;
+.sched-modal__head-left { display: flex; flex-direction: column; gap: 2px; }
+.sched-modal__title { color: #fff; font-size: 15px; font-weight: 700; }
+.sched-modal__ref   { color: #9DC3E6; font-size: 11px; font-family: 'IBM Plex Mono', monospace; }
+.sched-modal__close {
+  background: none; border: none; color: #9DC3E6;
+  font-size: 24px; cursor: pointer; line-height: 1; padding: 0;
 }
+.sched-modal__close:hover { color: #fff; }
 
-.file-size {
-  color: #666;
-  font-size: 0.85em;
-  margin-top: 2px;
+/* ── INFO BAND ── */
+.info-band {
+  display: flex; align-items: stretch;
+  background: #DEEAF1;
+  border-bottom: 1px solid #9DC3E6;
+  flex-shrink: 0;
 }
-
-.upload-limits {
-  display: flex;
-  justify-content: space-between;
-  color: #999;
-  font-size: 0.85em;
+.info-band__cell { padding: 10px 16px; flex: 1; }
+.info-band__div  { width: 1px; background: #9DC3E6; }
+.info-band__lbl  { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: #6081a3; }
+.info-band__val  { font-size: 12px; font-weight: 600; color: #1F3864; margin-top: 2px; }
+.plat-chip {
+  display: inline-block;
+  background: #1F3864; color: #fff;
+  font-size: 10px; font-weight: 700;
+  padding: 1px 8px;
 }
+.ref-mono { font-family: 'IBM Plex Mono', monospace; }
 
-.media-preview-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 20px;
-  margin-top: 15px;
+/* ── PUBLISHING DATES BAND ── */
+.pub-band {
+  background: #F7FBFE;
+  border-bottom: 2px solid #9DC3E6;
+  padding: 9px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+  flex-shrink: 0;
 }
-
-.media-preview {
-  background: #F9F9F9;
-  border: 1px solid #E5E5E5;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.preview-header {
-  padding: 10px 15px;
-  background: #003366;
-  color: white;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.preview-title {
-  font-weight: 500;
-  font-size: 0.9em;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.pub-band__lbl {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .4px;
+  color: #1F3864;
   white-space: nowrap;
+  padding-top: 3px;
+  display: flex; align-items: center; gap: 6px;
 }
-
-.preview-size {
-  font-size: 0.8em;
-  opacity: 0.9;
+.pub-band__count {
+  background: #DEEAF1; color: #1F3864;
+  border: 1px solid #9DC3E6;
+  font-size: 10px; font-weight: 700;
+  padding: 1px 6px;
 }
-
-.preview-content {
-  padding: 15px;
-  text-align: center;
+.pub-band__dates { display: flex; flex-wrap: wrap; gap: 4px; }
+.pub-chip {
+  display: inline-block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; font-weight: 600;
+  background: #DEEAF1; color: #1F3864;
+  border: 1px solid #9DC3E6;
+  padding: 2px 7px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .1s;
 }
-
-.image-preview img {
-  max-width: 100%;
-  max-height: 200px;
-  object-fit: contain;
-  border-radius: 4px;
+.pub-chip:hover { background: #BDD7EE; }
+.pub-chip--today { background: #1F3864; color: #fff; border-color: #1F3864; }
+.pub-chip--past  { background: #F7FBFE; color: #aaa; border-color: #DEEAF1; cursor: default; }
+.pub-chip--match     { background: #375623; color: #fff; border-color: #375623; }
+.pub-chip--scheduled {
+  background: #FCE4D6; color: #9C0006;
+  border-color: #E31E24; font-weight: 700;
 }
+.pub-chip--scheduled:hover { background: #f4c7b4; }
 
-.video-preview video {
-  max-width: 100%;
-  max-height: 200px;
-  border-radius: 4px;
+/* ── BODY ── */
+.sched-modal__body { flex: 1; overflow-y: auto; padding: 0; }
+
+/* ── SECTIONS ── */
+.xl-section { border-bottom: 1px solid #DEEAF1; }
+.xl-section:last-child { border-bottom: none; }
+.xl-section__head {
+  background: #F7FBFE;
+  border-bottom: 1px solid #DEEAF1;
+  padding: 8px 20px;
+  display: flex; align-items: center; gap: 10px;
 }
-
-.file-preview-icon {
-  padding: 20px;
+.xl-section__num   {
+  background: #1F3864; color: #fff;
+  font-size: 10px; font-weight: 700;
+  padding: 1px 6px;
+  font-family: 'IBM Plex Mono', monospace;
 }
+.xl-section__title { font-size: 12px; font-weight: 700; color: #1F3864; text-transform: uppercase; letter-spacing: .4px; }
+.xl-section__limits{ font-size: 10px; color: #888; margin-left: auto; }
+.xl-section__body  { padding: 16px 20px; }
 
-.icon-large {
-  font-size: 3em;
+/* ── FORM ── */
+.form-row { display: flex; gap: 20px; flex-wrap: wrap; }
+.fgroup   { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 160px; }
+.fgroup--note { justify-content: flex-end; }
+.flabel   { font-size: 11px; font-weight: 600; color: #555; }
+.req      { color: #E31E24; }
+.xl-input {
+  border: 1px solid #BDD7EE; padding: 6px 10px;
+  font-size: 12px; border-radius: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  background: #fff;
+}
+.xl-input:focus   { outline: none; border-color: #9DC3E6; box-shadow: 0 0 0 2px rgba(157,195,230,.25); }
+.xl-input--error  { border-color: #E31E24; background: #FFF5F5; }
+.xl-select {
+  border: 1px solid #BDD7EE; padding: 6px 8px;
+  font-size: 12px; border-radius: 0; background: #fff;
+}
+.xl-select:focus  { outline: none; border-color: #9DC3E6; }
+.ferror   { font-size: 11px; color: #E31E24; }
+.fwarn    { font-size: 11px; color: #9C5700; background: #FFEB9C; border: 1px solid #FFCC00; padding: 3px 7px; }
+.note-box {
+  background: #DEEAF1; color: #1F3864;
+  border: 1px solid #9DC3E6;
+  padding: 6px 10px; font-size: 11px; font-weight: 500;
+}
+.time-row    { display: flex; align-items: center; gap: 4px; }
+.time-sel    { width: 56px; }
+.period-sel  { width: 66px; }
+.time-colon  { font-weight: 700; color: #555; }
+
+/* ── DROP ZONE ── */
+.drop-zone {
+  border: 2px dashed #BDD7EE;
+  background: #F7FBFE;
+  transition: border-color .15s, background .15s;
+  min-height: 120px;
+  display: flex; align-items: center; justify-content: center;
+}
+.drop-zone--over   { border-color: #1F3864; background: #DEEAF1; }
+.drop-zone--filled { border-style: solid; border-color: #9DC3E6; background: #fff; align-items: flex-start; }
+.drop-zone__empty  { text-align: center; padding: 28px 20px; }
+.drop-zone__icon   { font-size: 32px; color: #9DC3E6; line-height: 1; }
+.drop-zone__msg    { font-size: 13px; color: #555; margin: 8px 0 4px; }
+.drop-zone__browse {
+  background: none; border: none; color: #1F3864;
+  text-decoration: underline; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.drop-zone__browse:hover { color: #E31E24; }
+.drop-zone__sub    { font-size: 11px; color: #999; }
+.drop-zone__list   { width: 100%; padding: 14px 16px; }
+.drop-zone__list-head {
+  display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 10px;
 }
-
-.file-type {
-  display: block;
-  color: #666;
-  font-size: 0.9em;
-  font-weight: 500;
+.drop-zone__list-count { font-size: 12px; font-weight: 600; color: #1F3864; }
+.file-rows { display: flex; flex-direction: column; gap: 4px; }
+.file-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px;
+  background: #F7FBFE;
+  border: 1px solid #DEEAF1;
 }
+.file-row__icon { font-size: 16px; flex-shrink: 0; }
+.file-row__info { flex: 1; min-width: 0; }
+.file-row__name { font-size: 12px; font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row__meta { font-size: 10px; color: #999; }
 
-.scheduling-progress {
-  background: #F9F9F9;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
+/* ── PREVIEW GRID ── */
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
 }
-
-.scheduling-progress h4 {
-  color: #333;
-  margin-bottom: 15px;
-  font-size: 1.1em;
+.preview-card { border: 1px solid #BDD7EE; overflow: hidden; }
+.preview-card__head {
+  background: #1F3864; color: #fff;
+  padding: 6px 10px;
+  display: flex; justify-content: space-between; align-items: center;
 }
+.preview-card__name { font-size: 10px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.preview-card__size { font-size: 10px; opacity: .7; margin-left: 8px; flex-shrink: 0; }
+.preview-card__body { padding: 10px; text-align: center; background: #F7FBFE; }
+.preview-card__img  { max-width: 100%; max-height: 160px; object-fit: contain; }
+.preview-card__video{ max-width: 100%; max-height: 160px; }
+.preview-card__file { padding: 16px 0; }
+.preview-card__file-icon { font-size: 32px; }
+.preview-card__file-type { font-size: 11px; color: #666; font-weight: 600; margin-top: 4px; }
 
-.progress-bar {
-  height: 10px;
-  background: #F5F5F5;
-  border-radius: 5px;
-  overflow: hidden;
-  margin-bottom: 10px;
+/* ── PROGRESS ── */
+.sched-progress {
+  background: #F7FBFE;
+  border: 1px solid #DEEAF1;
+  margin: 0 20px 16px;
+  padding: 14px 16px;
 }
-
-.progress-fill {
-  height: 100%;
-  background: #28a745;
-  transition: width 0.3s;
-}
-
-.progress-fill.indeterminate {
+.sched-progress__label { font-size: 12px; font-weight: 600; color: #1F3864; margin-bottom: 8px; }
+.sched-progress__sub   { font-size: 11px; color: #888; margin-top: 6px; }
+.prog-bar { height: 6px; background: #DEEAF1; overflow: hidden; }
+.prog-fill { height: 100%; background: #375623; }
+.prog-fill--indeterminate {
   width: 100%;
-  animation: indeterminate 1.5s infinite;
-  background: linear-gradient(90deg, #28a745 0%, #5cb85c 50%, #28a745 100%);
+  animation: indeterminate 1.4s infinite;
+  background: linear-gradient(90deg, #1F3864 0%, #9DC3E6 50%, #1F3864 100%);
   background-size: 200% 100%;
 }
-
 @keyframes indeterminate {
-  0% { background-position: 200% 0; }
+  0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 
-.progress-info {
-  color: #666;
-  font-size: 0.9em;
-  text-align: center;
+/* ── ERROR BOX ── */
+.xl-error-box {
+  background: #FCE4D6; border: 1px solid #FF7043;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; margin: 0 20px 16px;
+  font-size: 12px; color: #9C0006;
 }
+.xl-error-box__icon { font-size: 15px; }
 
-.error-alert {
-  background: #fff5f5;
-  border: 1px solid #fed7d7;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 15px;
+/* ── FOOTER ── */
+.sched-footer {
+  padding: 14px 20px;
+  border-top: 2px solid #DEEAF1;
+  background: #F7FBFE;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
 }
+.sched-footer__stats { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; }
+.sfd-div { color: #BDD7EE; }
+.sched-footer__actions { display: flex; gap: 8px; }
 
-.error-icon {
-  font-size: 1.5em;
-  color: #e53e3e;
-}
-
-.modal-footer {
-  padding-top: 30px;
-  border-top: 2px solid #F5F5F5;
-}
-
-.footer-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.upload-stats {
-  display: flex;
-  justify-content: space-between;
-  color: #666;
-  font-size: 0.9em;
-  padding-top: 15px;
-  border-top: 1px solid #EEEEEE;
-}
-
-.error-message {
-  color: #dc3545;
-  font-size: 0.85em;
-  margin-top: 5px;
-  padding-left: 5px;
-}
-
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1em;
-  font-weight: 500;
-  transition: all 0.3s;
-}
-
-.btn-primary {
-  background: #E31E24;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #c01820;
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  background: #cccccc;
-}
-
-.btn-secondary {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #0052a3;
-  transform: translateY(-1px);
-}
-
-.btn-danger {
-  background: #dc3545;
-  color: white;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.9em;
-}
-
-.processing-spinner {
+/* ── ACTION BUTTONS ── */
+.act-btn {
   display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  font-size: 12px; font-weight: 600;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  cursor: pointer; border-radius: 0;
+  white-space: nowrap; font-family: inherit;
+  transition: opacity .15s;
+}
+.act-btn:disabled { opacity: .5; cursor: not-allowed; }
+.act-btn--dl      { background: #DEEAF1; color: #1F3864; border-color: #9DC3E6; }
+.act-btn--dl:hover:not(:disabled) { background: #c5d9ec; }
+.act-btn--remove  { background: #FCE4D6; color: #9C0006; border-color: #FF7043; font-size: 11px; padding: 3px 8px; }
+.act-btn--remove:hover { background: #f4c7b4; }
+.act-btn--submit  {
+  background: #E31E24; color: #fff; border-color: #E31E24;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.act-btn--submit:hover:not(:disabled) { background: #c01820; }
+.btn-spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
   border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s linear infinite;
-  margin-right: 8px;
+  animation: spin 0.9s linear infinite;
   vertical-align: middle;
 }
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 768px) {
-  .scheduler-modal {
-    max-height: 95vh;
-  }
-  
-  .modal-header,
-  .modal-body {
-    padding: 20px;
-  }
-  
-  .time-input-group {
-    flex-wrap: wrap;
-  }
-  
-  .media-preview-container {
-    grid-template-columns: 1fr;
-  }
-  
-  .footer-actions {
-    flex-direction: column;
-  }
-  
-  .btn {
-    width: 100%;
-  }
-  
-  .upload-stats {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
+  .info-band { flex-direction: column; }
+  .info-band__div { width: 100%; height: 1px; }
+  .pub-band { flex-direction: column; gap: 6px; }
+  .form-row { flex-direction: column; }
+  .preview-grid { grid-template-columns: 1fr; }
+  .sched-footer { flex-direction: column; gap: 10px; align-items: stretch; }
+  .sched-footer__actions { flex-direction: column; }
+  .act-btn { width: 100%; text-align: center; justify-content: center; }
 }
+/* ── ATTACHMENTS TABLE ── */
+.att-body       { padding: 0; }
+.att-select-all {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  background: #F7FBFE;
+  border-bottom: 1px solid #DEEAF1;
+}
+.att-check-lbl  { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #1F3864; cursor: pointer; }
+.att-check      { accent-color: #1F3864; cursor: pointer; }
+.att-sel-count  { font-size: 11px; color: #375623; font-weight: 700; background: #E2EFDA; border: 1px solid #A9D18E; padding: 1px 7px; }
+.att-table-wrap { overflow-x: auto; }
+.att-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.att-tbl thead tr { background: #DEEAF1; }
+.att-tbl thead th {
+  padding: 6px 10px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .4px; color: #1F3864;
+  border-bottom: 1px solid #9DC3E6; border-right: 1px solid #BDD7EE;
+  text-align: left; white-space: nowrap;
+}
+.att-tbl thead th:last-child { border-right: none; }
+.att-row { border-bottom: 1px solid #EBF4FF; cursor: pointer; transition: background .1s; }
+.att-row:last-child { border-bottom: none; }
+.att-row:nth-child(even) { background: #F7FBFE; }
+.att-row:hover { background: #EBF4FF; }
+.att-row--selected { background: #E2EFDA !important; }
+.att-tbl td { padding: 7px 10px; border-right: 1px solid #EBF4FF; vertical-align: middle; }
+.att-tbl td:last-child { border-right: none; }
+.att-tc-chk  { width: 32px; text-align: center; }
+.att-tc-type { width: 60px; text-align: center; }
+.att-tc-size { width: 80px; text-align: right; }
+.att-tc-prev { width: 44px; text-align: center; }
+.att-fname   { display: flex; align-items: center; gap: 7px; }
+.att-icon    { font-size: 14px; flex-shrink: 0; }
+.att-name-text { font-weight: 500; color: #222; word-break: break-word; }
+.att-ext {
+  display: inline-block; font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px; font-weight: 700;
+  background: #DEEAF1; color: #1F3864; border: 1px solid #9DC3E6; padding: 1px 4px;
+}
+.att-prev-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; color: #6081a3;
+  border: 1px solid #BDD7EE; background: #F7FBFE;
+}
+.att-prev-link:hover { color: #1F3864; background: #DEEAF1; }
+.xl-section__badge--green {
+  font-size: 10px; font-weight: 700; color: #375623;
+  background: #E2EFDA; border: 1px solid #A9D18E; padding: 1px 7px; margin-left: 8px;
+}
+.xl-section__optional { font-size: 10px; color: #9C5700; background: #FFEB9C; border: 1px solid #FFCC00; padding: 1px 7px; margin-left: 8px; font-weight: 600; }
+.sfd-cms   { color: #375623; font-weight: 600; }
+.sfd-empty { color: #bbb; font-style: italic; }
+
 </style>

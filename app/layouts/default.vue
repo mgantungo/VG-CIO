@@ -61,6 +61,8 @@ onMounted(() => {
 
 .main-content {
   flex: 1;
+  min-width: 0;          /* critical: lets flex child shrink below content width */
+  overflow-x: hidden;    /* contain overflow at layout level; child scroll still works */
   margin-left: 250px;
   margin-top: 70px;
   padding: 30px;

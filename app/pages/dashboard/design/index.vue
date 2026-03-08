@@ -1,369 +1,327 @@
 <!--pages/dashboard/design/index.vue-->
 <template>
-  <div class="design-page">
-    <div class="page-header">
-      <div class="header-content">
-        <div>
-          <h1>🎨 Design House</h1>
-          <p>Access and manage advertising creative materials</p>
+  <div class="dh-page">
+
+    <!-- ── HEADER BAR ── -->
+    <div class="hd-bar">
+      <div class="hd-left">
+        <div class="hd-title">Design House</div>
+        <div class="hd-sub">Advert creative materials &amp; scheduling pipeline</div>
+      </div>
+      <div class="hd-right">
+        <div class="hd-period">
+          <label class="hd-label">From</label>
+          <input type="date" v-model="startDate" :max="endDate" class="hd-input" @change="handleDateChange">
+          <label class="hd-label">To</label>
+          <input type="date" v-model="endDate" :min="startDate" :max="maxAllowedDate" class="hd-input" @change="handleDateChange">
         </div>
-        <div class="header-actions">
-          <button class="btn btn-refresh" @click="refreshData" :disabled="loading">
-            <span v-if="loading">⏳ Loading...</span>
-            <span v-else>🔄 Refresh</span>
-          </button>
+        <div class="hd-quick">
+          <button v-for="r in quickRanges" :key="r.key"
+            class="qr-btn" :class="{ 'qr-btn--active': activeQuickRange === r.key }"
+            @click="setQuickDateRange(r.key)">{{ r.label }}</button>
         </div>
+        <button class="hd-btn" @click="refreshData" :disabled="loading">
+          <span v-if="loading">Loading…</span>
+          <span v-else>&#8635; Refresh</span>
+        </button>
       </div>
     </div>
 
-    <!-- Date Range Filter -->
-    <div class="content-card date-range-card">
-      <div class="card-header">
-        <h2>Date Range Filter</h2>
+    <!-- ── PROCESS FLOW STRIP ── -->
+    <div class="flow-strip">
+      <div class="flow-step flow-step--blue">
+        <div class="flow-num">{{ running }}</div>
+        <div class="flow-lbl">Running Now</div>
       </div>
-      
-      <div class="date-range-controls">
-        <div class="date-input-group">
-          <label for="startDate">Start Date</label>
-          <input 
-            id="startDate"
-            type="date" 
-            v-model="startDate"
-            class="date-input"
-            :max="endDate"
-            @change="handleDateChange"
-          >
-        </div>
-        
-          <div class="date-input-group">
-            <label for="endDate">End Date</label>
-            <input 
-              id="endDate"
-              type="date" 
-              v-model="endDate"
-              class="date-input"
-              :min="startDate"
-              :max="maxAllowedDate"
-              @change="handleDateChange"
-            >
-          </div>
-        
-        <div class="quick-date-buttons">
-          <button 
-            class="btn btn-secondary btn-sm"
-            :class="{ active: activeQuickRange === 'today' }"
-            @click="setQuickDateRange('today')"
-          >
-            Today
-          </button>
-          <button 
-            class="btn btn-secondary btn-sm"
-            :class="{ active: activeQuickRange === 'yesterday' }"
-            @click="setQuickDateRange('yesterday')"
-          >
-            Yesterday
-          </button>
-          <button 
-            class="btn btn-secondary btn-sm"
-            :class="{ active: activeQuickRange === 'this_week' }"
-            @click="setQuickDateRange('this_week')"
-          >
-            This Week
-          </button>
-          <button 
-            class="btn btn-secondary btn-sm"
-            :class="{ active: activeQuickRange === 'last_week' }"
-            @click="setQuickDateRange('last_week')"
-          >
-            Last Week
-          </button>
-          <button 
-            class="btn btn-secondary btn-sm"
-            :class="{ active: activeQuickRange === 'this_month' }"
-            @click="setQuickDateRange('this_month')"
-          >
-            This Month
-          </button>
-        </div>
-        
-        <div class="date-range-info">
-          <span v-if="startDate && endDate">
-            Showing adverts from {{ formatDisplayDate(startDate) }} to {{ formatDisplayDate(endDate) }}
-          </span>
-          <span v-else-if="startDate">
-            Showing adverts from {{ formatDisplayDate(startDate) }} onwards
-          </span>
-          <span v-else>
-            Showing all adverts
-          </span>
-        </div>
+      <div class="flow-arrow">&#9654;</div>
+      <div class="flow-step flow-step--teal">
+        <div class="flow-num">{{ upcoming }}</div>
+        <div class="flow-lbl">Upcoming</div>
+      </div>
+      <div class="flow-arrow">&#9654;</div>
+      <div class="flow-step flow-step--amber">
+        <div class="flow-num">{{ pendingDesign }}</div>
+        <div class="flow-lbl">Pending Design</div>
+      </div>
+      <div class="flow-arrow">&#9654;</div>
+      <div class="flow-step flow-step--green">
+        <div class="flow-num">{{ designApproved }}</div>
+        <div class="flow-lbl">Design Approved</div>
+      </div>
+      <div class="flow-arrow">&#9654;</div>
+      <div class="flow-step flow-step--gold">
+        <div class="flow-num">{{ readyToSchedule }}</div>
+        <div class="flow-lbl">Ready to Schedule</div>
+      </div>
+      <div class="flow-arrow">&#9654;</div>
+      <div class="flow-step flow-step--navy">
+        <div class="flow-num">{{ scheduled }}</div>
+        <div class="flow-lbl">Scheduled</div>
+      </div>
+      <div class="flow-spacer"></div>
+      <div class="flow-step flow-step--slate">
+        <div class="flow-num">{{ totalFiles }}</div>
+        <div class="flow-lbl">Total Files</div>
       </div>
     </div>
 
-    <!-- Global Search and Filters -->
-    <div class="content-card">
-      <div class="card-header">
-        <h2>Search & Filters</h2>
+    <!-- ── RIBBON ── -->
+    <div class="ribbon">
+      <div class="ribbon__tab-strip">
+        <button class="tab-btn" :class="{ 'tab-btn--active': viewTab === 'all' }" @click="viewTab = 'all'">
+          All <span class="tab-pill">{{ adverts.length }}</span>
+        </button>
+        <button class="tab-btn" :class="{ 'tab-btn--active': viewTab === 'running' }" @click="viewTab = 'running'">
+          Running Now <span class="tab-pill tab-pill--blue">{{ adverts.filter(a=>a.runningNow).length }}</span>
+        </button>
+        <button class="tab-btn" :class="{ 'tab-btn--active': viewTab === 'upcoming' }" @click="viewTab = 'upcoming'">
+          Upcoming <span class="tab-pill tab-pill--teal">{{ adverts.filter(a=>a.isUpcoming).length }}</span>
+        </button>
+        <button class="tab-btn" :class="{ 'tab-btn--active': viewTab === 'pending' }" @click="viewTab = 'pending'">
+          Pending Design <span class="tab-pill tab-pill--amber">{{ adverts.filter(a=>!a.isApproved).length }}</span>
+        </button>
+        <button class="tab-btn" :class="{ 'tab-btn--active': viewTab === 'approved' }" @click="viewTab = 'approved'">
+          Design Approved <span class="tab-pill tab-pill--green">{{ adverts.filter(a=>a.isApproved).length }}</span>
+        </button>
       </div>
-      
-      <div class="global-search-filter-bar">
-        <input 
-          v-model="searchQuery"
-          type="text" 
-          class="search-input" 
-          placeholder="Search by client, reference, or advert title..."
-          @input="handleSearch"
-        >
-        <select v-model="platformFilter" class="filter-select" @change="applyFilters">
+
+      <div class="ribbon__filters">
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.4"/></svg>
+          <input v-model="searchQuery" type="text" class="xl-input xl-input--search" placeholder="Search client, reference, title, contact…" @input="handleSearch">
+        </div>
+        <select v-model="platformFilter" class="xl-select" @change="applyFilters">
           <option value="">All Platforms</option>
           <option value="Print Media">Print Media</option>
           <option value="Television">Television</option>
           <option value="Radio">Radio</option>
           <option value="Digital">Digital</option>
         </select>
-        <select v-model="statusFilter" class="filter-select" @change="applyFilters">
-          <option value="">All Status</option>
-          <option value="pending">Pending Design</option>
-          <option value="complete">Design Complete</option>
+        <select v-model="productFilter" class="xl-select" @change="applyFilters">
+          <option value="">All Products</option>
+          <option v-for="p in productOptions" :key="p" :value="p">{{ p }}</option>
         </select>
-        <button class="btn btn-secondary btn-sm" @click="resetFilters">
-          Reset Filters
-        </button>
-        
-        <div class="active-filters" v-if="hasActiveFilters">
-          <span class="filter-label">Active Filters:</span>
-          <span v-if="searchQuery" class="filter-badge">
-            Search: "{{ searchQuery }}"
-            <button @click="clearSearch" class="filter-remove">×</button>
-          </span>
-          <span v-if="platformFilter" class="filter-badge">
-            Platform: {{ platformFilter }}
-            <button @click="clearPlatformFilter" class="filter-remove">×</button>
-          </span>
-          <span v-if="statusFilter" class="filter-badge">
-            Status: {{ formatDesignStatus(statusFilter) }}
-            <button @click="clearStatusFilter" class="filter-remove">×</button>
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div class="stats-grid">
-      <StatCard 
-        icon="🎨"
-        :value="activeProjects"
-        label="Active Projects"
-        color="blue"
-      />
-      <StatCard 
-        icon="📅"
-        :value="readyToSchedule"
-        label="Ready to Schedule"
-        color="green"
-      />
-      <StatCard 
-        icon="✅"
-        :value="completedDesigns"
-        label="Completed Designs"
-        color="teal"
-      />
-      <StatCard 
-        icon="📁"
-        :value="totalFiles"
-        label="Total Files"
-        color="gold"
-      />
-    </div>
-
-    <!-- Error State -->
-    <div v-if="error" class="error-alert">
-      <div class="error-icon">⚠️</div>
-      <div class="error-content">
-        <h3>Error Loading Designs</h3>
-        <p>{{ error }}</p>
-        <button class="btn btn-secondary" @click="refreshData">Try Again</button>
-      </div>
-    </div>
-
-    <div class="content-card">
-      <div class="card-header">
-        <h2>Approved Adverts for Design</h2>
-        <div class="result-count">
+        <button class="ribbon-btn ribbon-btn--reset" @click="resetFilters">Reset</button>
+        <div class="result-badge">
           {{ filteredAdverts.length }} adverts
-          <span v-if="filteredAdverts.length !== adverts.length" class="filtered-count">
-            (filtered from {{ adverts.length }})
-          </span>
+          <span v-if="filteredAdverts.length !== adverts.length" class="result-filtered">(of {{ adverts.length }})</span>
         </div>
       </div>
 
-      <!-- Loading State -->
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
-        <p>Loading adverts...</p>
-      </div>
-
-      <!-- Empty State -->
-      <div v-else-if="filteredAdverts.length === 0" class="empty-state">
-        <div class="empty-icon">🎨</div>
-        <h3>No Adverts Found</h3>
-        <p v-if="hasActiveFilters">No adverts match your search criteria</p>
-        <p v-else>No adverts available for the selected date range</p>
-        <button class="btn btn-secondary" @click="resetAllFilters">
-          Reset All Filters
-        </button>
-      </div>
-
-      <!-- Adverts Table -->
-      <div v-else class="table-container">
-        <DataTable 
-          :headers="tableHeaders"
-          :items="filteredAdverts"
-          :loading="loading"
-          :page-size="10"
-          :show-pagination="true"
-        >
-          <template #cell(reference)="{ item }">
-            <div class="ref-info">
-              <span class="ref-number">{{ item.reference }}</span>
-              <span class="ref-date">{{ formatDate(item.startDate) }}</span>
-            </div>
-          </template>
-
-          <template #cell(client)="{ item }">
-            <div class="client-info">
-              <div class="client-name">{{ item.clientName }}</div>
-              <div class="advert-title">{{ item.advertTitle }}</div>
-            </div>
-          </template>
-
-          <template #cell(platform)="{ item }">
-            <div class="platform-info">
-              <div class="platform-name">{{ item.platform }}</div>
-              <span v-if="item.category" class="platform-category">{{ item.category }}</span>
-            </div>
-          </template>
-
-          <template #cell(attachments)="{ item }">
-            <div 
-              class="attachments-info clickable"
-              @click="viewAttachments(item)"
-              :title="`View ${item.attachmentsCount || 0} files`"
-            >
-              <span class="attachment-count">📎 {{ item.attachmentsCount || 0 }} files</span>
-              <span v-if="item.totalFileSize" class="file-size">({{ item.totalFileSize }})</span>
-            </div>
-          </template>
-          
-          <template #cell(designStatus)="{ item }">
-            <span :class="`status-badge status-${item.designStatus}`">
-              {{ formatDesignStatus(item.designStatus) }}
-            </span>
-          </template>
-
-          <template #cell(deadline)="{ item }">
-            <div class="deadline-info">
-              <div class="deadline-date">{{ formatDate(item.endDate) }}</div>
-              <div v-if="isUrgent(item.endDate)" class="urgent-badge">⚠️ Urgent</div>
-            </div>
-          </template>
-          
-          <template #cell(actions)="{ item }">
-            <div class="action-buttons">
-              <button 
-                v-if="item.attachmentsCount > 0"
-                class="btn btn-info btn-sm"
-                @click="handleDownloadFiles(item)"
-                title="Download all files"
-              >
-                📥 Download
-              </button>
-              <button 
-                class="btn btn-success btn-sm"
-                @click="openScheduleModal(item)"
-                title="Schedule advert"
-              >
-                📅 Schedule
-              </button>
-              <button 
-                v-if="item.hasBrief"
-                class="btn btn-warning btn-sm"
-                @click="viewBrief(item)"
-                title="View creative brief"
-              >
-                📋 Brief
-              </button>
-              <button 
-                v-if="item.designStatus === 'pending'"
-                class="btn btn-primary btn-sm"
-                @click="handleMarkComplete(item)"
-                title="Mark design as complete"
-              >
-                ✓ Complete
-              </button>
-            </div>
-          </template>
-        </DataTable>
+      <div v-if="hasActiveFilters" class="ribbon__chips">
+        <span class="chip-lbl">Filters:</span>
+        <span v-if="searchQuery"    class="xl-chip">Search: "{{ searchQuery }}" <button @click="clearSearch" class="chip-x">x</button></span>
+        <span v-if="platformFilter" class="xl-chip">Platform: {{ platformFilter }} <button @click="clearPlatformFilter" class="chip-x">x</button></span>
+        <span v-if="productFilter" class="xl-chip">Product: {{ productFilter }} <button @click="productFilter = ''" class="chip-x">x</button></span>
       </div>
     </div>
 
-    <!-- Recent Uploads Section -->
-    <div v-if="recentUploads.length > 0" class="content-card">
-      <div class="card-header">
-        <h2>Recent Uploads</h2>
-        <span class="result-count">
-          {{ filteredRecentUploads.length }} recent
-          <span v-if="filteredRecentUploads.length !== recentUploads.length" class="filtered-count">
-            (filtered from {{ recentUploads.length }})
-          </span>
+    <!-- ── ERROR ── -->
+    <div v-if="error" class="xl-error">
+      <span class="xl-error__icon">!</span>
+      <div><div class="xl-error__title">Error Loading Designs</div><div class="xl-error__msg">{{ error }}</div></div>
+      <button class="ribbon-btn ribbon-btn--reset" @click="refreshData">Retry</button>
+    </div>
+
+    <!-- ── MAIN TABLE ── -->
+    <div class="xl-sheet">
+      <div class="xl-sheet__head">
+        <span class="xl-sheet__title">
+          <span v-if="viewTab==='running'">Running Now</span>
+          <span v-else-if="viewTab==='upcoming'">Upcoming Adverts</span>
+          <span v-else-if="viewTab==='pending'">Pending Design Approval</span>
+          <span v-else-if="viewTab==='approved'">Design Approved — Ready for Scheduling</span>
+          <span v-else>All Adverts in Range</span>
         </span>
+        <span class="xl-sheet__count">{{ filteredAdverts.length }} records</span>
       </div>
-      
-      <div v-if="filteredRecentUploads.length > 0" class="recent-uploads-scroll-container">
-        <div class="recent-uploads-grid">
-          <div 
-            v-for="upload in filteredRecentUploads" 
-            :key="upload.id"
-            class="upload-card"
-          >
-            <div class="upload-header">
-              <span class="upload-ref">{{ upload.reference }}</span>
-              <span class="upload-date">{{ formatDate(upload.startDate) }}</span>
-            </div>
-            <div class="upload-client">{{ upload.clientName }}</div>
-            <div class="upload-title">{{ upload.advertTitle }}</div>
-            <div class="upload-meta">
-              <span>📎 {{ upload.attachmentsCount || 0 }} files</span>
-              <span>{{ upload.totalFileSize }}</span>
-            </div>
-            <div class="upload-actions">
-              <button 
-                class="btn btn-sm btn-info"
-                @click="viewAttachments(upload)"
-              >
-                View Files
-              </button>
-            </div>
-          </div>
+
+      <div v-if="loading" class="state-box">
+        <div class="spinner"></div>
+        <p>Loading adverts…</p>
+      </div>
+
+      <div v-else-if="filteredAdverts.length === 0" class="state-box">
+        <div class="state-box__icon">&#128197;</div>
+        <div class="state-box__title">No Adverts Found</div>
+        <p v-if="hasActiveFilters || viewTab !== 'all'">No adverts match your current filters</p>
+        <p v-else>No paid adverts found for the selected date range</p>
+        <button class="ribbon-btn ribbon-btn--primary" @click="resetAllFilters">Reset All</button>
+      </div>
+
+      <div v-else class="tbl-wrap">
+        <table class="xl-tbl">
+          <thead>
+            <tr>
+              <th class="tc-ref">Reference</th>
+              <th class="tc-status">Design</th>
+              <th class="tc-client">Client / Title</th>
+              <th class="tc-platform">Platform</th>
+              <th class="tc-product">Product</th>
+              <th class="tc-dates">Publishing Dates</th>
+              <th class="tc-files">Files</th>
+              <th class="tc-deadline">Deadline</th>
+              <th class="tc-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in paginatedAdverts" :key="item.id"
+              class="xl-row"
+              :class="{
+                'xl-row--running':  item.runningNow,
+                'xl-row--upcoming': item.isUpcoming,
+                'xl-row--approved': item.isApproved,
+              }">
+
+              <td class="tc-ref">
+                <div class="ref-cell">
+                  <span class="ref-chip">{{ item.reference }}</span>
+                  <span class="ref-date">{{ fmtDate(item.startDate) }}</span>
+                  <span v-if="item.runningNow"  class="run-badge run-badge--on">LIVE</span>
+                  <span v-else-if="item.isUpcoming" class="run-badge run-badge--soon">SOON</span>
+                </div>
+              </td>
+
+              <td class="tc-status">
+                <span :class="`xlbadge xlbadge--${item.designStatus}`">
+                  {{ item.isApproved ? 'Approved' : 'Pending' }}
+                </span>
+                <div v-if="item.isScheduled" class="sched-tag">Scheduled</div>
+              </td>
+
+              <td class="tc-client">
+                <div class="cell-stack">
+                  <span class="cell-main">{{ item.clientName }}</span>
+                  <span v-if="item.contactPerson" class="cell-contact">
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:2px"><circle cx="8" cy="5" r="3" stroke="#6081a3" stroke-width="1.5"/><path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="#6081a3" stroke-width="1.5" stroke-linecap="round"/></svg>{{ item.contactPerson }}
+                  </span>
+                  <span v-if="item.contactNumber" class="cell-contact-detail">
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:2px"><path d="M3 2h3l1.5 3.5-2 1.2a9 9 0 004.8 4.8l1.2-2L15 11v3a1 1 0 01-1 1A13 13 0 012 3a1 1 0 011-1z" stroke="#6081a3" stroke-width="1.4" stroke-linejoin="round"/></svg>{{ item.contactNumber }}
+                  </span>
+                  <span v-if="item.contactEmail" class="cell-contact-detail cell-contact-email">
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:2px"><rect x="2" y="4" width="12" height="9" rx="1" stroke="#6081a3" stroke-width="1.4"/><path d="M2 5l6 5 6-5" stroke="#6081a3" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>{{ item.contactEmail }}
+                  </span>
+                  <span class="cell-sub">{{ item.advertTitle }}</span>
+                  <span v-if="item.adSize" class="cell-meta">{{ item.adSize }}</span>
+                </div>
+              </td>
+
+              <td class="tc-platform">
+                <div class="cell-stack">
+                  <span class="cell-main">{{ item.platform }}</span>
+                  <span v-if="item.category !== item.platform" class="plat-tag">{{ item.category }}</span>
+                </div>
+              </td>
+
+              <td class="tc-product">
+                <div class="cell-stack">
+                  <span v-if="item.product && item.product !== '—'" class="prod-name">{{ item.product }}</span>
+                  <span v-else class="pub-none">—</span>
+                </div>
+              </td>
+
+              <td class="tc-dates">
+                <div class="pub-dates">
+                  <span v-if="!item.publishingDates || item.publishingDates.length === 0" class="pub-none">—</span>
+                  <template v-else>
+                    <span v-for="d in item.publishingDates" :key="d"
+                      class="pub-chip"
+                      :class="{
+                        'pub-chip--scheduled': d >= today && item.scheduledDates?.includes(d),
+                        'pub-chip--today':     d === today && !item.scheduledDates?.includes(d),
+                        'pub-chip--past':      d < today
+                      }"
+                      :style="d >= today && item.scheduledDates?.includes(d) ? 'cursor:pointer' : ''"
+                      :title="d >= today && item.scheduledDates?.includes(d) ? 'Click to view schedule details' : ''"
+                      @click="d >= today && item.scheduledDates?.includes(d) ? openScheduleDateModal(item, d) : null">
+                      {{ fmtShortDate(d) }}
+                    </span>
+                    <span class="pub-total">{{ item.publishingDates.length }} day{{ item.publishingDates.length !== 1 ? 's' : '' }}</span>
+                  </template>
+                </div>
+              </td>
+
+              <td class="tc-files">
+                <div class="attach-cell" @click="viewAttachments(item)">
+                  <span class="attach-count">{{ item.attachmentsCount }} file{{ item.attachmentsCount !== 1 ? 's' : '' }}</span>
+                  <span v-if="item.totalFileSize && item.attachmentsCount > 0" class="attach-size">{{ item.totalFileSize }}</span>
+                  <span v-if="item.attachmentsCount === 0" class="attach-none">No files yet</span>
+                </div>
+              </td>
+
+              <td class="tc-deadline">
+                <div class="cell-stack">
+                  <span class="cell-main">{{ fmtDate(item.endDate) }}</span>
+                  <span v-if="isUrgent(item.endDate)" class="urgent-tag">Urgent</span>
+                </div>
+              </td>
+
+              <td class="tc-actions">
+                <div class="act-group">
+                  <!-- Upload -->
+                  <button class="act-btn act-btn--upload" @click="openUploadModal(item)" title="Upload design files">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  </button>
+                  <!-- View files -->
+                  <button v-if="item.attachmentsCount > 0" class="act-btn act-btn--view" @click="viewAttachments(item)" title="View files">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/></svg>
+                  </button>
+                  <!-- Approve design -->
+                  <button v-if="!item.isApproved" class="act-btn act-btn--approve" @click="handleMarkComplete(item)" title="Approve design">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <!-- Schedule -->
+                  <button v-if="item.isApproved" class="act-btn act-btn--sched" @click="openScheduleModal(item)" title="Schedule advert">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v3M11 1v3M2 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  </button>
+                  <!-- Brief -->
+                  <button v-if="item.hasBrief" class="act-btn act-btn--brief" @click="viewBrief(item)" title="View creative brief">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3" y="1" width="10" height="14" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M6 5h4M6 8h4M6 11h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  </button>
+                  <!-- Download -->
+                  <button v-if="item.attachmentsCount > 0" class="act-btn act-btn--dl" @click="handleDownloadFiles(item)" title="Download files">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v9M4 11l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="status-bar">
+        <div class="sb-left">
+          <span class="sb-stat">Showing <strong>{{ paginatedAdverts.length }}</strong> of <strong>{{ filteredAdverts.length }}</strong></span>
+          <span class="sb-div">|</span>
+          <span class="sb-stat">Pending: <strong class="sb-val--amber">{{ filteredAdverts.filter(a=>!a.isApproved).length }}</strong></span>
+          <span class="sb-div">|</span>
+          <span class="sb-stat">Approved: <strong class="sb-val--green">{{ filteredAdverts.filter(a=>a.isApproved).length }}</strong></span>
+          <span class="sb-div">|</span>
+          <span class="sb-stat">Scheduled: <strong class="sb-val--blue">{{ filteredAdverts.filter(a=>a.isScheduled).length }}</strong></span>
         </div>
-      </div>
-      
-      <div v-if="filteredRecentUploads.length === 0" class="empty-recent-uploads">
-        <div class="empty-icon">📁</div>
-        <h4>No Recent Uploads Match Search</h4>
-        <p>No recent uploads match your search criteria</p>
+        <div class="sb-right">
+          <button class="pg-btn" :disabled="currentPage <= 1" @click="currentPage--">&#8592;</button>
+          <span class="pg-label">Page {{ currentPage }} / {{ totalPages }}</span>
+          <button class="pg-btn" :disabled="currentPage >= totalPages" @click="currentPage++">&#8594;</button>
+        </div>
       </div>
     </div>
 
-    <!-- Files Modal -->
+    <!-- ── RECENT UPLOADS ── -->
+
+
+    <!-- ── MODALS ── -->
     <div v-if="showFilesModal" class="modal-overlay" @click.self="closeFilesModal">
-      <div class="files-modal">
-        <div class="modal-header">
-          <h2>Files for {{ selectedAdvert?.reference }}</h2>
-          <button class="modal-close" @click="closeFilesModal">×</button>
+      <div class="xl-modal">
+        <div class="xl-modal__head">
+          <div>
+            <div class="xl-modal__title">Attachments</div>
+            <div class="xl-modal__ref">{{ selectedAdvert?.reference }} — {{ selectedAdvert?.clientName }}</div>
+          </div>
+          <button class="xl-modal__close" @click="closeFilesModal">x</button>
         </div>
-        
-        <div class="modal-body">
-          <FileList 
+        <div class="xl-modal__body">
+          <FileList
             :files="selectedAdvert?.attachments || []"
             :loading="false"
             :show-delete="false"
@@ -372,23 +330,29 @@
             @download="downloadFile"
           />
         </div>
-        
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeFilesModal">
-            Close
-          </button>
+        <div class="xl-modal__foot">
+          <button class="act-btn act-btn--sched" @click="closeFilesModal">Close</button>
         </div>
       </div>
     </div>
 
-    <!-- DEBUG: Show if modal should be open -->
-  <!--
-    <div v-if="showScheduleModal" style="position: fixed; top: 10px; right: 10px; background: red; color: white; padding: 10px; z-index: 9999;">
-      DEBUG: Schedule Modal should be open
-    </div>
-  -->
+    <UploadDesign
+      v-if="showUploadModal"
+      :advert="selectedAdvert"
+      :show="showUploadModal"
+      @close="closeUploadModal"
+      @uploaded="handleUploadComplete"
+    />
 
-    <!-- Advert Scheduler Modal -->
+    <ScheduleDateModal
+      v-if="showScheduleDateModal"
+      :show="showScheduleDateModal"
+      :advert="selectedAdvert"
+      :date="selectedScheduleDate"
+      @close="closeScheduleDateModal"
+      @reschedule="handleRescheduleFromModal"
+    />
+
     <AdvertScheduler
       v-if="showScheduleModal"
       :advert="selectedAdvert"
@@ -397,1303 +361,407 @@
       @scheduled="handleScheduleComplete"
     />
 
-    <!-- Brief Modal -->
     <BriefModal
       v-if="showBriefModal"
       :advert="selectedAdvert"
       @close="closeBriefModal"
     />
+
   </div>
 </template>
 
 <script setup>
-import StatCard from '~/components/common/StatCard.vue'
-import DataTable from '~/components/common/DataTable.vue'
-import AdvertScheduler from '~/components/design/AdvertScheduler.vue'
-import BriefModal from '~/components/design/BriefModal.vue'
-import FileList from '~/components/design/FileList.vue'
-import { useDesign } from '~/composables/useDesign'
+import DataTable       from '~/components/common/DataTable.vue'
+import AdvertScheduler      from '~/components/design/AdvertScheduler.vue'
+import ScheduleDateModal    from '~/components/design/ScheduleDateModal.vue'
+import BriefModal      from '~/components/design/BriefModal.vue'
+import FileList        from '~/components/design/FileList.vue'
+import UploadDesign    from '~/components/design/UploadDesign.vue'
+import { useDesign }   from '~/composables/useDesign'
 import { ref, computed, onMounted, watch } from 'vue'
 
-// Composable
-const { 
-  adverts,
-  recentUploads,
-  activeProjects,
-  readyToSchedule,
-  completedDesigns,
-  totalFiles,
-  loading,
-  error,
-  loadDesigns,
-  loadDesignStats,
-  downloadFiles: downloadAllFiles,
-  markDesignComplete,
-  getTodayFormatted,
-  getDateRange,
-  formatDateForAPI
+const {
+  adverts, running, upcoming, pendingDesign,
+  designApproved, readyToSchedule, scheduled, totalFiles,
+  loading, error, loadDesigns, loadDesignStats,
+  downloadFiles: downloadAllFiles, markDesignComplete,
+  getTodayFormatted, getDateRange, formatDateForAPI,
 } = useDesign()
 
-// Local state
-const searchQuery = ref('')
+const searchQuery    = ref('')
 const platformFilter = ref('')
-const statusFilter = ref('')
+const productFilter   = ref('')
+const viewTab        = ref('all')
 const selectedAdvert = ref(null)
 const showScheduleModal = ref(false)
-const showBriefModal = ref(false)
-const showFilesModal = ref(false)
+const showBriefModal       = ref(false)
+const showScheduleDateModal = ref(false)
+const selectedScheduleDate  = ref('')
+const showFilesModal    = ref(false)
+const showUploadModal   = ref(false)
+const startDate         = ref('')
+const endDate           = ref('')
+const activeQuickRange  = ref('')
+const currentPage       = ref(1)
+const pageSize          = 12
 
-// Date range state
-const startDate = ref('')
-const endDate = ref('')
-const activeQuickRange = ref('')
+const today = getTodayFormatted()
 
-const maxAllowedDate = computed(() => {
-  const maxDate = new Date()
-  maxDate.setFullYear(maxDate.getFullYear() + 2) // 2 years from now
-  return maxDate.toISOString().split('T')[0]
-});
-
-// Table configuration
-const tableHeaders = [
-  { key: 'reference', label: 'Reference' },
-  { key: 'client', label: 'Client / Title' },
-  { key: 'platform', label: 'Platform' },
-  { key: 'attachments', label: 'Attachments' },
-  { key: 'designStatus', label: 'Status' },
-  { key: 'deadline', label: 'Deadline' },
-  { key: 'actions', label: 'Actions' }
+const quickRanges = [
+  { key: 'today',      label: 'Today'      },
+  { key: 'this_week',  label: 'This Week'  },
+  { key: 'this_month', label: 'This Month' },
+  { key: 'next_month', label: 'Next Month' },
 ]
 
-// Computed - check if filters are active
-const hasActiveFilters = computed(() => {
-  return searchQuery.value || platformFilter.value || statusFilter.value
+const productOptions = computed(() => {
+  const set = new Set(adverts.value.map(a => a.product).filter(p => p && p !== '—'))
+  return [...set].sort()
 })
 
-// Helper function to filter adverts
-const filterAdverts = (advertsList) => {
-  let filtered = [...advertsList]
-  
-  // Search filter
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(advert => 
-      advert.clientName?.toLowerCase().includes(query) ||
-      advert.advertTitle?.toLowerCase().includes(query) ||
-      advert.reference?.toLowerCase().includes(query)
-    )
-  }
-  
-  // Platform filter
-  if (platformFilter.value) {
-    filtered = filtered.filter(advert => 
-      advert.platform === platformFilter.value
-    )
-  }
+const maxAllowedDate = computed(() => {
+  const d = new Date(); d.setFullYear(d.getFullYear() + 2)
+  return d.toISOString().split('T')[0]
+})
 
-  // Status filter
-  if (statusFilter.value) {
-    filtered = filtered.filter(advert => 
-      advert.designStatus === statusFilter.value
-    )
-  }
-  
-  return filtered
-}
-
-// Computed - filtered adverts for main table
 const filteredAdverts = computed(() => {
-  return filterAdverts(adverts.value)
+  let list = [...adverts.value]
+  if (viewTab.value === 'running')  list = list.filter(a =>  a.runningNow)
+  if (viewTab.value === 'upcoming') list = list.filter(a =>  a.isUpcoming)
+  if (viewTab.value === 'pending')  list = list.filter(a => !a.isApproved)
+  if (viewTab.value === 'approved') list = list.filter(a =>  a.isApproved)
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    list = list.filter(a =>
+      a.clientName?.toLowerCase().includes(q) ||
+      a.advertTitle?.toLowerCase().includes(q) ||
+      a.reference?.toLowerCase().includes(q) ||
+      a.product?.toLowerCase().includes(q) ||
+      a.contactPerson?.toLowerCase().includes(q) ||
+      a.contactNumber?.toLowerCase().includes(q) ||
+      a.contactEmail?.toLowerCase().includes(q)
+    )
+  }
+  if (platformFilter.value) list = list.filter(a => a.platform === platformFilter.value)
+  if (productFilter.value)  list = list.filter(a => a.product === productFilter.value)
+  return list
 })
 
-// Computed - filtered recent uploads
-const filteredRecentUploads = computed(() => {
-  return filterAdverts(recentUploads.value)
+const totalPages      = computed(() => Math.max(1, Math.ceil(filteredAdverts.value.length / pageSize)))
+const paginatedAdverts = computed(() => {
+  const s = (currentPage.value - 1) * pageSize
+  return filteredAdverts.value.slice(s, s + pageSize)
 })
+watch(filteredAdverts, () => { currentPage.value = 1 })
+const hasActiveFilters = computed(() => searchQuery.value || platformFilter.value || productFilter.value)
 
-// Lifecycle - load data on mount
 onMounted(async () => {
-  // Set default date range to today
-  const today = getTodayFormatted()
-  startDate.value = today
-  endDate.value = today
-  activeQuickRange.value = 'today'
-  
+  const t = getTodayFormatted()
+  startDate.value = t; endDate.value = t; activeQuickRange.value = 'today'
   await loadData()
 })
+watch([startDate, endDate], () => loadData(), { immediate: false })
 
-// Watch date range changes
-watch([startDate, endDate], ([newStart, newEnd]) => {
-  if (newStart || newEnd) {
-    loadData()
-  }
-}, { immediate: false })
-
-// Methods
 const loadData = async () => {
-  const params = {}
-  
-  if (startDate.value) {
-    params.startDate = formatDateForAPI(startDate.value)
+  const p = {
+    startDate: startDate.value ? formatDateForAPI(startDate.value) : undefined,
+    endDate:   endDate.value   ? formatDateForAPI(endDate.value)   : undefined,
   }
-  
-  if (endDate.value) {
-    params.endDate = formatDateForAPI(endDate.value)
-  }
-  
-  await Promise.all([
-    loadDesigns(params),
-    loadDesignStats(params)
-  ])
+  await Promise.all([loadDesigns(p), loadDesignStats(p)])
 }
+const refreshData = () => loadData()
 
-// View attachments method
-const viewAttachments = (advert) => {
-  selectedAdvert.value = advert
-  showFilesModal.value = true
-}
-
-const closeFilesModal = () => {
-  showFilesModal.value = false
-  selectedAdvert.value = null
-}
-
-const previewFile = (file) => {
-  if (file.url) {
-    window.open(file.url, '_blank', 'noopener,noreferrer')
-  } else {
-    alert('File URL not available')
-  }
-}
-
-const downloadFile = (file) => {
-  if (file.url) {
-    const link = document.createElement('a')
-    link.href = file.url
-    link.download = file.name || 'download'
-    link.target = '_blank'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  } else {
-    alert('File URL not available')
-  }
-}
-
-const refreshData = async () => {
-  await loadData()
-}
-
-const handleSearch = () => {
-  // Search is reactive via computed property
-}
-
-const applyFilters = () => {
-  // Filters are reactive via computed property
-}
-
-const resetFilters = () => {
-  searchQuery.value = ''
-  platformFilter.value = ''
-  statusFilter.value = ''
-}
-
-const clearSearch = () => {
-  searchQuery.value = ''
-}
-
-const clearPlatformFilter = () => {
-  platformFilter.value = ''
-}
-
-const clearStatusFilter = () => {
-  statusFilter.value = ''
-}
-
+const handleSearch = () => {}
+const applyFilters = () => {}
+const resetFilters = () => { searchQuery.value = ''; platformFilter.value = ''; productFilter.value = '' }
+const clearSearch         = () => { searchQuery.value = '' }
+const clearPlatformFilter = () => { platformFilter.value = '' }
 const resetAllFilters = () => {
-  resetFilters()
-  // Reset to today's date
-  const today = getTodayFormatted()
-  startDate.value = today
-  endDate.value = today
-  activeQuickRange.value = 'today'
+  resetFilters(); viewTab.value = 'all'
+  const t = getTodayFormatted()
+  startDate.value = t; endDate.value = t; activeQuickRange.value = 'today'
   loadData()
 }
-
-const formatDesignStatus = (status) => {
-  const statusMap = {
-    'pending': 'Pending Design',
-    'complete': 'Design Complete'
-  }
-  return statusMap[status] || status
-}
-
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-UG', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
-  } catch (error) {
-    return dateString
-  }
-}
-
-const formatDisplayDate = (dateString) => {
-  if (!dateString) return ''
-  
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-UG', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
-  } catch (error) {
-    return dateString
-  }
-}
-
-const isUrgent = (endDate) => {
-  if (!endDate) return false
-  
-  const end = new Date(endDate)
-  const now = new Date()
-  const daysUntil = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
-  
-  return daysUntil <= 3 && daysUntil >= 0
-}
-
-const openScheduleModal = (advert) => {
-  console.log('Opening schedule modal for:', advert)
-  selectedAdvert.value = advert
-  showScheduleModal.value = true
-  console.log('showScheduleModal set to:', showScheduleModal.value)
-}
-
-const closeScheduleModal = () => {
-  console.log('Closing schedule modal')
-  showScheduleModal.value = false
-  selectedAdvert.value = null
-}
-
-const handleScheduleComplete = async () => {
-  console.log('Schedule completed')
-  closeScheduleModal()
-  // Reload data after successful scheduling
-  await refreshData()
-}
-
-const handleDownloadFiles = async (advert) => {
-  try {
-    if (advert.attachmentsCount === 1) {
-      await downloadAllFiles(advert.id)
-      alert(`✅ Started downloading file for ${advert.reference}`)
-    } else if (advert.attachmentsCount > 1) {
-      const confirmed = confirm(`Download ${advert.attachmentsCount} files for ${advert.reference}?\n\nFiles will be downloaded one by one. Please allow multiple downloads.`)
-      
-      if (confirmed) {
-        await downloadAllFiles(advert.id)
-      }
-    } else {
-      alert(`No files available for ${advert.reference}`)
-    }
-  } catch (err) {
-    alert(`❌ Failed to download files: ${err.message}`)
-  }
-}
-
-const viewBrief = (advert) => {
-  selectedAdvert.value = advert
-  showBriefModal.value = true
-}
-
-const closeBriefModal = () => {
-  showBriefModal.value = false
-  selectedAdvert.value = null
-}
-
-const handleMarkComplete = async (advert) => {
-  const notes = prompt(`Mark design as complete for ${advert.reference}?\n\nAdd completion notes (optional):`)
-  
-  if (notes === null) return // User cancelled
-  
-  try {
-    // Get designer email from localStorage
-    const vgamsUser = JSON.parse(localStorage.getItem('vgams_user'))
-    
-    await markDesignComplete(advert.id, notes || '', vgamsUser?.email)
-    alert(`✅ Design marked as complete for ${advert.reference}`)
-    
-    // Reload data
-    await refreshData()
-  } catch (err) {
-    alert(`❌ Failed to mark complete: ${err.message}`)
-  }
-}
-
-// Date range methods
-const handleDateChange = () => {
-  // Clear active quick range when manually changing dates
-  activeQuickRange.value = ''
-  loadData()
-}
-
+const handleDateChange = () => { activeQuickRange.value = ''; loadData() }
 const setQuickDateRange = (range) => {
   activeQuickRange.value = range
-  const dates = getDateRange(range)
-  startDate.value = dates.startDate
-  endDate.value = dates.endDate
+  const d = getDateRange(range)
+  startDate.value = d.startDate; endDate.value = d.endDate
+}
+
+const fmtDate = (s) => {
+  if (!s) return '—'
+  try { return new Date(s).toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' }) }
+  catch { return s }
+}
+const fmtShortDate = (s) => {
+  if (!s) return '—'
+  try { return new Date(s + 'T00:00:00').toLocaleDateString('en-UG', { month: 'short', day: 'numeric' }) }
+  catch { return s }
+}
+const isUrgent = (d) => {
+  if (!d) return false
+  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
+  return days >= 0 && days <= 3
+}
+
+const viewAttachments   = (a) => { selectedAdvert.value = a; showFilesModal.value = true }
+const closeFilesModal   = () => { showFilesModal.value = false; selectedAdvert.value = null }
+const openUploadModal   = (a) => { selectedAdvert.value = a; showUploadModal.value = true }
+const closeUploadModal  = () => { showUploadModal.value = false; selectedAdvert.value = null }
+const handleUploadComplete = async () => { closeUploadModal(); await refreshData() }
+const openScheduleModal  = (a) => { selectedAdvert.value = a; showScheduleModal.value = true }
+const closeScheduleModal = () => { showScheduleModal.value = false; selectedAdvert.value = null }
+const handleScheduleComplete = async () => { closeScheduleModal(); await refreshData() }
+const viewBrief    = (a) => { selectedAdvert.value = a; showBriefModal.value = true }
+
+const openScheduleDateModal  = (a, d) => { selectedAdvert.value = a; selectedScheduleDate.value = d; showScheduleDateModal.value = true }
+const closeScheduleDateModal = () => { showScheduleDateModal.value = false; selectedScheduleDate.value = '' }
+const handleRescheduleFromModal = ({ advert }) => { closeScheduleDateModal(); openScheduleModal(advert) }
+const closeBriefModal = () => { showBriefModal.value = false; selectedAdvert.value = null }
+const previewFile  = (f) => { if (f.url) window.open(f.url, '_blank', 'noopener') }
+const downloadFile = (f) => {
+  if (!f.url) return
+  const a = document.createElement('a')
+  a.href = f.url; a.download = f.name || 'file'; a.target = '_blank'
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+}
+const handleDownloadFiles = async (advert) => {
+  try {
+    if (advert.attachmentsCount === 0) { alert('No files available'); return }
+    const ok = advert.attachmentsCount > 1 ? confirm(`Download ${advert.attachmentsCount} files for ${advert.reference}?`) : true
+    if (ok) await downloadAllFiles(advert.id)
+  } catch (e) { alert(`Download failed: ${e.message}`) }
+}
+const handleMarkComplete = async (advert) => {
+  const notes = prompt(`Approve design for ${advert.reference}?\n\nAdd approval notes (optional):`)
+  if (notes === null) return
+  try {
+    const vgamsUser = JSON.parse(localStorage.getItem('vgams_user') || '{}')
+    await markDesignComplete(advert.id, notes || '', vgamsUser?.email || '')
+    alert(`Design approved for ${advert.reference}`)
+    await refreshData()
+  } catch (e) { alert(`Failed: ${e.message}`) }
 }
 </script>
 
 <style scoped>
-.design-page {
-  width: 100%;
-  padding-bottom: 30px;
-}
+.dh-page { width:100%; padding-bottom:40px; background:#F2F2F2; font-family:'IBM Plex Sans','Segoe UI',sans-serif; font-size:13px; }
 
-/* HEADER */
-.page-header {
-  background: white;
-  padding: 25px 30px;
-  border-radius: 10px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
+.hd-bar { background:#1F3864; padding:0 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; min-height:54px; border-bottom:3px solid #E31E24; }
+.hd-left { display:flex; flex-direction:column; gap:1px; }
+.hd-title { color:#fff; font-size:15px; font-weight:700; letter-spacing:.3px; }
+.hd-sub { color:#9DC3E6; font-size:11px; }
+.hd-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 0; }
+.hd-period { display:flex; align-items:center; gap:6px; }
+.hd-label { color:#9DC3E6; font-size:11px; white-space:nowrap; }
+.hd-input { background:#162d52; color:#fff; border:1px solid #4a6fa5; padding:4px 8px; font-size:12px; height:28px; border-radius:0; font-family:'IBM Plex Mono',monospace; }
+.hd-input:focus { outline:none; border-color:#9DC3E6; }
+.hd-quick { display:flex; gap:4px; }
+.qr-btn { background:#162d52; color:#9DC3E6; border:1px solid #4a6fa5; padding:3px 9px; font-size:11px; cursor:pointer; border-radius:0; }
+.qr-btn:hover { background:#1e4080; color:#fff; }
+.qr-btn--active { background:#E31E24; color:#fff; border-color:#E31E24; }
+.hd-btn { background:#E31E24; color:#fff; border:none; padding:5px 14px; font-size:12px; font-weight:600; cursor:pointer; border-radius:0; height:28px; }
+.hd-btn:disabled { opacity:.6; cursor:not-allowed; }
+.hd-btn:hover:not(:disabled) { background:#c01820; }
 
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
-}
+.flow-strip { display:flex; align-items:center; background:#fff; border-bottom:1px solid #BDD7EE; overflow-x:auto; }
+.flow-step { display:flex; flex-direction:column; align-items:center; padding:11px 20px; min-width:100px; border-right:1px solid #DEEAF1; }
+.flow-num { font-size:22px; font-weight:700; font-family:'IBM Plex Mono',monospace; line-height:1; }
+.flow-lbl { font-size:10px; color:#666; margin-top:2px; white-space:nowrap; text-align:center; }
+.flow-arrow { color:#BDD7EE; font-size:12px; padding:0 2px; flex-shrink:0; }
+.flow-spacer { flex:1; border-right:2px dashed #DEEAF1; min-width:20px; }
+.flow-step--blue  .flow-num { color:#1F3864; }
+.flow-step--teal  .flow-num { color:#244F75; }
+.flow-step--amber .flow-num { color:#9C5700; }
+.flow-step--green .flow-num { color:#375623; }
+.flow-step--gold  .flow-num { color:#7F6000; }
+.flow-step--navy  .flow-num { color:#203864; }
+.flow-step--slate .flow-num { color:#595959; }
 
-.page-header h1 {
-  color: #003366;
-  margin-bottom: 8px;
-  font-size: 1.8em;
-  font-weight: 600;
-}
+.ribbon { background:#fff; border-bottom:1px solid #BDD7EE; margin-bottom:14px; }
+.ribbon__tab-strip { display:flex; border-bottom:1px solid #BDD7EE; padding:0 16px; flex-wrap:wrap; }
+.tab-btn { display:flex; align-items:center; gap:6px; padding:7px 14px; border:1px solid transparent; border-bottom:none; background:#E8EEF4; color:#555; font-size:12px; font-weight:500; cursor:pointer; margin-right:3px; margin-top:5px; position:relative; bottom:-1px; border-radius:0; }
+.tab-btn:hover { background:#DEEAF1; color:#1F3864; }
+.tab-btn--active { background:#fff; color:#1F3864; font-weight:700; border-color:#9DC3E6 #9DC3E6 #fff; }
+.tab-pill { background:#BDD7EE; color:#1F3864; font-size:10px; font-weight:700; padding:1px 6px; min-width:18px; text-align:center; }
+.tab-pill--blue  { background:#DEEAF1; }
+.tab-pill--teal  { background:#DDEBF7; color:#244F75; }
+.tab-pill--amber { background:#FFEB9C; color:#9C5700; }
+.tab-pill--green { background:#E2EFDA; color:#375623; }
 
-.page-header p {
-  color: #666;
-  margin: 0;
-  font-size: 0.95em;
-}
+.ribbon__filters { display:flex; align-items:center; gap:10px; padding:10px 16px; flex-wrap:wrap; }
+.search-wrap { position:relative; flex:1 1 180px; max-width:300px; }
+.search-icon { position:absolute; left:8px; top:50%; transform:translateY(-50%); width:14px; height:14px; color:#999; pointer-events:none; }
+.xl-input { width:100%; border:1px solid #BDD7EE; padding:5px 8px; font-size:12px; border-radius:0; }
+.xl-input--search { padding-left:28px; }
+.xl-input:focus,.xl-select:focus { outline:none; border-color:#9DC3E6; box-shadow:0 0 0 2px rgba(157,195,230,.2); }
+.xl-select { border:1px solid #BDD7EE; padding:5px 8px; font-size:12px; border-radius:0; min-width:130px; }
+.ribbon-btn { padding:5px 12px; border:none; font-size:12px; cursor:pointer; border-radius:0; font-weight:500; }
+.ribbon-btn--reset { background:#DEEAF1; color:#1F3864; border:1px solid #9DC3E6; }
+.ribbon-btn--reset:hover { background:#c5d9ec; }
+.ribbon-btn--primary { background:#E31E24; color:#fff; }
+.ribbon-btn--primary:hover { background:#c01820; }
+.result-badge { margin-left:auto; font-size:12px; color:#555; white-space:nowrap; }
+.result-filtered { color:#999; font-size:11px; }
+.ribbon__chips { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:6px 16px 10px; border-top:1px solid #DEEAF1; }
+.chip-lbl { color:#888; font-size:11px; }
+.xl-chip { display:inline-flex; align-items:center; gap:4px; background:#DEEAF1; color:#1F3864; border:1px solid #9DC3E6; padding:2px 8px; font-size:11px; }
+.chip-x { background:none; border:none; color:#666; cursor:pointer; font-size:14px; padding:0; line-height:1; }
+.chip-x:hover { color:#E31E24; }
 
-.header-actions {
-  display: flex;
-  gap: 15px;
-}
+.xl-error { background:#FCE4D6; border:1px solid #FF7043; display:flex; align-items:center; gap:12px; padding:10px 16px; margin-bottom:14px; }
+.xl-error__icon { font-size:16px; color:#9C0006; font-weight:700; }
+.xl-error__title { font-weight:600; color:#9C0006; font-size:13px; }
+.xl-error__msg { font-size:12px; color:#5D4037; }
 
-/* DATE RANGE CARD */
-.date-range-card {
-  margin-bottom: 30px;
-}
+.xl-sheet { background:#fff; border:1px solid #BDD7EE; }
+.xl-sheet__head { background:#1F3864; color:#fff; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; }
+.xl-sheet__title { font-size:13px; font-weight:600; }
+.xl-sheet__count { font-size:11px; color:#9DC3E6; }
 
-.date-range-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+.tbl-wrap { overflow-x:auto; }
+.xl-tbl { width:100%; border-collapse:collapse; font-size:12px; min-width:1100px; }
+.xl-tbl thead tr { background:#1F3864; }
+.xl-tbl thead th { color:#fff; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.4px; padding:8px 10px; border-bottom:2px solid #162d52; border-right:1px solid #2e4f7a; text-align:left; white-space:nowrap; }
+.xl-tbl thead th:last-child { border-right:none; }
+.xl-tbl tbody tr.xl-row:nth-child(even) { background:#F7FBFE; }
+.xl-tbl tbody tr.xl-row:hover { background:#EBF4FF; }
+.xl-tbl tbody tr.xl-row--running  { border-left:3px solid #1F3864; }
+.xl-tbl tbody tr.xl-row--upcoming { border-left:3px solid #244F75; }
+.xl-tbl tbody tr.xl-row--approved { border-left:3px solid #375623; }
+.xl-tbl tbody td { padding:8px 10px; border-bottom:1px solid #DEEAF1; border-right:1px solid #EBF4FF; vertical-align:top; }
+.xl-tbl tbody td:last-child { border-right:none; }
 
-.date-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.tc-ref      { width:110px; }
+.tc-status   { width:88px; }
+.tc-client   { min-width:180px; }
+.tc-platform { width:110px; }
+.tc-product  { width:120px; }
+.tc-dates    { width:200px; }
+.tc-files    { width:100px; }
+.tc-deadline { width:100px; }
+.tc-actions  { width:130px; }
 
-.date-input-group label {
+.ref-cell { display:flex; flex-direction:column; gap:3px; }
+.ref-chip { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; color:#1F3864; background:#DEEAF1; border:1px solid #9DC3E6; padding:1px 6px; }
+.ref-date { font-size:10px; color:#888; }
+.run-badge { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.5px; padding:1px 5px; border:1px solid transparent; }
+.run-badge--on   { background:#1F3864; color:#fff; }
+.run-badge--soon { background:#DEEAF1; color:#1F3864; border-color:#9DC3E6; }
+
+.cell-stack { display:flex; flex-direction:column; gap:2px; }
+.cell-main { font-weight:500; color:#222; }
+.cell-sub  { font-size:11px; color:#888; }
+.cell-meta { font-size:10px; color:#aaa; font-family:'IBM Plex Mono',monospace; }
+.plat-tag  { display:inline-block; background:#DEEAF1; color:#1F3864; border:1px solid #9DC3E6; padding:1px 5px; font-size:10px; font-weight:600; width:fit-content; }
+
+.pub-dates { display:flex; flex-wrap:wrap; gap:3px; align-items:center; }
+.pub-none  { font-size:11px; color:#bbb; }
+.pub-chip  { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; background:#DEEAF1; color:#1F3864; border:1px solid #9DC3E6; padding:1px 5px; }
+.pub-chip--today { background:#1F3864; color:#fff; border-color:#1F3864; }
+.pub-chip--past      { background:#F7FBFE; color:#aaa; border-color:#DEEAF1; }
+.pub-chip--scheduled { background:#FCE4D6; color:#9C0006; border-color:#E31E24; font-weight:700; }
+.pub-chip--scheduled:hover { background:#f4c7b4; }
+.pub-more  { font-size:10px; font-weight:700; color:#1F3864; background:#BDD7EE; border:1px solid #9DC3E6; padding:1px 5px; cursor:help; }
+.pub-total { font-size:10px; color:#888; margin-left:2px; white-space:nowrap; }
+.prod-name { font-size:11px; font-weight:600; color:#244F75; }
+.cell-contact { font-size:10px; color:#6081a3; display:flex; align-items:center; }
+.cell-contact-detail { font-size:10px; color:#6081a3; display:flex; align-items:center; }
+.cell-contact-email { color:#244F75; }
+.cell-product { font-size:10px; color:#244F75; background:#DDEBF7; border:1px solid #9DC3E6; padding:1px 5px; display:inline-flex; align-items:center; width:fit-content; }
+
+.attach-cell { cursor:pointer; padding:2px 4px; display:flex; flex-direction:column; gap:2px; }
+.attach-cell:hover { background:#DEEAF1; }
+.attach-count { font-size:12px; font-weight:500; color:#333; }
+.attach-size  { font-size:10px; color:#888; }
+.attach-none  { font-size:10px; color:#bbb; font-style:italic; }
+
+.xlbadge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border:1px solid transparent; text-transform:uppercase; letter-spacing:.3px; }
+.xlbadge--pending  { background:#FFEB9C; color:#9C5700; border-color:#FFCC00; }
+.xlbadge--approved { background:#E2EFDA; color:#375623; border-color:#92D050; }
+.sched-tag { margin-top:3px; font-size:9px; font-weight:600; color:#1F3864; }
+.urgent-tag { display:inline-block; background:#FCE4D6; color:#9C0006; border:1px solid #FF7043; font-size:10px; font-weight:700; padding:1px 5px; }
+
+.act-group { display:flex; gap:3px; flex-wrap:wrap; align-items:center; }
+.act-btn { display:inline-flex; align-items:center; font-size:11px; font-weight:600; padding:4px 8px; border:1px solid transparent; cursor:pointer; border-radius:0; white-space:nowrap; font-family:inherit; transition:opacity .12s; position:relative; }
+.act-btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border:1px solid transparent; cursor:pointer; border-radius:0; font-family:inherit; transition:opacity .12s; position:relative; }
+.act-btn[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1F3864;
+  color: #fff;
+  font-size: 10px;
   font-weight: 500;
-  color: #333;
-  font-size: 0.95em;
-}
-
-.date-input {
-  padding: 10px 15px;
-  border: 1px solid #DDDDDD;
-  border-radius: 5px;
-  font-size: 0.95em;
-  max-width: 200px;
-}
-
-.date-input:focus {
-  outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-}
-
-.quick-date-buttons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.quick-date-buttons .btn-sm {
-  padding: 6px 12px;
-  font-size: 0.85em;
-  background: #f0f7ff;
-  color: #0066CC;
-  border: 1px solid #b3d4ff;
-}
-
-.quick-date-buttons .btn-sm:hover {
-  background: #e1f0ff;
-}
-
-.quick-date-buttons .btn-sm.active {
-  background: #0066CC;
-  color: white;
-  border-color: #0066CC;
-}
-
-.date-range-info {
-  padding: 10px 15px;
-  background: #f0f7ff;
-  border-radius: 5px;
-  color: #0066CC;
-  font-weight: 500;
-  font-size: 0.95em;
-}
-
-/* Global Search & Filters */
-.global-search-filter-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 12px 15px;
-  border: 1px solid #DDDDDD;
-  border-radius: 5px;
-  font-size: 1em;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-}
-
-.filter-select {
-  padding: 12px 15px;
-  border: 1px solid #DDDDDD;
-  border-radius: 5px;
-  background: white;
-  font-size: 1em;
-  min-width: 180px;
-}
-
-.filter-select:focus {
-  outline: none;
-  border-color: #0066CC;
-}
-
-/* Active Filters */
-.active-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 0;
-  border-top: 1px solid #EEEEEE;
-  margin-top: 10px;
-}
-
-.filter-label {
-  color: #666;
-  font-size: 0.9em;
-  font-weight: 500;
-}
-
-.filter-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: #f0f7ff;
-  color: #0066CC;
-  border-radius: 20px;
-  font-size: 0.85em;
-  font-weight: 500;
-}
-
-.filter-remove {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  font-size: 1.2em;
-  padding: 0;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.3s;
-}
-
-.filter-remove:hover {
-  background: #ff6b6b;
-  color: white;
-}
-
-/* Filtered Count */
-.filtered-count {
-  color: #999;
-  font-size: 0.8em;
-  font-weight: normal;
-  margin-left: 5px;
-}
-
-/* STATS GRID */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-/* ERROR ALERT */
-.error-alert {
-  background: #fff5f5;
-  border: 2px solid #feb2b2;
-  border-radius: 10px;
-  padding: 30px;
-  margin-bottom: 30px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.error-icon {
-  font-size: 3em;
-  color: #e53e3e;
-}
-
-.error-content h3 {
-  color: #e53e3e;
-  margin-bottom: 10px;
-}
-
-.error-content p {
-  color: #742a2a;
-  margin-bottom: 20px;
-}
-
-/* CONTENT CARD */
-.content-card {
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  margin-bottom: 30px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #F5F5F5;
-}
-
-.card-header h2 {
-  color: #003366;
-  margin: 0;
-  font-size: 1.4em;
-}
-
-.result-count {
-  color: #666;
-  font-size: 0.9em;
-  font-weight: 500;
-}
-
-/* Table Container for Horizontal Scroll */
-.table-container {
-  width: 100%;
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #F5F5F5;
-  background: white;
-}
-
-/* Ensure DataTable can be wider than container */
-.table-container :deep(.data-table) {
-  min-width: 1000px; /* Minimum width for table */
-}
-
-/* Responsive table cells */
-.table-container :deep(.data-table td),
-.table-container :deep(.data-table th) {
   white-space: nowrap;
-  padding: 12px 16px;
-}
-
-/* Action buttons in table */
-.table-container :deep(.action-buttons) {
-  min-width: 250px;
-  justify-content: flex-start;
-}
-
-/* Clickable attachments */
-.attachments-info.clickable {
-  cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 5px;
-  transition: all 0.3s;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.attachments-info.clickable:hover {
-  background: #f0f7ff;
-  transform: translateY(-1px);
-}
-
-.attachment-count {
-  color: #333;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.file-size {
-  font-size: 0.85em;
-  color: #666;
-}
-
-/* LOADING STATE */
-.loading-state {
-  text-align: center;
-  padding: 60px 20px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #DDDDDD;
-  border-top-color: #0066CC;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* EMPTY STATE */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  background: #F9F9F9;
-  border-radius: 8px;
-  border: 2px dashed #DDDDDD;
-}
-
-.empty-icon {
-  font-size: 3em;
-  color: #0066CC;
-  margin-bottom: 20px;
-}
-
-.empty-state h3 {
-  color: #666;
-  margin-bottom: 10px;
-  font-weight: 500;
-}
-
-.empty-state p {
-  color: #999;
-  margin-bottom: 30px;
-}
-
-/* TABLE CELL STYLES */
-.ref-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ref-number {
-  font-family: monospace;
-  font-weight: 600;
-  color: #003366;
-  background: #f0f7ff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.9em;
-}
-
-.ref-date {
-  font-size: 0.85em;
-  color: #666;
-}
-
-.client-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.client-name {
-  font-weight: 500;
-  color: #333;
-}
-
-.advert-title {
-  font-size: 0.85em;
-  color: #666;
-}
-
-.platform-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.platform-name {
-  font-weight: 500;
-  color: #333;
-}
-
-.platform-category {
-  display: inline-block;
-  padding: 2px 8px;
-  background: rgba(0, 102, 204, 0.1);
-  color: #0066CC;
-  border-radius: 12px;
-  font-size: 0.8em;
-  font-weight: 500;
-  width: fit-content;
-}
-
-.deadline-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.deadline-date {
-  color: #333;
-  font-weight: 500;
-}
-
-.urgent-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  background: #fff5f5;
-  color: #e53e3e;
-  border-radius: 12px;
-  font-size: 0.75em;
-  font-weight: 600;
-  width: fit-content;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 0.85em;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.status-pending {
-  background: #ffeaa7;
-  color: #636e72;
-}
-
-.status-complete {
-  background: #55efc4;
-  color: #00b894;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* Recent Uploads Horizontal Scroll */
-.recent-uploads-scroll-container {
-  width: 100%;
-  overflow-x: auto;
-  padding-bottom: 10px;
-  margin-bottom: 20px;
-}
-
-.recent-uploads-grid {
-  display: flex;
-  gap: 20px;
-  padding: 10px 5px;
-  min-width: min-content; /* Allow grid to be wider than container */
-}
-
-.upload-card {
-  flex: 0 0 280px; /* Fixed width cards */
-  background: #F9F9F9;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #EEEEEE;
-  transition: all 0.3s;
-  min-height: 180px;
-  display: flex;
-  flex-direction: column;
-}
-
-.upload-card:hover {
-  border-color: #0066CC;
-  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.1);
-}
-
-.upload-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.upload-ref {
-  font-family: monospace;
-  font-weight: 600;
-  color: #003366;
-  font-size: 0.9em;
-}
-
-.upload-date {
-  font-size: 0.8em;
-  color: #666;
-}
-
-.upload-client {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 5px;
-}
-
-.upload-title {
-  color: #666;
-  font-size: 0.9em;
-  margin-bottom: 15px;
-}
-
-.upload-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85em;
-  color: #666;
-  margin-bottom: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #E5E5E5;
-}
-
-.upload-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-}
-
-/* Hide scrollbar for Chrome, Safari and Opera */
-.recent-uploads-scroll-container::-webkit-scrollbar {
-  height: 8px;
-}
-
-.recent-uploads-scroll-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.recent-uploads-scroll-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.recent-uploads-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Hide scrollbar for IE, Edge and Firefox */
-.recent-uploads-scroll-container {
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
-}
-
-/* Empty Recent Uploads */
-.empty-recent-uploads {
-  text-align: center;
-  padding: 40px 20px;
-  background: #F9F9F9;
-  border-radius: 8px;
-  border: 2px dashed #DDDDDD;
-  margin-top: 20px;
-}
-
-.empty-recent-uploads .empty-icon {
-  font-size: 2.5em;
-  color: #0066CC;
-  margin-bottom: 15px;
-}
-
-.empty-recent-uploads h4 {
-  color: #666;
-  margin-bottom: 10px;
-  font-weight: 500;
-}
-
-.empty-recent-uploads p {
-  color: #999;
-  margin-bottom: 0;
-}
-
-/* Files Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 20px;
-  animation: fadeIn 0.3s ease;
-}
-
-.files-modal {
-  background: white;
-  border-radius: 10px;
-  width: 100%;
-  max-width: 900px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.3s ease;
-}
-
-.files-modal .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 25px 30px;
-  border-bottom: 2px solid #F5F5F5;
-}
-
-.files-modal .modal-header h2 {
-  color: #003366;
-  margin: 0;
-  font-size: 1.5em;
-}
-
-.files-modal .modal-close {
-  background: none;
-  border: none;
-  font-size: 1.8em;
-  color: #999;
-  cursor: pointer;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.3s;
-}
-
-.files-modal .modal-close:hover {
-  background: #F5F5F5;
-  color: #E31E24;
-}
-
-.files-modal .modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 30px;
-}
-
-.files-modal .modal-footer {
-  padding: 20px 30px;
-  border-top: 2px solid #F5F5F5;
-  display: flex;
-  justify-content: flex-end;
-  gap: 15px;
-}
-
-/* Ensure FileList component is scrollable */
-.files-modal .modal-body :deep(.file-list) {
-  min-width: 600px;
-}
-
-.files-modal .modal-body :deep(.files-container) {
-  min-width: 600px;
-}
-
-/* Scrollbar styling for modal */
-.files-modal .modal-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.files-modal .modal-body::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.files-modal .modal-body::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.files-modal .modal-body::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* BUTTONS */
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 0.95em;
-  font-weight: 500;
-  transition: all 0.3s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.85em;
-}
-
-.btn-primary {
-  background: #E31E24;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #c01820;
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #0052a3;
-  transform: translateY(-1px);
-}
-
-.btn-info {
-  background: #17a2b8;
-  color: white;
-}
-
-.btn-info:hover {
-  background: #138496;
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover {
-  background: #218838;
-}
-
-.btn-warning {
-  background: #ffc107;
-  color: #333333;
-}
-
-.btn-warning:hover {
-  background: #e0a800;
-}
-
-.btn-refresh {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: #5a6268;
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from { 
-    transform: translateY(20px); 
-    opacity: 0; 
-  }
-  to { 
-    transform: translateY(0); 
-    opacity: 1; 
-  }
-}
-
-/* RESPONSIVE */
-@media (max-width: 768px) {
-  .page-header,
-  .content-card {
-    padding: 20px;
-  }
-  
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .date-range-controls {
-    gap: 15px;
-  }
-  
-  .date-input {
-    max-width: 100%;
-  }
-  
-  .quick-date-buttons {
-    justify-content: center;
-  }
-  
-  .global-search-filter-bar {
-    flex-direction: column;
-  }
-  
-  .search-input,
-  .filter-select {
-    width: 100%;
-  }
-  
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .action-buttons {
-    flex-direction: column;
-    gap: 5px;
-  }
-  
-  .btn-sm {
-    width: 100%;
-    text-align: center;
-  }
-  
-  .table-container {
-    margin: 0 -20px;
-    width: calc(100% + 40px);
-    border-left: none;
-    border-right: none;
-    border-radius: 0;
-  }
-  
-  .table-container :deep(.data-table) {
-    min-width: 800px;
-  }
-  
-  .recent-uploads-scroll-container {
-    margin: 0 -20px;
-    width: calc(100% + 40px);
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-  
-  .upload-card {
-    flex: 0 0 260px;
-  }
-  
-  .files-modal {
-    max-width: 100%;
-    max-height: 90vh;
-  }
-  
-  .files-modal .modal-header,
-  .files-modal .modal-body,
-  .files-modal .modal-footer {
-    padding: 20px;
-  }
-  
-  .files-modal .modal-body :deep(.file-list),
-  .files-modal .modal-body :deep(.files-container) {
-    min-width: 400px;
-  }
-  
-  .active-filters {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .filter-badge {
-    width: 100%;
-    justify-content: space-between;
-  }
-}
-
-/* Desktop layout for date inputs */
-@media (min-width: 769px) {
-  .date-range-controls {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    gap: 20px;
-    align-items: end;
-  }
-  
-  .quick-date-buttons {
-    grid-column: 1 / span 3;
-  }
-  
-  .date-range-info {
-    grid-column: 1 / span 3;
-  }
-  
-  .global-search-filter-bar {
-    display: grid;
-    grid-template-columns: 1fr auto auto auto;
-    gap: 15px;
-    align-items: center;
-  }
-  
-  .active-filters {
-    grid-column: 1 / span 4;
-  }
-}
-
-/* For very small screens */
-@media (max-width: 480px) {
-  .table-container :deep(.data-table) {
-    min-width: 700px;
-  }
-  
-  .upload-card {
-    flex: 0 0 240px;
-  }
+  padding: 3px 8px;
+  pointer-events: none;
+  z-index: 999;
+  letter-spacing: .2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.act-btn[title]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #1F3864;
+  pointer-events: none;
+  z-index: 999;
+}
+.act-btn:disabled { opacity:.45; cursor:not-allowed; }
+.act-btn--upload  { background:#1F3864; color:#fff; }
+.act-btn--upload:hover  { background:#162d52; }
+.act-btn--view    { background:#DEEAF1; color:#1F3864; border-color:#9DC3E6; }
+.act-btn--view:hover    { background:#c5d9ec; }
+.act-btn--approve { background:#E2EFDA; color:#375623; border-color:#92D050; }
+.act-btn--approve:hover { background:#c8e3b4; }
+.act-btn--sched   { background:#244F75; color:#fff; }
+.act-btn--sched:hover   { background:#1a3a59; }
+.act-btn--brief   { background:#FFF2CC; color:#7F6000; border-color:#FFD966; }
+.act-btn--brief:hover   { background:#ffe08a; }
+.act-btn--dl      { background:#F7FBFE; color:#555; border-color:#BDD7EE; }
+.act-btn--dl:hover      { background:#DEEAF1; }
+
+.status-bar { background:#DEEAF1; border-top:1px solid #9DC3E6; padding:6px 14px; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#555; }
+.sb-left { display:flex; align-items:center; gap:10px; }
+.sb-stat { white-space:nowrap; }
+.sb-div  { color:#9DC3E6; }
+.sb-val--green { color:#375623; }
+.sb-val--amber { color:#9C5700; }
+.sb-val--blue  { color:#1F3864; }
+.sb-right { display:flex; align-items:center; gap:6px; }
+.pg-btn { background:#DEEAF1; border:1px solid #9DC3E6; color:#1F3864; padding:2px 8px; font-size:12px; cursor:pointer; border-radius:0; }
+.pg-btn:disabled { opacity:.4; cursor:default; }
+.pg-label { font-size:11px; font-weight:500; color:#1F3864; white-space:nowrap; }
+
+.state-box { text-align:center; padding:56px 20px; background:#F7FBFE; border-top:1px solid #DEEAF1; }
+.state-box__icon  { font-size:34px; margin-bottom:12px; opacity:.4; }
+.state-box__title { font-size:14px; font-weight:600; color:#555; margin-bottom:6px; }
+.state-box p { font-size:12px; color:#999; margin:0 0 14px; }
+.spinner { width:30px; height:30px; border:3px solid #DEEAF1; border-top-color:#1F3864; border-radius:50%; animation:spin .9s linear infinite; margin:0 auto 12px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; z-index:3000; padding:20px; }
+.xl-modal { background:#fff; width:100%; max-width:640px; max-height:88vh; display:flex; flex-direction:column; border-top:4px solid #1F3864; }
+.xl-modal__head { background:#1F3864; padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start; }
+.xl-modal__title { color:#fff; font-size:14px; font-weight:700; }
+.xl-modal__ref { color:#9DC3E6; font-size:11px; font-family:'IBM Plex Mono',monospace; margin-top:2px; }
+.xl-modal__close { background:none; border:none; color:#9DC3E6; font-size:22px; cursor:pointer; line-height:1; padding:0; }
+.xl-modal__close:hover { color:#fff; }
+.xl-modal__body { flex:1; overflow-y:auto; padding:18px; }
+.xl-modal__foot { padding:10px 18px; border-top:1px solid #DEEAF1; display:flex; justify-content:flex-end; background:#F7FBFE; }
+
+@media (max-width:768px) {
+  .hd-bar { flex-direction:column; align-items:flex-start; padding:10px 14px; }
+  .flow-strip { overflow-x:auto; }
+  .flow-step { min-width:84px; padding:9px 12px; }
+  .ribbon__filters { flex-direction:column; align-items:stretch; }
+  .xl-modal { max-width:100%; }
 }
 </style>

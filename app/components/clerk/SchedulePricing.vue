@@ -6,21 +6,27 @@
       <div class="section-badge">Financial</div>
     </div>
     
-    <div class="form-row">
+    <!-- First Row: Advert Dates and Payment Method -->
+    <div class="form-row two-columns">
+      <!-- Advert Dates -->
       <div class="form-group">
         <label>Advert Dates <span class="required">*</span></label>
         <div class="date-input-wrapper">
           <div class="multi-date-selector">
-            <div class="selected-dates-header" @click="toggleDatePicker">
+            <div 
+              class="selected-dates-header" 
+              :class="{ 'error': showDateError && selectedDates.length === 0 }"
+              @click="toggleDatePicker"
+            >
               <div class="selected-dates-summary">
                 <template v-if="selectedDates.length === 0">
                   <span class="placeholder-text">Select advert dates</span>
                 </template>
                 <template v-else>
                   <div class="date-range-display">
-                    <span class="date-count">{{ selectedDates.length }} date(s) selected</span>
+                    <span class="date-count">{{ selectedDates.length }} date(s)</span>
                     <span class="date-range">
-                      {{ formatDate(earliestDate) }} to {{ formatDate(latestDate) }}
+                      {{ formatDate(earliestDate) }} - {{ formatDate(latestDate) }}
                     </span>
                   </div>
                 </template>
@@ -94,8 +100,6 @@
                         'empty': day.isEmpty,
                         'today': day.isToday,
                         'selected': day.isSelected,
-                        'range-start': day.isRangeStart,
-                        'range-end': day.isRangeEnd,
                         'disabled': day.isDisabled
                       }
                     ]"
@@ -141,109 +145,27 @@
               <circle cx="6" cy="6" r="5" stroke="#7C8DB5" stroke-width="1.5"/>
               <path d="M6 4V6M6 8H6.005" stroke="#7C8DB5" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
-            Click to select multiple dates. First date = Start, Last date = End, Others will be added to notes.
+            First date = Start, Last date = End
           </small>
+          <div v-if="showDateError && selectedDates.length === 0" class="field-error">
+            ⚠️ Please select at least one date
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label>
-          Frequency
-          <span v-if="isPrintMedia" class="print-media-note">(Print Media: Fixed at 1)</span>
-        </label>
-        <div class="input-with-buttons">
-          <div class="frequency-wrapper">
-            <input 
-              :value="frequency"
-              type="number" 
-              placeholder="Number of insertions/spots" 
-              min="1" 
-              @change="handleFrequencyChange($event)"
-              :disabled="!rateCardId || disabled || priceLoading || isPrintMedia"
-              :class="{ 'locked': isPrintMedia }"
-            >
-            <div class="frequency-label">times</div>
-          </div>
-          <div class="frequency-buttons" v-if="!isPrintMedia">
-            <button 
-              type="button" 
-              class="btn-frequency btn-minus"
-              @click="adjustFrequency(-1)"
-              :disabled="frequency <= 1 || !rateCardId || disabled"
-            >
-              <svg width="14" height="2" viewBox="0 0 14 2" fill="none">
-                <path d="M1 1H13" stroke="white" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
-            <button 
-              type="button" 
-              class="btn-frequency btn-plus"
-              @click="adjustFrequency(1)"
-              :disabled="!rateCardId || disabled"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M7 1V13M1 7H13" stroke="white" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
-          </div>
-          <div class="print-media-lock" v-else>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <rect x="5" y="11" width="14" height="10" rx="2" stroke="#94A3B8" stroke-width="2"/>
-              <path d="M8 11V7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7V11" stroke="#94A3B8" stroke-width="2"/>
-              <circle cx="12" cy="16" r="1" fill="#94A3B8"/>
-            </svg>
-          </div>
-        </div>
-        <small class="help-text">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align: middle; margin-right: 4px;">
-            <circle cx="6" cy="6" r="5" stroke="#7C8DB5" stroke-width="1.5"/>
-            <path d="M6 4V6M6 8H6.005" stroke="#7C8DB5" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span v-if="isPrintMedia">Print media adverts run once per selected date</span>
-          <span v-else>Number of times the advert will run</span>
-        </small>
-      </div>
-      
-      <div class="form-group">
-        <label>Discount (%)</label>
-        <div class="discount-wrapper">
-          <input 
-            :value="discount"
-            type="number" 
-            placeholder="Enter discount percentage" 
-            min="0"
-            max="100"
-            step="0.1"
-            @input="updateDiscount($event.target.value)"
-            :disabled="!rateCardId || disabled || priceLoading"
-            class="discount-input"
-          >
-          <div class="discount-icon">%</div>
-        </div>
-        <small class="help-text">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align: middle; margin-right: 4px;">
-            <circle cx="6" cy="6" r="5" stroke="#7C8DB5" stroke-width="1.5"/>
-            <path d="M6 4V6M6 8H6.005" stroke="#7C8DB5" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          Apply a percentage discount (0-100%)
-        </small>
-      </div>
-    </div>
-
-    <div class="form-row">
+      <!-- Payment Method -->
       <div class="form-group">
         <label>Payment Method <span class="required">*</span></label>
         <div class="payment-select-wrapper">
           <select 
             :value="paymentMethod" 
             required
+            :class="{ 'error': showPaymentError && !paymentMethod }"
             :disabled="disabled"
             @change="updatePaymentMethod($event.target.value)"
             class="styled-select"
           >
-            <option value="">Select payment method</option>
+            <option value="" disabled selected>-- Select payment method --</option>
             <option value="cash" style="color: #10B981; font-weight: 600;">💵 Cash</option>
             <option value="credit" style="color: #F59E0B; font-weight: 600;">💳 Credit (Requires Approval)</option>
             <option value="pdc" style="color: #8B5CF6; font-weight: 600;">📝 Post-Dated Cheque</option>
@@ -258,61 +180,138 @@
             </svg>
           </div>
         </div>
+        <small class="help-text payment-prompt">
+          <span class="prompt-icon">💡</span>
+          Select how the client will pay for this advert
+        </small>
+        <div v-if="showPaymentError && !paymentMethod" class="field-error">
+          ⚠️ Please select a payment method
+        </div>
       </div>
     </div>
 
-    <!-- Date Summary Display -->
-    <div v-if="selectedDates.length > 0" class="date-summary-section">
-      <div class="date-summary-header">
-        <h4>Date Summary</h4>
-        <div class="date-count-badge">{{ selectedDates.length }} dates</div>
-      </div>
-      
-      <div class="date-summary-content">
-        <div class="summary-row">
-          <div class="summary-item">
-            <span class="summary-label">Start Date:</span>
-            <span class="summary-value start-date">{{ formatDate(earliestDate) }}</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">End Date:</span>
-            <span class="summary-value end-date">{{ formatDate(latestDate) }}</span>
-          </div>
-        </div>
-        
-        <div v-if="middleDates.length > 0" class="middle-dates-summary">
-          <span class="summary-label">Additional Dates:</span>
-          <div class="middle-dates-list">
-            <span 
-              v-for="(date, index) in middleDates" 
-              :key="date.toISOString()"
-              class="middle-date"
+    <!-- Second Row: Frequency and Discount -->
+    <div class="form-row two-columns">
+      <!-- Frequency -->
+      <div class="form-group">
+        <label>
+          Frequency
+          <span v-if="isPrintMedia" class="print-media-note">(Fixed at 1)</span>
+          <span v-else class="required">*</span>
+        </label>
+        <div class="frequency-compact">
+          <div class="frequency-wrapper">
+            <input 
+              :value="frequency"
+              type="number" 
+              placeholder="Times" 
+              min="1" 
+              required
+              :class="{ 'locked': isPrintMedia, 'error': showFrequencyError && !isPrintMedia && !frequency }"
+              @change="handleFrequencyChange($event)"
+              :disabled="!rateCardId || disabled || priceLoading || isPrintMedia"
             >
-              {{ formatDate(date) }}
-              <span v-if="index < middleDates.length - 1">, </span>
-            </span>
           </div>
-          <small class="summary-note">
-            These dates will be added to special instructions as: dates[{{ formatMiddleDatesForInstructions() }}]
-          </small>
+          <div class="frequency-buttons-compact" v-if="!isPrintMedia">
+            <button 
+              type="button" 
+              class="btn-frequency-compact btn-minus"
+              @click="adjustFrequency(-1)"
+              :disabled="frequency <= 1 || !rateCardId || disabled"
+              title="Decrease frequency"
+            >
+              <svg width="12" height="2" viewBox="0 0 12 2" fill="none">
+                <path d="M1 1H11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button 
+              type="button" 
+              class="btn-frequency-compact btn-plus"
+              @click="adjustFrequency(1)"
+              :disabled="!rateCardId || disabled"
+              title="Increase frequency"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M6 1V11M1 6H11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="print-media-lock-compact" v-else>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <rect x="4" y="9" width="12" height="8" rx="2" stroke="#94A3B8" stroke-width="2"/>
+              <path d="M7 9V6C7 4.34315 8.34315 3 10 3C11.6569 3 13 4.34315 13 6V9" stroke="#94A3B8" stroke-width="2"/>
+              <circle cx="10" cy="13" r="1" fill="#94A3B8"/>
+            </svg>
+          </div>
         </div>
+        <small class="help-text">
+          <span v-if="isPrintMedia">Once per selected date</span>
+          <span v-else>Number of insertions/spots</span>
+        </small>
+        <div v-if="showFrequencyError && !isPrintMedia && !frequency" class="field-error">
+          ⚠️ Please enter frequency
+        </div>
+      </div>
+
+      <!-- Discount -->
+      <div class="form-group">
+        <label>Discount (%)</label>
+        <div class="discount-wrapper">
+          <input 
+            :value="discount"
+            type="number" 
+            placeholder="0-100%" 
+            min="0"
+            max="100"
+            step="0.1"
+            @input="updateDiscount($event.target.value)"
+            :disabled="!rateCardId || disabled || priceLoading"
+            class="discount-input"
+          >
+          <div class="discount-icon">%</div>
+        </div>
+        <small class="help-text">
+          Apply percentage discount (optional)
+        </small>
+      </div>
+    </div>
+
+    <!-- Date Summary Display (Compact) -->
+    <div v-if="selectedDates.length > 0" class="date-summary-compact">
+      <div class="date-summary-header">
+        <span class="summary-label">Dates:</span>
+        <span class="date-count-badge">{{ selectedDates.length }}</span>
+      </div>
+      <div class="date-summary-content">
+        <span class="date-range-compact">
+          {{ formatDate(earliestDate) }} - {{ formatDate(latestDate) }}
+        </span>
+        <span v-if="middleDates.length > 0" class="middle-dates-compact">
+          +{{ middleDates.length }} more
+        </span>
+      </div>
+    </div>
+
+    <!-- Required Fields Summary -->
+    <div v-if="showRequiredSummary" class="required-summary">
+      <div class="summary-icon">⚠️</div>
+      <div class="summary-message">
+        Please complete all required fields marked with <span class="required-star">*</span>
       </div>
     </div>
 
     <!-- Price Calculator -->
     <div class="price-calculator-section">
       <slot name="price-calculator">
-        <!-- Default slot for price calculator -->
-        <div class="no-price-info">
+        <div class="no-price-info" v-if="!priceCalculation">
           <div class="price-placeholder-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="6" width="18" height="12" rx="2" stroke="#CBD5E0" stroke-width="2"/>
               <path d="M3 10H21" stroke="#CBD5E0" stroke-width="2"/>
               <circle cx="18" cy="12" r="1" fill="#CBD5E0"/>
-              <path d="M6 12H9M12 12H15" stroke="#CBD5E0" stroke-width="2" stroke-linecap="round"/>
             </svg>
           </div>
-          <p>Select all advert information above to see pricing.</p>
+          <p>Select all options to see pricing</p>
         </div>
       </slot>
       
@@ -344,11 +343,10 @@
         <div class="price-summary-item total">
           <div class="total-label">
             <span>Total Amount:</span>
-            <small>Including all charges</small>
           </div>
           <div class="total-amount">
             <strong>{{ formatCurrency(calculateFinalTotal()) }}</strong>
-            <div class="total-badge">Final Price</div>
+            <div class="total-badge">Final</div>
           </div>
         </div>
       </div>
@@ -415,6 +413,11 @@ const props = defineProps({
   platformCategory: {
     type: String,
     default: ''
+  },
+  // Validation control props
+  validateFields: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -428,18 +431,42 @@ const emit = defineEmits([
   'frequency-change',
   'frequency-adjust',
   'discount-change',
-  'dates-updated'
+  'dates-updated',
+  'validation-change'
 ])
 
-// Reactive state for date picker
+// Reactive state for date picker and validation
 const showDatePicker = ref(false)
 const currentDate = ref(new Date())
 const selectedDates = ref([])
+
+// Validation state
+const showDateError = ref(false)
+const showPaymentError = ref(false)
+const showFrequencyError = ref(false)
 
 // Computed: Check if platform is print media
 const isPrintMedia = computed(() => {
   return props.platformCategory === 'print'
 })
+
+// Watch for validation trigger
+watch(() => props.validateFields, (newVal) => {
+  if (newVal) {
+    validateRequiredFields()
+  }
+})
+
+// Validate required fields
+const validateRequiredFields = () => {
+  showDateError.value = selectedDates.value.length === 0
+  showPaymentError.value = !props.paymentMethod
+  showFrequencyError.value = !isPrintMedia.value && !props.frequency
+  
+  const isValid = !showDateError.value && !showPaymentError.value && !showFrequencyError.value
+  emit('validation-change', isValid)
+  return isValid
+}
 
 // Watch for print media change - force frequency to 1
 watch(isPrintMedia, (newValue) => {
@@ -457,6 +484,11 @@ watch(() => props.datesList, (newDates) => {
     selectedDates.value = []
   }
 }, { immediate: true })
+
+// Computed for required fields summary
+const showRequiredSummary = computed(() => {
+  return (showDateError.value || showPaymentError.value || showFrequencyError.value)
+})
 
 // Weekday labels
 const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -505,9 +537,7 @@ const calendarDays = computed(() => {
       isToday,
       isSelected,
       isDisabled,
-      isEmpty: false,
-      isRangeStart: false,
-      isRangeEnd: false
+      isEmpty: false
     })
   }
   
@@ -550,6 +580,11 @@ const toggleDateSelection = (date) => {
     selectedDates.value.splice(existingIndex, 1)
   } else {
     selectedDates.value.push(new Date(date))
+  }
+  
+  // Clear date error if dates are selected
+  if (selectedDates.value.length > 0) {
+    showDateError.value = false
   }
 }
 
@@ -643,32 +678,21 @@ const formatMiddleDatesForInstructions = () => {
   }).join(', ')
 }
 
-// Existing functions
-const updateEndDate = (value) => {
-  emit('update:endDate', value)
-}
-
+// Update functions
 const updatePaymentMethod = (value) => {
   emit('update:paymentMethod', value)
+  if (value) {
+    showPaymentError.value = false
+  }
 }
 
 const updateDiscount = (value) => {
   const discountValue = parseFloat(value) || 0
-  emit('update:discount', Math.min(Math.max(discountValue, 0), 100)) // Clamp between 0 and 100
+  emit('update:discount', Math.min(Math.max(discountValue, 0), 100))
   emit('discount-change')
 }
 
-const handleStartDateChange = (event) => {
-  const value = event.target.value
-  emit('update:startDate', value)
-  
-  if (props.endDate && new Date(props.endDate) < new Date(value)) {
-    emit('update:endDate', value)
-  }
-}
-
 const handleFrequencyChange = (event) => {
-  // For print media, always keep frequency at 1
   if (isPrintMedia.value) {
     emit('update:frequency', 1)
     return
@@ -677,16 +701,23 @@ const handleFrequencyChange = (event) => {
   const value = parseInt(event.target.value) || 1
   emit('update:frequency', value)
   emit('frequency-change', value)
+  
+  if (value) {
+    showFrequencyError.value = false
+  }
 }
 
 const adjustFrequency = (change) => {
-  // Don't allow frequency adjustment for print media
   if (isPrintMedia.value) return
   
   const newFrequency = parseInt(props.frequency) + change
   if (newFrequency >= 1) {
     emit('update:frequency', newFrequency)
     emit('frequency-adjust', newFrequency)
+    
+    if (newFrequency) {
+      showFrequencyError.value = false
+    }
   }
 }
 
@@ -700,7 +731,7 @@ const calculateSubtotalWithDates = () => {
   return baseSubtotal * dateCount
 }
 
-// Calculate discount amount based on subtotal with dates
+// Calculate discount amount
 const calculateDiscountAmount = () => {
   if (!props.priceCalculation || !props.discount) return 0
   
@@ -733,35 +764,16 @@ const formatCurrency = (amount) => {
   }).format(amount)
 }
 
-const formatPriceWithDetails = (amount) => {
-  if (!amount && amount !== 0) return `${props.currency} 0`
-  
-  let priceText = formatCurrency(amount)
-  
-  if (props.rateCardDetails && props.rateCardDetails.details) {
-    const details = props.rateCardDetails.details
-    if (details.cm && details.columns) {
-      priceText += ` (${details.cm}cm × ${details.columns}col)`
-    } else if (details.columns) {
-      priceText += ` (${details.columns} col)`
-    } else if (details.words) {
-      priceText += ` (${details.words} words)`
-    } else if (details.photos) {
-      priceText += ` (${details.photos} photos)`
-    }
-  }
-  
-  return priceText
-}
-
-// Expose computed property for validation
+// Expose methods
 defineExpose({
   hasRequiredFields: computed(() => {
-    return selectedDates.value.length > 0 && props.paymentMethod && props.priceCalculation?.total
+    return selectedDates.value.length > 0 && props.paymentMethod && 
+           (isPrintMedia.value || props.frequency) && props.priceCalculation?.total
   }),
   getMiddleDatesForInstructions: formatMiddleDatesForInstructions,
   selectedDates: sortedSelectedDates,
-  calculateFinalTotal
+  calculateFinalTotal,
+  validateRequiredFields
 })
 </script>
 
@@ -779,7 +791,7 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 25px;
 }
 
 .section-title {
@@ -804,20 +816,21 @@ defineExpose({
   box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
 }
 
-.form-row {
+/* Two-column layout */
+.form-row.two-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
-  margin-bottom: 30px;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
 .form-group {
-  margin-bottom: 25px;
+  margin-bottom: 5px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: #2A4B8C;
   font-weight: 600;
   font-size: 0.95em;
@@ -829,35 +842,17 @@ defineExpose({
   font-weight: 700;
 }
 
-/* Print Media Specific Styles */
+/* Print Media Note */
 .print-media-note {
   color: #F59E0B;
-  font-size: 0.85em;
+  font-size: 0.8em;
   font-weight: 600;
-  margin-left: 8px;
+  margin-left: 6px;
 }
 
-.frequency-wrapper input.locked {
-  background: linear-gradient(135deg, #FFF5F5 0%, #FEE2E2 100%);
-  border-color: #FECACA;
-  cursor: not-allowed;
-}
-
-.print-media-lock {
-  width: 50px;
-  height: 104px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #F7F9FC 0%, #EDF2F7 100%);
-  border-radius: 10px;
-  border: 2px solid #E2E8F0;
-}
-
-/* Multi Date Selector Styles */
+/* Date Input Styles */
 .date-input-wrapper {
-  max-width: 600px;
-  min-width: 400px;
+  width: 100%;
 }
 
 .multi-date-selector {
@@ -868,16 +863,22 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 2px solid #e6e9f4;
   border-radius: 10px;
   background-color: #ffffff;
   cursor: pointer;
   transition: all 0.3s ease;
+  min-height: 48px;
 }
 
 .selected-dates-header:hover {
   border-color: #4A6FDC;
+}
+
+.selected-dates-header.error {
+  border-color: #FF6B6B;
+  background-color: #FFF5F5;
 }
 
 .selected-dates-summary {
@@ -892,28 +893,29 @@ defineExpose({
 .date-range-display {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .date-count {
   color: #2D3748;
   font-weight: 600;
-  font-size: 0.95em;
+  font-size: 0.9em;
 }
 
 .date-range {
   color: #64748B;
-  font-size: 0.85em;
+  font-size: 0.8em;
 }
 
 .calendar-icon {
   color: #4A6FDC;
+  margin-left: 10px;
 }
 
 /* Date Picker Modal */
 .date-picker-modal {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 5px);
   left: 0;
   width: 100%;
   background: white;
@@ -929,7 +931,7 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid #e6e9f4;
   background: linear-gradient(135deg, #F0F4FF 0%, #E6EDFF 100%);
   border-radius: 12px 12px 0 0;
@@ -938,7 +940,7 @@ defineExpose({
 .date-picker-header h4 {
   margin: 0;
   color: #2A4B8C;
-  font-size: 1.1em;
+  font-size: 1em;
   font-weight: 700;
 }
 
@@ -948,7 +950,6 @@ defineExpose({
   padding: 4px;
   cursor: pointer;
   border-radius: 4px;
-  transition: background 0.3s ease;
 }
 
 .close-picker:hover {
@@ -956,7 +957,7 @@ defineExpose({
 }
 
 .date-picker-controls {
-  padding: 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid #e6e9f4;
 }
 
@@ -964,21 +965,20 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .nav-button {
   background: linear-gradient(135deg, #8bb1fe 0%, #8bb1fe 100%);
   border: none;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: #000805;
 }
 
 .nav-button:hover {
@@ -993,19 +993,19 @@ defineExpose({
 .current-month {
   color: #2A4B8C;
   font-weight: 700;
-  font-size: 1.1em;
+  font-size: 1em;
 }
 
 .date-selection-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   justify-content: flex-end;
 }
 
 .action-button {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 0.9em;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85em;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1040,28 +1040,28 @@ defineExpose({
 
 /* Calendar Grid */
 .calendar-grid {
-  padding: 16px;
+  padding: 12px 16px;
 }
 
 .weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .weekday {
   text-align: center;
   color: #64748B;
   font-weight: 600;
-  font-size: 0.9em;
-  padding: 8px 0;
+  font-size: 0.8em;
+  padding: 4px 0;
 }
 
 .calendar-days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
+  gap: 4px;
 }
 
 .calendar-day {
@@ -1069,12 +1069,13 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   position: relative;
   transition: all 0.3s ease;
-  font-size: 0.9em;
+  font-size: 0.85em;
   font-weight: 500;
+  height: 32px;
 }
 
 .calendar-day.empty {
@@ -1096,10 +1097,10 @@ defineExpose({
 
 .calendar-day.selected .selected-indicator {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 6px;
-  height: 6px;
+  top: 2px;
+  right: 2px;
+  width: 4px;
+  height: 4px;
   background: white;
   border-radius: 50%;
 }
@@ -1115,18 +1116,9 @@ defineExpose({
   color: #4A6FDC;
 }
 
-.calendar-day.selected:hover {
-  background: linear-gradient(135deg, #2A4B8C 0%, #1E3A8A 100%);
-}
-
-.day-number {
-  position: relative;
-  z-index: 1;
-}
-
 /* Selected Dates List */
 .selected-dates-list {
-  padding: 16px;
+  padding: 12px 16px;
   border-top: 1px solid #e6e9f4;
   background: #F8F9FA;
 }
@@ -1134,32 +1126,32 @@ defineExpose({
 .selected-dates-title {
   color: #2A4B8C;
   font-weight: 600;
-  margin-bottom: 12px;
-  font-size: 0.95em;
+  margin-bottom: 8px;
+  font-size: 0.9em;
 }
 
 .selected-dates-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .selected-date-tag {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 4px 8px;
   background: linear-gradient(135deg, #4A6FDC 0%, #2A4B8C 100%);
   color: white;
-  border-radius: 20px;
-  font-size: 0.85em;
+  border-radius: 16px;
+  font-size: 0.8em;
   font-weight: 500;
 }
 
 .remove-date {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
   border: none;
@@ -1168,146 +1160,28 @@ defineExpose({
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: background 0.3s ease;
 }
 
 .remove-date:hover {
   background: rgba(255, 255, 255, 0.3);
 }
 
-.remove-date:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .no-dates-selected {
   color: #64748B;
   font-style: italic;
   text-align: center;
-  padding: 20px;
-  background: white;
-  border-radius: 8px;
-  border: 1px dashed #CBD5E0;
-}
-
-/* Date Summary Section */
-.date-summary-section {
-  margin-top: 30px;
-  padding: 20px;
-  background: linear-gradient(135deg, #F0F4FF 0%, #E6EDFF 100%);
-  border-radius: 12px;
-  border: 1px solid #D6E4FF;
-  box-shadow: 0 4px 6px rgba(74, 111, 220, 0.1);
-}
-
-.date-summary-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #D6E4FF;
-}
-
-.date-summary-header h4 {
-  margin: 0;
-  color: #2A4B8C;
-  font-size: 1.1em;
-  font-weight: 700;
-}
-
-.date-count-badge {
-  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
-  color: white;
-  font-size: 0.8em;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 20px;
-  letter-spacing: 0.5px;
-}
-
-.date-summary-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.summary-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-}
-
-.summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.summary-label {
-  color: #64748B;
-  font-size: 0.9em;
-  font-weight: 500;
-}
-
-.summary-value {
-  color: #2D3748;
-  font-weight: 600;
-  font-size: 1em;
-}
-
-.summary-value.start-date {
-  color: #10B981;
-  font-weight: 700;
-}
-
-.summary-value.end-date {
-  color: #EF4444;
-  font-weight: 700;
-}
-
-.middle-dates-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   padding: 12px;
   background: white;
-  border-radius: 8px;
-  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  border: 1px dashed #CBD5E0;
+  font-size: 0.85em;
 }
 
-.middle-dates-list {
+/* Compact Frequency Styles */
+.frequency-compact {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-}
-
-.middle-date {
-  color: #4A6FDC;
-  font-weight: 500;
-  font-size: 0.9em;
-}
-
-.summary-note {
-  color: #64748B;
-  font-size: 0.85em;
-  font-style: italic;
-}
-
-/* Help Text */
-.help-text {
-  display: block;
-  margin-top: 8px;
-  color: #64748B;
-  font-size: 0.85em;
-  display: flex;
   align-items: center;
-}
-
-/* Frequency Input */
-.input-with-buttons {
-  display: flex;
-  gap: 12px;
 }
 
 .frequency-wrapper {
@@ -1317,14 +1191,15 @@ defineExpose({
 
 .frequency-wrapper input {
   width: 100%;
-  padding: 14px 16px 14px 16px;
+  padding: 10px 12px;
   border: 2px solid #e6e9f4;
-  border-radius: 10px;
-  font-size: 1em;
+  border-radius: 8px;
+  font-size: 0.95em;
   transition: all 0.3s ease;
   background-color: #ffffff;
   color: #2D3748;
   text-align: center;
+  height: 42px;
 }
 
 .frequency-wrapper input:focus {
@@ -1333,44 +1208,35 @@ defineExpose({
   box-shadow: 0 0 0 3px rgba(74, 111, 220, 0.15);
 }
 
-.frequency-wrapper input:disabled {
-  background-color: #F7F9FC;
+.frequency-wrapper input.locked {
+  background: linear-gradient(135deg, #FFF5F5 0%, #FEE2E2 100%);
+  border-color: #FECACA;
   cursor: not-allowed;
-  opacity: 0.7;
-  border-color: #E2E8F0;
 }
 
-.frequency-label {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #64748B;
-  font-size: 0.9em;
-  font-weight: 500;
-  pointer-events: none;
+.frequency-wrapper input.error {
+  border-color: #FF6B6B;
+  background-color: #FFF5F5;
 }
 
-.frequency-buttons {
+.frequency-buttons-compact {
   display: flex;
-  flex-direction: column;
   gap: 4px;
 }
 
-.btn-frequency {
-  width: 50px;
-  height: 50px;
+.btn-frequency-compact {
+  width: 36px;
+  height: 42px;
   padding: 0;
   border: none;
   color: white;
-  font-size: 1.2em;
-  font-weight: 500;
+  font-size: 1em;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .btn-minus {
@@ -1381,32 +1247,43 @@ defineExpose({
   background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
 }
 
-.btn-frequency:hover:not(:disabled) {
+.btn-frequency-compact:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.btn-frequency:disabled {
+.btn-frequency-compact:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none !important;
 }
 
-/* Discount Wrapper */
+.print-media-lock-compact {
+  width: 36px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #F7F9FC 0%, #EDF2F7 100%);
+  border-radius: 8px;
+  border: 2px solid #E2E8F0;
+}
+
+/* Discount Styles */
 .discount-wrapper {
   position: relative;
 }
 
 .discount-input {
   width: 100%;
-  padding: 14px 45px 14px 16px;
+  padding: 10px 35px 10px 12px;
   border: 2px solid #e6e9f4;
-  border-radius: 10px;
-  font-size: 1em;
+  border-radius: 8px;
+  font-size: 0.95em;
   transition: all 0.3s ease;
   background-color: #ffffff;
   color: #2D3748;
   text-align: right;
+  height: 42px;
 }
 
 .discount-input:focus {
@@ -1415,40 +1292,34 @@ defineExpose({
   box-shadow: 0 0 0 3px rgba(74, 111, 220, 0.15);
 }
 
-.discount-input:disabled {
-  background-color: #F7F9FC;
-  cursor: not-allowed;
-  opacity: 0.7;
-  border-color: #E2E8F0;
-}
-
 .discount-icon {
   position: absolute;
-  right: 16px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: #4A6FDC;
   font-weight: 600;
-  font-size: 1.1em;
+  font-size: 1em;
   pointer-events: none;
 }
 
-/* Payment Method Selector */
+/* Payment Method Styles */
 .payment-select-wrapper {
   position: relative;
 }
 
 .payment-select-wrapper .styled-select {
   width: 100%;
-  padding: 14px 45px 14px 16px;
+  padding: 10px 35px 10px 12px;
   border: 2px solid #e6e9f4;
-  border-radius: 10px;
-  font-size: 1em;
+  border-radius: 8px;
+  font-size: 0.95em;
   transition: all 0.3s ease;
   background-color: #ffffff;
   color: #2D3748;
   appearance: none;
   cursor: pointer;
+  height: 42px;
 }
 
 .payment-select-wrapper .styled-select:focus {
@@ -1457,26 +1328,143 @@ defineExpose({
   box-shadow: 0 0 0 3px rgba(74, 111, 220, 0.15);
 }
 
-.payment-select-wrapper .styled-select:disabled {
-  background-color: #F7F9FC;
-  cursor: not-allowed;
-  opacity: 0.7;
-  border-color: #E2E8F0;
+.payment-select-wrapper .styled-select.error {
+  border-color: #FF6B6B;
+  background-color: #FFF5F5;
 }
 
 .payment-icon {
   position: absolute;
-  right: 16px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
   color: #4A6FDC;
+  display: flex;
+  align-items: center;
+}
+
+/* Help Text with Prompt */
+.help-text {
+  display: block;
+  margin-top: 4px;
+  color: #64748B;
+  font-size: 0.8em;
+}
+
+.payment-prompt {
+  color: #4A6FDC;
+  font-weight: 500;
+  background: #E6EDFF;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+.prompt-icon {
+  margin-right: 4px;
+}
+
+/* Field Error */
+.field-error {
+  color: #FF6B6B;
+  font-size: 0.8em;
+  font-weight: 500;
+  margin-top: 4px;
+  padding-left: 4px;
+}
+
+/* Compact Date Summary */
+.date-summary-compact {
+  margin-top: 15px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #F0F4FF 0%, #E6EDFF 100%);
+  border-radius: 8px;
+  border: 1px solid #D6E4FF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.date-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-summary-header .summary-label {
+  color: #2A4B8C;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.date-count-badge {
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+  color: white;
+  font-size: 0.7em;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 12px;
+}
+
+.date-summary-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-range-compact {
+  color: #2D3748;
+  font-weight: 500;
+  font-size: 0.85em;
+}
+
+.middle-dates-compact {
+  color: #4A6FDC;
+  font-size: 0.8em;
+  font-weight: 600;
+  padding: 2px 6px;
+  background: white;
+  border-radius: 12px;
+}
+
+/* Required Fields Summary */
+.required-summary {
+  margin-top: 15px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #FFF5F5 0%, #FEE2E2 100%);
+  border-radius: 8px;
+  border: 1px solid #FECACA;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.summary-icon {
+  font-size: 1.2em;
+}
+
+.summary-message {
+  color: #991B1B;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.required-star {
+  color: #FF6B6B;
+  font-weight: 700;
 }
 
 /* Price Calculator Section */
 .price-calculator-section {
-  margin-top: 30px;
-  padding: 25px;
+  margin-top: 25px;
+  padding: 20px;
   background: linear-gradient(135deg, #F0F4FF 0%, #E6EDFF 100%);
   border-radius: 12px;
   border: 1px solid #D6E4FF;
@@ -1485,13 +1473,13 @@ defineExpose({
 
 .no-price-info {
   text-align: center;
-  padding: 30px 20px;
+  padding: 20px;
   color: #64748B;
   font-style: italic;
 }
 
 .price-placeholder-icon {
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   opacity: 0.5;
 }
 
@@ -1499,48 +1487,37 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
   border-bottom: 2px solid #D6E4FF;
 }
 
 .price-summary-header h4 {
   margin: 0;
   color: #2A4B8C;
-  font-size: 1.1em;
+  font-size: 1em;
   font-weight: 700;
 }
 
 .currency-badge {
   background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
   color: white;
-  font-size: 0.8em;
+  font-size: 0.75em;
   font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 6px;
-  letter-spacing: 0.5px;
-}
-
-.price-summary {
-  padding-top: 15px;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .price-summary-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  padding: 12px 15px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
   background: white;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid #E2E8F0;
-  font-size: 0.95em;
-  transition: all 0.3s ease;
-}
-
-.price-summary-item:hover {
-  border-color: #4A6FDC;
-  box-shadow: 0 2px 8px rgba(74, 111, 220, 0.1);
+  font-size: 0.9em;
 }
 
 .price-summary-item.surcharge-item {
@@ -1568,78 +1545,53 @@ defineExpose({
   font-weight: 600;
 }
 
-.price-summary-item .base-price {
+.base-price {
   color: #10B981;
   font-weight: 700;
 }
 
-.price-summary-item .surcharge-price {
+.surcharge-price {
   color: #EF4444;
   font-weight: 700;
 }
 
-.price-summary-item .discount-price {
+.discount-price {
   color: #10B981;
   font-weight: 700;
 }
 
-.price-summary-item.date-count-item strong {
-  color: #3B82F6;
-  font-weight: 700;
-}
-
 .price-summary-item.total {
-  margin-top: 20px;
-  padding: 20px;
+  margin-top: 15px;
+  padding: 12px;
   background: linear-gradient(135deg, #2A4B8C 0%, #4A6FDC 100%);
   border: none;
   color: white;
-  font-size: 1.1em;
-}
-
-.price-summary-item.total:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(42, 75, 140, 0.25);
-}
-
-.total-label {
-  display: flex;
-  flex-direction: column;
 }
 
 .total-label span {
   color: white;
   font-weight: 600;
-  font-size: 1.1em;
-}
-
-.total-label small {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.85em;
-  margin-top: 4px;
 }
 
 .total-amount {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
 .total-amount strong {
   color: white;
   font-weight: 700;
-  font-size: 1.3em;
-  margin-bottom: 5px;
+  font-size: 1.1em;
 }
 
 .total-badge {
   background: rgba(255, 255, 255, 0.2);
   color: white;
-  font-size: 0.75em;
+  font-size: 0.7em;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
-  backdrop-filter: blur(4px);
 }
 
 /* Responsive Styles */
@@ -1648,42 +1600,15 @@ defineExpose({
     padding: 20px;
   }
   
-  .form-row {
+  .form-row.two-columns {
     grid-template-columns: 1fr;
-    gap: 25px;
+    gap: 15px;
   }
   
   .section-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .section-badge {
-    align-self: flex-start;
-  }
-  
-  .input-with-buttons {
-    flex-direction: column;
-  }
-  
-  .frequency-buttons {
-    flex-direction: row;
-    width: 100%;
-  }
-  
-  .btn-frequency {
-    flex: 1;
-    height: 44px;
-  }
-  
-  .print-media-lock {
-    width: 100%;
-    height: 44px;
-  }
-  
-  .price-calculator-section {
-    padding: 20px;
+    gap: 8px;
   }
   
   .date-picker-modal {
@@ -1695,52 +1620,17 @@ defineExpose({
     max-height: 80vh;
   }
   
-  .summary-row {
-    grid-template-columns: 1fr;
-    gap: 16px;
+  .frequency-compact {
+    flex-wrap: wrap;
   }
   
-  .price-summary-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .price-summary-item span,
-  .price-summary-item strong {
+  .frequency-buttons-compact {
     width: 100%;
-    text-align: left;
+    justify-content: center;
   }
   
-  .total-amount {
-    align-items: flex-start;
-  }
-}
-
-@media (max-width: 480px) {
-  .calendar-days {
-    gap: 4px;
-  }
-  
-  .calendar-day {
-    font-size: 0.8em;
-  }
-  
-  .selected-date-tag {
-    font-size: 0.8em;
-  }
-  
-  .date-summary-section {
-    padding: 15px;
-  }
-  
-  .price-summary-item {
-    padding: 10px;
-    font-size: 0.9em;
-  }
-  
-  .price-summary-item.total {
-    padding: 15px;
+  .btn-frequency-compact {
+    flex: 1;
   }
 }
 </style>

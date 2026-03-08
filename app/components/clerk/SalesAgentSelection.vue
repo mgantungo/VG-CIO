@@ -66,7 +66,7 @@
             </div>
           </div>
           
-          <!-- Dropdown Options -->
+          <!-- Dropdown Options - WITH HIGH Z-INDEX -->
           <div v-if="showDropdown && !disabled" class="dropdown-options">
             <!-- Search Input -->
             <div class="dropdown-search">
@@ -145,6 +145,7 @@
         </div>
         
         <!-- Selected Agent Details -->
+         <!----
         <div v-if="selectedAgent" class="selected-agent-details">
           <div class="details-header">
             <h4 class="details-title">Selected Agent Details</h4>
@@ -175,13 +176,14 @@
             </div>
           </div>
         </div>
+      -->
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useSalesAgentsStore } from '~/stores/salesAgents'
 
 const props = defineProps({
@@ -345,6 +347,8 @@ watch(() => props.modelValue, async (newValue) => {
   padding: 30px;
   margin-bottom: 30px;
   transition: all 0.3s ease;
+  position: relative; /* ADDED: Establish positioning context */
+  z-index: 3; /* ADDED: Base z-index */
 }
 
 .sales-agent-section:hover {
@@ -488,6 +492,7 @@ watch(() => props.modelValue, async (newValue) => {
 .dropdown-container {
   position: relative;
   width: 100%;
+  z-index: 10; /* ADDED: Container z-index */
 }
 
 .dropdown-select {
@@ -501,6 +506,8 @@ watch(() => props.modelValue, async (newValue) => {
   cursor: pointer;
   transition: all 0.3s ease;
   min-height: 56px;
+  position: relative; /* ADDED */
+  z-index: 11; /* ADDED */
 }
 
 .dropdown-select:hover:not(.dropdown-disabled) {
@@ -595,7 +602,7 @@ watch(() => props.modelValue, async (newValue) => {
   font-size: 0.8em;
 }
 
-/* Dropdown Options */
+/* Dropdown Options - FIXED Z-INDEX */
 .dropdown-options {
   position: absolute;
   top: 100%;
@@ -606,7 +613,7 @@ watch(() => props.modelValue, async (newValue) => {
   border-top: none;
   border-radius: 0 0 12px 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  z-index: 1000;
+  z-index: 1000; /* INCREASED: Much higher z-index */
   max-height: 400px;
   overflow: hidden;
   display: flex;
@@ -616,6 +623,9 @@ watch(() => props.modelValue, async (newValue) => {
 .dropdown-search {
   padding: 16px;
   border-bottom: 1px solid #f1f5f9;
+  background: white; /* ADDED */
+  position: relative;
+  z-index: 1001; /* ADDED */
 }
 
 .search-input-wrapper {
@@ -677,6 +687,9 @@ watch(() => props.modelValue, async (newValue) => {
   flex: 1;
   overflow-y: auto;
   max-height: 300px;
+  background: white; /* ADDED */
+  position: relative;
+  z-index: 1001; /* ADDED */
 }
 
 .no-options {
@@ -713,6 +726,9 @@ watch(() => props.modelValue, async (newValue) => {
   cursor: pointer;
   transition: all 0.2s ease;
   border-bottom: 1px solid #f8fafc;
+  background: white; /* ADDED */
+  position: relative;
+  z-index: 1001; /* ADDED */
 }
 
 .dropdown-option:hover {
@@ -781,6 +797,8 @@ watch(() => props.modelValue, async (newValue) => {
   padding: 12px 16px;
   border-top: 1px solid #f1f5f9;
   background: #f8fafc;
+  position: relative;
+  z-index: 1001; /* ADDED */
 }
 
 .footer-stats {
@@ -835,6 +853,8 @@ watch(() => props.modelValue, async (newValue) => {
   background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
   border-radius: 12px;
   border: 2px solid #bae6fd;
+  position: relative; /* ADDED */
+  z-index: 5; /* Lower than dropdown but still above other content */
 }
 
 .details-header {

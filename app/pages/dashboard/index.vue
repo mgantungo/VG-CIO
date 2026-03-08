@@ -1,221 +1,204 @@
-<!--pages/dashboard/index.vue - FIXED-->
+<!--pages/dashboard/index.vue-->
 <template>
-  <div class="review-page">
-    <div class="page-header">
-      <div class="header-content">
-        <div>
-          <h1>📋 Dashboard</h1>
-          <p>Review and manage advertising submissions</p>
+  <div class="db-page">
+
+    <!-- ════════════════════════════════════════════════════
+         FILTER PANEL
+    ═════════════════════════════════════════════════════ -->
+    <section class="filter-panel">
+      <div class="filter-panel__head">
+        <div class="filter-panel__title">
+          <svg class="fp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          <span>Dashboard</span>
         </div>
-        <div class="header-actions">
-          <button class="btn btn-refresh" @click="loadAdverts" :disabled="loading">
-            <span v-if="loading">⏳ Loading...</span>
-            <span v-else>🔄 Refresh</span>
+        <button class="btn btn-refresh" @click="loadAdverts" :disabled="loading">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+          <span>{{ loading ? 'Loading…' : 'Refresh' }}</span>
+        </button>
+      </div>
+
+      <div class="filter-panel__body">
+        <div class="fp-row">
+          <div class="fp-field">
+            <label class="fp-label">From</label>
+            <input type="date" v-model="startDate" @change="loadAdverts" class="fp-input" :max="endDate">
+          </div>
+          <div class="fp-field">
+            <label class="fp-label">To</label>
+            <input type="date" v-model="endDate" @change="loadAdverts" class="fp-input" :min="startDate" :max="today">
+          </div>
+          <div class="fp-quick">
+            <button class="qr-btn" @click="setQuickRange('today')">Today</button>
+            <button class="qr-btn" @click="setQuickRange('week')">This Week</button>
+            <button class="qr-btn" @click="setQuickRange('month')">This Month</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════
+         STATS ROW
+    ═════════════════════════════════════════════════════ -->
+    <div class="stats-row">
+
+      <div class="stat-card sc--blue">
+        <span class="stat-card__label">Total Adverts</span>
+        <span class="stat-card__value">{{ statistics.total }}</span>
+      </div>
+
+      <div class="stat-card sc--amber">
+        <span class="stat-card__label">Pending Review</span>
+        <span class="stat-card__value">{{ statistics.pendingReview }}</span>
+      </div>
+
+      <div class="stat-card sc--green">
+        <span class="stat-card__label">Approved</span>
+        <span class="stat-card__value">{{ statistics.approved }}</span>
+      </div>
+
+      <div class="stat-card sc--red">
+        <span class="stat-card__label">Rejected</span>
+        <span class="stat-card__value">{{ statistics.rejected }}</span>
+      </div>
+
+      <div class="stat-card sc--navy">
+        <span class="stat-card__label">Total Revenue</span>
+        <span class="stat-card__value stat-card__value--rev">{{ formatCurrency(statistics.totalRevenue) }}</span>
+      </div>
+
+      <div class="stat-card sc--gray">
+        <span class="stat-card__label">Drafts</span>
+        <span class="stat-card__value">{{ statistics.drafts }}</span>
+      </div>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         ADVERTS TABLE
+    ═════════════════════════════════════════════════════ -->
+    <section class="results-section">
+
+      <!-- Controls: tabs + status filter -->
+      <div class="controls-bar">
+        <div class="tabs">
+          <button
+            v-for="tab in tabs" :key="tab.id"
+            class="tab-btn"
+            :class="{ active: activeTab === tab.id }"
+            @click="activeTab = tab.id"
+          >
+            {{ tab.label }}
+            <span class="tab-count" :class="{ active: activeTab === tab.id }">{{ getTabCount(tab.id) }}</span>
           </button>
         </div>
-      </div>
-    </div>
 
-    <!-- Date Range Filter -->
-    <div class="date-filter-card">
-      <h3>📅 Filter by Date Range</h3>
-      <div class="date-controls">
-        <div class="date-input-group">
-          <label>Start Date:</label>
-          <input 
-            type="date" 
-            v-model="startDate"
-            @change="loadAdverts"
-            :max="endDate"
-          >
-        </div>
-        <div class="date-input-group">
-          <label>End Date:</label>
-          <input 
-            type="date" 
-            v-model="endDate"
-            @change="loadAdverts"
-            :min="startDate"
-            :max="today"
-          >
-        </div>
-        <div class="quick-buttons">
-          <button class="btn-quick" @click="setQuickRange('today')">Today</button>
-          <button class="btn-quick" @click="setQuickRange('week')">This Week</button>
-          <button class="btn-quick" @click="setQuickRange('month')">This Month</button>
+        <div class="controls-right">
+          <label class="fp-label" style="white-space:nowrap">Status</label>
+          <select v-model="statusFilter" @change="applyFilters" class="fp-input fp-select">
+            <option value="all">All Statuses</option>
+            <option value="draft">Draft</option>
+            <option value="pending_review">Pending Review</option>
+            <option value="editor_approved">Editor Approved</option>
+            <option value="manager_approved">Manager Approved</option>
+            <option value="editor_rejected">Rejected</option>
+          </select>
         </div>
       </div>
-    </div>
 
-    <!-- Statistics Cards - FIXED LAYOUT -->
-    <div class="stats-container">
-      <div class="stats-grid">
-        <StatCard 
-          icon="📊"
-          :value="statistics.total"
-          label="Total Adverts"
-          color="blue"
-        />
-        <StatCard 
-          icon="⏳"
-          :value="statistics.pendingReview"
-          label="Pending Review"
-          color="red"
-        />
-        <StatCard 
-          icon="✓"
-          :value="statistics.approved"
-          label="Approved"
-          color="green"
-        />
-        <StatCard 
-          icon="❌"
-          :value="statistics.rejected"
-          label="Rejected"
-          color="red"
-        />
-        <StatCard 
-          icon="💰"
-          :value="formatCurrency(statistics.totalRevenue)"
-          label="Total Revenue"
-          color="green"
-        />
-        <StatCard 
-          icon="📝"
-          :value="statistics.drafts"
-          label="Drafts"
-          color="gold"
-        />
-      </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="content-card">
-      <div class="card-header">
-        <h2>Adverts by Category</h2>
-        <span class="result-count">{{ filteredAdverts.length }} adverts</span>
+      <!-- Summary strip -->
+      <div class="summary-strip">
+        <span class="ss-count">{{ filteredAdverts.length }}</span>
+        <span class="ss-label">advert{{ filteredAdverts.length !== 1 ? 's' : '' }}</span>
       </div>
 
-      <!-- Tabs for filtering by platform -->
-      <div class="tabs">
-        <button 
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="tab"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.label }}
-          <span class="tab-count">{{ getTabCount(tab.id) }}</span>
-        </button>
-      </div>
-
-      <!-- Status Filter -->
-      <div class="status-filter">
-        <label>Filter by Status:</label>
-        <select v-model="statusFilter" @change="applyFilters">
-          <option value="all">All Status</option>
-          <option value="draft">Draft</option>
-          <option value="pending_review">Pending Review</option>
-          <option value="editor_approved">Editor Approved</option>
-          <option value="manager_approved">Manager Approved</option>
-          <option value="editor_rejected">Rejected</option>
-        </select>
-      </div>
-
-      <!-- Loading State -->
-      <div v-if="loading" class="loading-state">
+      <!-- Loading -->
+      <div v-if="loading" class="state-loading">
         <div class="spinner"></div>
-        <p>Loading adverts...</p>
+        <p>Loading adverts…</p>
       </div>
 
-      <!-- Error State -->
-      <div v-else-if="error" class="error-state">
-        <div class="error-icon">⚠️</div>
-        <h3>Error Loading Data</h3>
+      <!-- Error -->
+      <div v-else-if="error" class="state-error">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <h3>Failed to load</h3>
         <p>{{ error }}</p>
-        <button class="btn btn-primary" @click="loadAdverts">Try Again</button>
+        <button class="btn btn-apply" @click="loadAdverts">Try Again</button>
       </div>
 
-      <!-- Adverts Table - USING DATA TABLE COMPONENT -->
-      <div v-else-if="filteredAdverts.length > 0" class="adverts-container">
-        <DataTable 
-          :headers="tableHeaders"
-          :items="filteredAdverts"
-          :loading="loading"
-          :page-size="10"
-          :show-pagination="true"
-        >
-          <template #cell(reference)="{ item }">
-            <span class="ref-number">{{ item.reference }}</span>
-          </template>
-          
-          <template #cell(client)="{ item }">
-            <div class="client-info">
-              <div class="client-name">{{ item.clientName }}</div>
-              <div class="client-contact">{{ item.contactPerson }}</div>
-            </div>
-          </template>
-          
-          <template #cell(platform)="{ item }">
-            <div class="platform-info">
-              <div class="platform-name">{{ item.productName }}</div>
-              <span class="platform-badge" :class="`badge-${item.platformCategory}`">
-                {{ formatCategory(item.platformCategory) }}
-              </span>
-            </div>
-          </template>
-          
-          <template #cell(amount)="{ item }">
-            <strong>{{ formatCurrency(item.totalAmount) }}</strong>
-          </template>
-          
-          <template #cell(status)="{ item }">
-            <span :class="`status-badge badge-${getStatusClass(item.status)}`">
-              {{ getStatusLabel(item.status) }}
-            </span>
-          </template>
-          
-          <template #cell(created)="{ item }">
-            <div class="date-info">
-              <div class="date">{{ formatDate(item.createdAt) }}</div>
-              <div class="time">{{ formatTime(item.createdAt) }}</div>
-            </div>
-          </template>
-          
-          <template #cell(actions)="{ item }">
-            <div class="table-actions">
-              <button 
-                class="btn btn-sm btn-primary"
-                @click="viewAdvert(item)"
-              >
-                👁️ View
-              </button>
-              <button 
-                v-if="canReview(item)"
-                class="btn btn-sm btn-success"
-                @click="handleReview(item)"
-              >
-                ✓ Review
-              </button>
-            </div>
-          </template>
-        </DataTable>
-      </div>
-
-      <!-- Empty State -->
-      <div v-else class="empty-state">
-        <div class="empty-icon">📊</div>
+      <!-- Empty -->
+      <div v-else-if="filteredAdverts.length === 0" class="state-empty">
+        <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="8" width="48" height="48" rx="2" stroke="#CBD5E1" stroke-width="3"/><line x1="20" y1="26" x2="44" y2="26" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/><line x1="20" y1="34" x2="36" y2="34" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/></svg>
         <h3>No adverts found</h3>
-        <p>No adverts found for the selected date range and filters</p>
-        <button class="btn btn-primary" @click="resetFilters">
-          🔄 Reset Filters
-        </button>
+        <p>No adverts match the selected filters.</p>
+        <button class="btn btn-reset" @click="resetFilters">Reset Filters</button>
       </div>
-    </div>
 
-    <!-- Review Modal -->
-    <ReviewModal 
+      <!-- Table via DataTable component -->
+      <template v-else>
+        <div class="tbl-outer">
+          <DataTable
+            :headers="tableHeaders"
+            :items="filteredAdverts"
+            :loading="loading"
+            :page-size="10"
+            :show-pagination="true"
+          >
+            <template #cell(reference)="{ item }">
+              <code class="ref-chip">{{ item.reference }}</code>
+            </template>
+
+            <template #cell(client)="{ item }">
+              <span class="c1">{{ item.clientName }}</span>
+              <span class="c2">{{ item.contactPerson }}</span>
+            </template>
+
+            <template #cell(platform)="{ item }">
+              <span class="c1">{{ item.productName }}</span>
+              <span :class="'pcat pcat--' + item.platformCategory">{{ formatCategory(item.platformCategory) }}</span>
+            </template>
+
+            <template #cell(amount)="{ item }">
+              <span class="amount-val">{{ formatCurrency(item.totalAmount) }}</span>
+            </template>
+
+            <template #cell(status)="{ item }">
+              <span :class="'sbadge sbadge--' + getStatusClass(item.status)">
+                {{ getStatusLabel(item.status) }}
+              </span>
+            </template>
+
+            <template #cell(created)="{ item }">
+              <span class="c1">{{ formatDate(item.createdAt) }}</span>
+              <span class="c2">{{ formatTime(item.createdAt) }}</span>
+            </template>
+
+            <template #cell(actions)="{ item }">
+              <div class="act-group">
+                <div class="act-wrap">
+                  <button class="act-btn act-view" @click="viewAdvert(item)" aria-label="View">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  </button>
+                  <span class="act-tip">View</span>
+                </div>
+                <div v-if="canReview(item)" class="act-wrap">
+                  <button class="act-btn act-review" @click="handleReview(item)" aria-label="Review">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  </button>
+                  <span class="act-tip">Review</span>
+                </div>
+              </div>
+            </template>
+          </DataTable>
+        </div>
+      </template>
+
+    </section>
+
+    <!-- Review Modal (unchanged) -->
+    <ReviewModal
       v-if="selectedAdvert"
       :advert="selectedAdvert"
       :show="showModal"
@@ -224,9 +207,9 @@
       @request-changes="handleRequestChanges"
       @close="closeModal"
     />
+
   </div>
 </template>
-
 <script setup>
 import StatCard from '~/components/common/StatCard.vue'
 import ReviewModal from '~/components/editor/ReviewModal.vue'
@@ -716,501 +699,494 @@ onMounted(() => {
   loadAdverts()
 })
 </script>
-
 <style scoped>
-.review-page {
-  width: 99%;
-  padding-bottom: 30px;
+/* ══════════════════════════════════════════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════════════════════════════════════════ */
+.db-page {
+  --navy:       #003366;
+  --navy-light: #004080;
+  --red:        #E31E24;
+  --blue:       #0066CC;
+  --blue-lt:    #EEF4FF;
+
+  --surface:    #FFFFFF;
+  --page-bg:    #F0F4F8;
+  --border:     #D1D9E0;
+  --border-lt:  #E8ECF0;
+
+  --text-1:     #0F172A;
+  --text-2:     #334155;
+  --text-3:     #64748B;
+  --text-4:     #94A3B8;
+
+  --green-text: #166534; --green-bg: #F0FDF4; --green-bd: #86EFAC;
+  --red-text:   #991B1B; --red-bg:   #FEF2F2; --red-bd:   #FECACA;
+  --amber-text: #78350F; --amber-bg: #FFFBEB; --amber-bd: #FCD34D;
+  --gray-text:  #374151; --gray-bg:  #F1F5F9; --gray-bd:  #CBD5E1;
+
+  --ring:       0 0 0 3px rgba(0,102,204,.15);
+  --shadow-sm:  0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:  0 4px 16px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.04);
+
+  --t:    140ms ease;
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* HEADER */
-.page-header {
-  background: white;
-  padding: 25px 30px;
-  border-radius: 10px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  width: 85%;
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@600&display=swap');
+
+.db-page {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--page-bg);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-2);
+  padding-bottom: 64px;
+  min-width: 0;
 }
 
-.header-content {
+/* ══════════════════════════════════════════════════════════════════════════════
+   FILTER PANEL
+══════════════════════════════════════════════════════════════════════════════ */
+.filter-panel {
+  margin: 16px 16px 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-lt);
+}
+
+.filter-panel__head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
-  width: 85%;
+  padding: 16px 24px;
+  background: var(--navy);
 }
 
-.page-header h1 {
-  color: #003366;
-  margin-bottom: 8px;
-  font-size: 1.8em;
-  font-weight: 600;
-}
-
-.page-header p {
-  color: #666;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 15px;
-}
-
-/* DATE FILTER */
-.date-filter-card {
-  background: white;
-  padding: 20px 30px;
-  border-radius: 10px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  width: 85%;
-}
-
-.date-filter-card h3 {
-  color: #003366;
-  margin-bottom: 15px;
-  font-size: 1.2em;
-}
-
-.date-controls {
+.filter-panel__title {
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
 }
 
-.date-input-group {
+.fp-icon { width: 18px; height: 18px; stroke: #fff; flex-shrink: 0; }
+
+.filter-panel__body { padding: 18px 24px; }
+
+.fp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.fp-field {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 130px;
+  flex: 0 0 auto;
 }
 
-.date-input-group label {
-  font-size: 0.9em;
-  font-weight: 500;
-  color: #666;
+.fp-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-3);
 }
 
-.date-input-group input {
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 0.95em;
-}
-
-.date-input-group input:focus {
+.fp-input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1.5px solid var(--border);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-1);
+  background: var(--surface);
+  transition: border-color var(--t), box-shadow var(--t);
   outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+  border-radius: 1px;
 }
+.fp-input:focus { border-color: var(--blue); box-shadow: var(--ring); }
+.fp-select { cursor: pointer; }
 
-.quick-buttons {
+.fp-quick {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-end;
+  padding-bottom: 1px;
 }
 
-.btn-quick {
-  padding: 8px 16px;
-  border: 1px solid #0066CC;
-  background: white;
-  color: #0066CC;
-  border-radius: 5px;
+.qr-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 1px;
+  background: #fff;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
   cursor: pointer;
-  font-size: 0.9em;
-  transition: all 0.3s;
+  transition: all var(--t);
+  white-space: nowrap;
+}
+.qr-btn:hover  { border-color: var(--blue); color: var(--blue); background: var(--blue-lt); }
+.qr-btn.active { border-color: var(--blue); color: #fff; background: var(--blue); }
+
+@media (max-width: 640px) {
+  .filter-panel { margin: 8px 8px 0; }
+  .filter-panel__head { padding: 14px 16px; flex-wrap: wrap; gap: 10px; }
+  .filter-panel__body { padding: 14px 16px; }
+  .fp-row { flex-direction: column; align-items: stretch; }
+  .fp-field { min-width: unset; }
 }
 
-.btn-quick:hover {
-  background: #0066CC;
-  color: white;
-}
-
-/* STATS CARDS - FIXED CONTAINER */
-.stats-container {
-  margin-bottom: 30px;
-  width: 85%;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  width:100%;
-}
-
-/* Ensure cards have proper width */
-.stat-card {
-  min-width: 0; /* Prevent overflow */
-}
-
-/* MAIN CONTENT */
-.content-card {
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  width: 85%;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
+/* ══════════════════════════════════════════════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════════════════════════════════════════════ */
+.btn {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #F5F5F5;
+  gap: 7px;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 1px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t), box-shadow var(--t), transform var(--t), opacity var(--t);
+  outline: none;
+}
+.btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: scale(.97); }
+
+.btn-refresh { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25); }
+.btn-refresh:hover:not(:disabled) { background: rgba(255,255,255,.22); }
+
+.btn-apply  { background: var(--red); color: #fff; }
+.btn-apply:hover:not(:disabled) { background: #C0181E; }
+
+.btn-reset  { background: var(--blue-lt); color: var(--blue); border: 1.5px solid rgba(0,102,204,.2); }
+.btn-reset:hover:not(:disabled) { background: #dce9ff; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   STATS ROW
+══════════════════════════════════════════════════════════════════════════════ */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  margin: 16px 16px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
 
-.card-header h2 {
-  color: #003366;
-  margin: 0;
+@media (max-width: 1100px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px)  { .stats-row { grid-template-columns: repeat(2, 1fr); margin: 8px 8px 0; } }
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 20px 16px;
+  border-right: 1px solid var(--border-lt);
+  border-top: 3px solid transparent;
+  transition: background var(--t);
+}
+.stat-card:last-child { border-right: none; }
+.stat-card:hover { background: #FAFBFC; }
+
+.sc--blue  { border-top-color: var(--blue); }
+.sc--amber { border-top-color: #F59E0B; }
+.sc--green { border-top-color: #16A34A; }
+.sc--red   { border-top-color: var(--red); }
+.sc--navy  { border-top-color: var(--navy); }
+.sc--gray  { border-top-color: #94A3B8; }
+
+.stat-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.result-count {
-  color: #666;
-  font-size: 0.9em;
+.stat-card__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1;
+  white-space: nowrap;
+}
+.stat-card__value--rev {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.4;
+  white-space: normal;
+  word-break: break-word;
 }
 
-/* TABS */
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESULTS SECTION
+══════════════════════════════════════════════════════════════════════════════ */
+.results-section {
+  margin: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 640px) { .results-section { margin: 8px 8px 0; } }
+
+/* Controls bar */
+.controls-bar {
+  background: var(--surface);
+  border: 1px solid var(--border-lt);
+  border-bottom: none;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0;
+}
+
 .tabs {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  border-bottom: 2px solid #DDDDDD;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border-lt);
+  flex: 1;
 }
+.tabs::-webkit-scrollbar { display: none; }
 
-.tab {
-  padding: 12px 20px;
-  cursor: pointer;
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 16px;
   border: none;
   background: none;
-  color: #666;
-  font-size: 0.95em;
-  border-bottom: 3px solid transparent;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color var(--t), border-color var(--t);
+  margin-bottom: -1px;
 }
-
-.tab:hover {
-  color: #E31E24;
-}
-
-.tab.active {
-  color: #E31E24;
-  border-bottom-color: #E31E24;
-}
+.tab-btn:hover  { color: var(--text-1); }
+.tab-btn.active { color: var(--red); border-bottom-color: var(--red); font-weight: 600; }
 
 .tab-count {
-  background: #f0f2f5;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.85em;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--page-bg);
+  color: var(--text-3);
+  border-radius: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  transition: background var(--t), color var(--t);
 }
+.tab-count.active { background: rgba(227,30,36,.1); color: var(--red); }
 
-.tab.active .tab-count {
-  background: rgba(227, 30, 36, 0.1);
-  color: #E31E24;
-}
-
-/* STATUS FILTER */
-.status-filter {
+.controls-right {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 8px;
+  padding: 0 16px;
+  border-left: 1px solid var(--border-lt);
+  border-bottom: 1px solid var(--border-lt);
 }
 
-.status-filter label {
-  font-weight: 500;
-  color: #666;
+/* Summary strip */
+.summary-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border-lt);
+  border-bottom: none;
 }
 
-.status-filter select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 0.95em;
-}
+.ss-count { font-size: 20px; font-weight: 700; color: var(--navy); line-height: 1; }
+.ss-label { font-size: 13px; color: var(--text-3); font-weight: 500; }
 
-/* LOADING STATE */
-.loading-state {
-  text-align: center;
-  padding: 60px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #0066CC;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* ERROR STATE */
-.error-state {
-  text-align: center;
-  padding: 60px;
-  color: #dc3545;
-}
-
-.error-icon {
-  font-size: 3em;
-  margin-bottom: 15px;
-}
-
-/* ADVERTS CONTAINER */
-.adverts-container {
-  width: 100%;
-  overflow-x: auto;
-  border-radius: 8px;
-}
-
-/* TABLE SLOT STYLES */
-.ref-number {
-  font-family: monospace;
-  font-weight: 600;
-  color: #003366;
-  background: #f0f7ff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.9em;
-}
-
-.client-info {
-  min-width: 150px;
-}
-
-.client-name {
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 3px;
-}
-
-.client-contact {
-  font-size: 0.85em;
-  color: #666;
-}
-
-.platform-info {
+/* States */
+.state-loading, .state-error, .state-empty {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-}
-
-.platform-name {
-  font-weight: 500;
-  color: #333;
-}
-
-.platform-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.8em;
-  font-weight: 500;
-  width: fit-content;
-}
-
-.badge-print { background: rgba(0, 102, 204, 0.1); color: #0066CC; }
-.badge-tv { background: rgba(142, 68, 173, 0.1); color: #8E44AD; }
-.badge-radio { background: rgba(230, 126, 34, 0.1); color: #E67E22; }
-.badge-digital { background: rgba(46, 204, 113, 0.1); color: #2ECC71; }
-.badge-other { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
-
-strong {
-  color: #28a745;
-  font-size: 1em;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 0.85em;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.badge-draft {
-  background-color: rgba(108, 117, 125, 0.15);
-  color: #6c757d;
-  border: 1px solid rgba(108, 117, 125, 0.3);
-}
-
-.badge-pending {
-  background-color: rgba(255, 193, 7, 0.15);
-  color: #856404;
-  border: 1px solid rgba(255, 193, 7, 0.3);
-}
-
-.badge-approved {
-  background-color: rgba(40, 167, 69, 0.15);
-  color: #155724;
-  border: 1px solid rgba(40, 167, 69, 0.3);
-}
-
-.badge-rejected {
-  background-color: rgba(220, 53, 69, 0.15);
-  color: #721c24;
-  border: 1px solid rgba(220, 53, 69, 0.3);
-}
-
-.date-info {
-  font-size: 0.9em;
-}
-
-.date {
-  color: #333;
-  margin-bottom: 2px;
-}
-
-.time {
-  color: #666;
-  font-size: 0.9em;
-}
-
-.table-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* BUTTONS */
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 0.95em;
-  transition: all 0.3s;
-  font-weight: 500;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.85em;
-}
-
-.btn-primary {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #0052a3;
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #218838;
-}
-
-.btn-refresh {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: #5a6268;
-}
-
-/* EMPTY STATE */
-.empty-state {
+  align-items: center;
+  gap: 12px;
+  padding: 64px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border-lt);
   text-align: center;
-  padding: 60px 20px;
-  color: #666;
-  border: 2px dashed #dee2e6;
-  border-radius: 8px;
+  color: var(--text-3);
+}
+.state-error svg, .state-empty svg { width: 56px; height: 56px; opacity: .35; }
+.state-error h3, .state-empty h3 { font-size: 15px; font-weight: 700; color: var(--text-2); margin: 0; }
+.state-error h3 { color: var(--red-text); }
+.state-error p, .state-empty p { font-size: 13px; margin: 0; max-width: 320px; }
+
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--border-lt);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* DataTable outer wrapper — forces scroll within component */
+.tbl-outer {
+  background: var(--surface);
+  border: 1px solid var(--border-lt);
+  overflow: hidden;
 }
 
-.empty-icon {
-  font-size: 3em;
-  margin-bottom: 15px;
-  opacity: 0.5;
+/* ══════════════════════════════════════════════════════════════════════════════
+   DATATABLE SLOT CONTENT ATOMS
+   (these style the content we inject via slots — DataTable renders the shell)
+══════════════════════════════════════════════════════════════════════════════ */
+.ref-chip {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--blue-lt);
+  border: 1px solid rgba(0,102,204,.15);
+  padding: 3px 8px;
+  border-radius: 1px;
+  letter-spacing: .04em;
+  white-space: nowrap;
 }
 
-.empty-state h3 {
-  color: #333;
-  margin-bottom: 10px;
+.c1 {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.c2 {
+  display: block;
+  font-size: 11px;
+  color: var(--text-4);
+  line-height: 1.4;
+  margin-top: 1px;
 }
 
-.empty-state p {
-  margin-bottom: 20px;
+.amount-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  white-space: nowrap;
 }
 
-/* RESPONSIVE */
-@media (max-width: 1200px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+/* Platform category chips */
+.pcat {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 1px;
+  letter-spacing: .03em;
+  white-space: nowrap;
 }
+.pcat--print   { background: var(--blue-lt);  color: var(--blue);      border: 1px solid rgba(0,102,204,.2); }
+.pcat--tv      { background: #F5F3FF;          color: #5B21B6;          border: 1px solid #C4B5FD;            }
+.pcat--radio   { background: #FFF7ED;          color: #C2410C;          border: 1px solid #FED7AA;            }
+.pcat--digital { background: var(--green-bg);  color: var(--green-text);border: 1px solid var(--green-bd);   }
+.pcat--other   { background: var(--gray-bg);   color: var(--gray-text); border: 1px solid var(--gray-bd);    }
 
-@media (max-width: 768px) {
-  .page-header,
-  .date-filter-card,
-  .content-card {
-    padding: 20px;
-  }
-  
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .date-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .tabs {
-    overflow-x: auto;
-  }
-  
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .table-actions {
-    flex-direction: column;
-    gap: 5px;
-  }
-  
-  .btn-sm {
-    width: 100%;
-    text-align: center;
-  }
+/* Status badges */
+.sbadge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 1px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: .03em;
 }
+.sbadge--draft    { background: var(--amber-bg); color: var(--amber-text); border: 1px solid var(--amber-bd); }
+.sbadge--pending  { background: #EEF4FF;         color: #1E40AF;           border: 1px solid #BFDBFE;         }
+.sbadge--approved { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-bd); }
+.sbadge--rejected { background: var(--red-bg);   color: var(--red-text);   border: 1px solid var(--red-bd);   }
+.sbadge--default  { background: var(--gray-bg);  color: var(--gray-text);  border: 1px solid var(--gray-bd);  }
 
-@media (max-width: 480px) {
-  .stats-grid {
-    gap: 15px;
-  }
-  
-  .stat-card {
-    padding: 15px;
-  }
+/* Action icon buttons */
+.act-group { display: flex; align-items: center; gap: 4px; }
+.act-wrap  { position: relative; display: inline-flex; }
+
+.act-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border: none;
+  border-radius: 1px;
+  cursor: pointer;
+  transition: background var(--t), transform var(--t);
 }
+.act-btn svg { width: 15px; height: 15px; }
+.act-btn:active { transform: scale(.92); }
+
+.act-view   { background: #E0F2FE; color: #0369A1; }
+.act-view:hover { background: #BAE6FD; }
+.act-review { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-bd); }
+.act-review:hover { background: #DCFCE7; }
+
+.act-tip {
+  pointer-events: none;
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%; transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--text-1);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 9px;
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity var(--t);
+  z-index: 9999;
+}
+.act-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 50%; transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--text-1);
+}
+.act-wrap:hover .act-tip { opacity: 1; }
 </style>

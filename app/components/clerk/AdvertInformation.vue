@@ -2,227 +2,244 @@
 <template>
   <div class="form-section">
     <div class="section-header">
+      <div class="section-icon">📢</div>
       <h3 class="section-title">Advert Information</h3>
-      <div class="section-badge">Required</div>
     </div>
-    
-    <div class="form-group">
-      <label>Advert Title <span class="required">*</span></label>
-      <div class="input-wrapper">
-        <input 
-          :value="advertTitle"
-          type="text" 
-          placeholder="e.g., MTN New Year Campaign" 
-          required
-          :disabled="disabled"
-          @input="updateAdvertTitle($event.target.value)"
-        >
-        <div class="input-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M11 5H6C4.89543 5 4 5.89543 4 7V18C4 19.1046 4.89543 20 6 20H17C18.1046 20 19 19.1046 19 18V13M17.5858 3.58579C18.3668 2.80474 19.6332 2.80474 20.4142 3.58579C21.1953 4.36684 21.1953 5.63316 20.4142 6.41421L11.8284 15H9L9 12.1716L17.5858 3.58579Z" stroke="#4A6FDC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
-    </div>
+    <p class="section-description">Select the platform and details for your advert</p>
 
-    <div class="form-group">
-      <label>Platform Category <span class="required">*</span></label>
-      <div class="select-wrapper">
-        <select 
-          :value="platformCategory" 
-          required 
-          @change="handleCategoryChange($event)"
-          :disabled="disabled || categoriesLoading"
-          class="styled-select"
-        >
-          <option value="">Select platform category</option>
-          <option 
-            v-for="category in activeCategories" 
-            :key="category.id" 
-            :value="category.category_type"
-            :disabled="!category.is_active"
-          >
-            {{ category.name }}
-            <span v-if="!category.is_active">(Inactive)</span>
-          </option>
-        </select>
-        <div class="select-arrow">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4L6 8L10 4" stroke="#4A6FDC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div v-if="categoriesLoading" class="select-loading">
-          <span class="spinner-small"></span>
-        </div>
-      </div>
-      <small v-if="platformCategory && selectedCategory" class="category-description">
-        {{ selectedCategory.description }}
-      </small>
-    </div>
-
-    <div class="form-row">
+    <!-- First Row: Advert Title and Office Location (60-40 split) -->
+    <div class="form-row split-60-40">
+      <!-- Advert Title - 60% width -->
       <div class="form-group">
-        <label>Product/Section <span class="required">*</span></label>
-        <div class="select-wrapper">
-          <select 
-            :value="product" 
-            required 
-            @change="handleProductChange($event)"
-            :disabled="!platformCategory || disabled || productsLoading"
-            class="styled-select"
+        <div class="form-label">
+          <label>Advert Title</label>
+          <span class="required">*</span>
+        </div>
+        <div class="input-container">
+          <span class="input-icon">📝</span>
+          <input 
+            :value="advertTitle"
+            type="text" 
+            placeholder="e.g., New Year Promotion, Job Vacancy, Product Launch"
+            required
+            :disabled="disabled"
+            @input="updateAdvertTitle($event.target.value)"
+            class="form-input"
           >
-            <option value="">Select category first</option>
+        </div>
+        <div class="input-hint">
+          A clear, descriptive title for your advert
+        </div>
+      </div>
+
+      <!-- Office Location - 40% width -->
+      <div class="form-group">
+        <div class="form-label">
+          <label>Office Location</label>
+          <span class="required">*</span>
+        </div>
+        <div class="input-container">
+          <span class="input-icon">📍</span>
+          <select 
+            :value="officeLocation"
+            required
+            :disabled="disabled || officeLocationsLoading"
+            @change="selectOfficeLocation($event.target.value)"
+            class="form-select"
+          >
+            <option value="">Select location</option>
+            <option 
+              v-for="location in officeLocations" 
+              :key="location.code" 
+              :value="location.code"
+            >
+              {{ location.office }}
+            </option>
+          </select>
+          <span v-if="officeLocationsLoading" class="select-spinner">↻</span>
+        </div>
+        <div v-if="officeLocationsError" class="input-error">{{ officeLocationsError }}</div>
+      </div>
+    </div>
+
+    <!-- Second Row: Platform Category, Product, and Color/Type Toggle -->
+    <div class="form-row three-columns">
+      <!-- Platform Category -->
+      <div class="form-group">
+        <div class="form-label">
+          <label>Platform Category</label>
+          <span class="required">*</span>
+        </div>
+        <div class="input-container">
+          <span class="input-icon">📱</span>
+          <select 
+            :value="platformCategory"
+            required
+            :disabled="disabled || categoriesLoading"
+            @change="handleCategoryChange($event.target.value)"
+            class="form-select"
+          >
+            <option value="">Select category</option>
+            <option 
+              v-for="category in categories" 
+              :key="category.id" 
+              :value="category.category_type"
+            >
+              {{ category.category_type_display || category.category_type }}
+            </option>
+          </select>
+          <span v-if="categoriesLoading" class="select-spinner">↻</span>
+        </div>
+      </div>
+
+      <!-- Product -->
+      <div class="form-group">
+        <div class="form-label">
+          <label>Product</label>
+          <span class="required">*</span>
+        </div>
+        <div class="input-container">
+          <span class="input-icon">📰</span>
+          <select 
+            :value="product"
+            required
+            :disabled="!platformCategory || disabled || productsLoading"
+            @change="handleProductChange($event.target.value)"
+            class="form-select"
+          >
+            <option value="">Select product</option>
             <option 
               v-for="product in filteredProducts" 
               :key="product.id" 
               :value="product.id"
-              :disabled="!product.is_active"
             >
               {{ product.name }}
-              <span v-if="!product.is_active">(Inactive)</span>
-              <span v-if="product.circulation" class="product-info">
-                (Circulation: {{ formatNumber(product.circulation) }})
-              </span>
             </option>
           </select>
-          <div class="select-arrow">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 4L6 8L10 4" stroke="#4A6FDC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div v-if="productsLoading" class="select-loading">
-            <span class="spinner-small"></span>
-          </div>
+          <span v-if="productsLoading" class="select-spinner">↻</span>
         </div>
-        <small v-if="productsLoading" class="loading-text">Loading products...</small>
-        <small v-if="product && selectedProduct" class="product-description">
-          {{ selectedProduct.description }}
-        </small>
       </div>
-      
+
+      <!-- Color/Type Toggle -->
       <div class="form-group">
-        <label>Rate Card <span class="required">*</span></label>
-        <div class="select-wrapper">
-          <select 
-            :value="rateCardId" 
-            required 
-            @change="handleRateCardChange($event)"
-            :disabled="!product || disabled || rateCardsLoading"
-            class="styled-select"
+        <div class="form-label">
+          <label>Color/Type</label>
+          <span class="required">*</span>
+        </div>
+        <div class="color-toggle-container">
+          <button 
+            type="button"
+            class="color-toggle-btn"
+            :class="{ active: adType === 'full_color' }"
+            :disabled="disabled"
+            @click="updateAdType('full_color')"
           >
-            <option value="">Select product first</option>
+            <span class="color-indicator full-color"></span>
+            <span class="toggle-text">Full Color</span>
+          </button>
+          <button 
+            type="button"
+            class="color-toggle-btn"
+            :class="{ active: adType === 'black_white' }"
+            :disabled="disabled"
+            @click="updateAdType('black_white')"
+          >
+            <span class="color-indicator bw"></span>
+            <span class="toggle-text">B&W</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Third Row: Rate Card, Ad Size, and Publish on Web Toggle -->
+    <div class="form-row three-columns">
+      <!-- Rate Card (depends on ad type) -->
+      <div class="form-group">
+        <div class="form-label">
+          <label>Rate Card</label>
+          <span class="required">*</span>
+        </div>
+        <div class="input-container">
+          <span class="input-icon">💰</span>
+          <select 
+            :value="rateCardId"
+            required
+            :disabled="!product || disabled || rateCardsLoading"
+            @change="handleRateCardChange($event.target.value)"
+            class="form-select"
+          >
+            <option value="">Select rate card</option>
             <option 
-              v-for="rateCard in availableRateCards" 
+              v-for="rateCard in rateCards" 
               :key="rateCard.id" 
               :value="rateCard.id"
             >
               {{ getRateCardDisplayName(rateCard) }}
-              <span v-if="!isRateCardActive(rateCard)" class="expired-label">(Expired)</span>
             </option>
           </select>
-          <div class="select-arrow">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 4L6 8L10 4" stroke="#4A6FDC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div v-if="rateCardsLoading" class="select-loading">
-            <span class="spinner-small"></span>
-          </div>
+          <span v-if="rateCardsLoading" class="select-spinner">↻</span>
         </div>
-        <small v-if="rateCardsLoading" class="loading-text">Loading rate cards...</small>
-        <small v-if="selectedRateCard && selectedRateCard.effectiveDate" class="ratecard-info">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align: middle; margin-right: 4px;">
-            <path d="M6 3V6L8 7.5M6 10.5C8.48528 10.5 10.5 8.48528 10.5 6C10.5 3.51472 8.48528 1.5 6 1.5C3.51472 1.5 1.5 3.51472 1.5 6C1.5 8.48528 3.51472 10.5 6 10.5Z" stroke="#4A6FDC" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          Effective: {{ formatDate(selectedRateCard.effectiveDate) }}
-          <span v-if="selectedRateCard.expiryDate">
-            to {{ formatDate(selectedRateCard.expiryDate) }}
-          </span>
-        </small>
+        <button 
+          v-if="rateCardDetails && rateCardId"
+          type="button"
+          class="edit-details-btn"
+          @click="editDetails"
+          :disabled="disabled"
+        >
+          <span>✎</span> Edit Details
+        </button>
       </div>
-    </div>
 
-    <div class="form-row">
+      <!-- Ad Size (Free text input) -->
       <div class="form-group">
-        <label>Ad Size</label>
-        <div class="input-wrapper">
+        <div class="form-label">
+          <label>Ad Size</label>
+          <span class="optional">(Optional)</span>
+        </div>
+        <div class="input-container">
+          <span class="input-icon">📏</span>
           <input 
             :value="adSize"
             type="text" 
-            placeholder="e.g., Full Page, 30 sec spot"
+            placeholder="e.g., Full Page, 10cm x 3col"
             :disabled="disabled"
             @input="updateAdSize($event.target.value)"
+            class="form-input"
           >
-          <div class="input-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <rect x="3" y="3" width="18" height="18" rx="2" stroke="#4A6FDC" stroke-width="2"/>
-            </svg>
-          </div>
+        </div>
+        <div class="input-hint">
+          Specify dimensions or size
         </div>
       </div>
-      
+
+      <!-- Publish on Web Toggle -->
       <div class="form-group">
-        <label>Color/Type</label>
-        <div class="color-select-wrapper">
-          <select 
-            :value="adType" 
-            @change="handleAdTypeChange($event)"
-            :disabled="!rateCardId || disabled || priceLoading"
-            class="styled-select"
-          >
-            <option value="full_color" style="color: #4A6FDC; font-weight: 600;">Full Color</option>
-            <option value="black_white" style="color: #2D3748; font-weight: 600;">Black & White</option>
-          </select>
-          <div class="color-preview" :class="adType"></div>
+        <div class="form-label">
+          <label>Publish on Web</label>
+          <span class="optional">(Optional)</span>
         </div>
-      </div>
-    </div>
-    
-    <!-- Display rate card details if available -->
-    <div v-if="rateCardDetails" class="ratecard-details-summary">
-      <div class="details-header">
-        <h4>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="vertical-align: middle; margin-right: 8px;">
-            <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="#2A4B8C" stroke-width="1.5"/>
-            <path d="M8 5V8M8 11H8.005" stroke="#2A4B8C" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          Rate Card Details
-        </h4>
-        <button type="button" class="btn-edit-details" @click="editRateCardDetails" :disabled="disabled">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align: middle; margin-right: 4px;">
-            <path d="M10.3333 1.66699C10.5084 1.49182 10.7163 1.3536 10.9451 1.2608C11.1739 1.16801 11.419 1.12268 11.6663 1.12752C11.9137 1.13235 12.1581 1.18728 12.3838 1.28891C12.6095 1.39054 12.8118 1.53672 12.9783 1.71833C13.1447 1.89993 13.2718 2.11307 13.3515 2.34436C13.4312 2.57565 13.4617 2.82014 13.4412 3.06281C13.4206 3.30549 13.3495 3.54113 13.2323 3.75497C13.115 3.96881 12.9543 4.15611 12.76 4.30532L5.58333 11.482L1.66667 12.3337L2.51833 8.41702L10.3333 1.66699Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Edit Details
-        </button>
-      </div>
-      <div class="details-content">
-        <template v-if="rateCardDetails.sizeDimension === 'per cm col'">
-          <div class="detail-item">
-            <span>Size:</span>
-            <div class="detail-value">
-              <strong>{{ rateCardDetails.details.cm }} cm × {{ rateCardDetails.details.columns }} columns</strong>
-              <span class="detail-info">(Total: {{ rateCardDetails.details.cm * rateCardDetails.details.columns }} cm col)</span>
-            </div>
+        <div class="toggle-container">
+          <div class="toggle-wrapper" :class="{ 'disabled': disabled }">
+            <button 
+              type="button"
+              class="toggle-btn"
+              :class="{ 'active': publishOnWeb }"
+              :disabled="disabled"
+              @click="togglePublishOnWeb"
+            >
+              <span class="toggle-slider">
+                <span class="toggle-knob"></span>
+              </span>
+            </button>
+            <span class="toggle-label">{{ publishOnWeb ? 'Yes' : 'No' }}</span>
           </div>
-        </template>
-        <template v-else-if="rateCardDetails.sizeDimension === 'per column'">
-          <div class="detail-item">
-            <span>Columns:</span>
-            <strong>{{ rateCardDetails.details.columns }} column(s)</strong>
+          <div class="toggle-hint">
+            <span v-if="publishOnWeb" class="web-badge">
+              <span class="web-icon">🌐</span> Web
+            </span>
+            <span v-else class="no-web-hint">No web</span>
           </div>
-        </template>
-        <template v-else-if="rateCardDetails.sizeDimension === 'per word'">
-          <div class="detail-item">
-            <span>Words:</span>
-            <strong>{{ rateCardDetails.details.words }} words</strong>
-          </div>
-        </template>
-        <template v-else-if="rateCardDetails.adType === 'classified photo/Logo'">
-          <div class="detail-item">
-            <span>Photos/Logos:</span>
-            <strong>{{ rateCardDetails.details.photos }} item(s)</strong>
-          </div>
-        </template>
+        </div>
       </div>
     </div>
   </div>
@@ -256,10 +273,19 @@ const props = defineProps({
     type: String,
     default: 'full_color'
   },
+  officeLocation: {
+    type: String,
+    default: ''
+  },
+  publishOnWeb: {
+    type: Boolean,
+    default: false
+  },
   disabled: {
     type: Boolean,
     default: false
   },
+  // Categories and Products
   categories: {
     type: Array,
     default: () => []
@@ -276,6 +302,7 @@ const props = defineProps({
     type: Object,
     default: null
   },
+  // Loading states
   categoriesLoading: {
     type: Boolean,
     default: false
@@ -291,127 +318,58 @@ const props = defineProps({
   priceLoading: {
     type: Boolean,
     default: false
+  },
+  // Office locations from store
+  officeLocations: {
+    type: Array,
+    default: () => []
+  },
+  officeLocationsLoading: {
+    type: Boolean,
+    default: false
+  },
+  officeLocationsError: {
+    type: String,
+    default: ''
   }
 })
 
 const emit = defineEmits([
-  'update:advertTitle', 
-  'update:platformCategory', 
-  'update:product', 
+  'update:advertTitle',
+  'update:platformCategory',
+  'update:product',
   'update:rateCardId',
   'update:adSize',
   'update:adType',
+  'update:officeLocation',
+  'update:publishOnWeb',
   'category-change',
   'product-change',
   'ratecard-change',
   'adtype-change',
   'edit-ratecard-details',
-  'ratecard-selected',
-  'size-dimension-change' 
+  'office-location-selected'
 ])
 
-const activeCategories = computed(() => {
-  return props.categories.filter(category => category.is_active !== false)
-})
-
-const selectedCategory = computed(() => {
-  if (!props.platformCategory) return null
-  return props.categories.find(c => c.category_type === props.platformCategory)
-})
-
+// Filter products based on selected category
 const filteredProducts = computed(() => {
   if (!props.platformCategory) return []
   return props.products.filter(product => 
-    product.categoryType === props.platformCategory && 
-    product.is_active !== false
+    product.categoryType === props.platformCategory
   )
 })
 
-const selectedProduct = computed(() => {
-  if (!props.product) return null
-  return props.products.find(p => p.id === props.product)
-})
-
-const availableRateCards = computed(() => {
-  if (!props.product) return []
-  return props.rateCards.filter(rateCard => {
-    return isRateCardActive(rateCard)
-  })
-})
-
-const selectedRateCard = computed(() => {
-  if (!props.rateCardId) return null
-  return props.rateCards.find(rc => rc.id === props.rateCardId)
-})
-
-const updateAdvertTitle = (value) => {
-  emit('update:advertTitle', value)
-}
-
-const updateAdSize = (value) => {
-  emit('update:adSize', value)
-}
-
-const handleCategoryChange = (event) => {
-  const value = event.target.value
-  emit('update:platformCategory', value)
-  emit('update:product', '')
-  emit('update:rateCardId', '')
-  emit('category-change', value)
-}
-
-const handleProductChange = (event) => {
-  const value = event.target.value
-  emit('update:product', value)
-  emit('update:rateCardId', '')
-  emit('product-change', value)
-}
-
-/*
-const handleRateCardChange = (event) => {
-  const value = event.target.value
-  emit('update:rateCardId', value)
-  emit('ratecard-change', value)
-}
-*/
-
-const handleRateCardChange = (event) => {
-  const value = event.target.value
-  emit('update:rateCardId', value)
-  emit('ratecard-change', value)
-  
-  // Emit the selected rate card's size dimension
-  if (value) {
-    const selectedCard = props.rateCards.find(rc => rc.id === value)
-    if (selectedCard && selectedCard.size_dimension) {
-      emit('size-dimension-change', selectedCard.size_dimension)
-      // Also emit the entire rate card for other potential uses
-      emit('ratecard-selected', selectedCard)
-    }
-  }
-}
-
-
-const handleAdTypeChange = (event) => {
-  const value = event.target.value
-  emit('update:adType', value)
-  emit('adtype-change', value)
-}
-
-const editRateCardDetails = () => {
-  if (!props.disabled) {
-    emit('edit-ratecard-details')
-  }
-}
-
+// Helper function to get rate card display name (depends on adType)
 const getRateCardDisplayName = (rateCard) => {
-  let displayName = ""
+  let displayName = ''
+  
+  // Get the appropriate price based on selected ad type
   const price = props.adType === 'full_color' ? rateCard.price_fc : rateCard.price_bw
   
   if (rateCard.ad_type) {
     displayName += `${rateCard.ad_type}`
   }
-
+  
   if (price) {
     displayName += ` - ${formatCurrency(price)}`
   }
@@ -423,22 +381,9 @@ const getRateCardDisplayName = (rateCard) => {
   return displayName
 }
 
-const isRateCardActive = (rateCard) => {
-  if (!rateCard.effectiveDate && !rateCard.expiryDate) return true
-  
-  const today = new Date()
-  const effectiveDate = rateCard.effectiveDate ? new Date(rateCard.effectiveDate) : null
-  const expiryDate = rateCard.expiryDate ? new Date(rateCard.expiryDate) : null
-  
-  if (effectiveDate && today < effectiveDate) return false
-  if (expiryDate && today > expiryDate) return false
-  
-  return true
-}
-
+// Format currency helper
 const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return 'UGX 0'
-  
   return new Intl.NumberFormat('en-UG', {
     style: 'currency',
     currency: 'UGX',
@@ -447,355 +392,437 @@ const formatCurrency = (amount) => {
   }).format(amount)
 }
 
-const formatNumber = (number) => {
-  if (!number && number !== 0) return '0'
-  
-  return new Intl.NumberFormat('en-UG').format(number)
+// Handlers
+const updateAdvertTitle = (value) => {
+  emit('update:advertTitle', value)
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-UG', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  } catch (error) {
-    return dateString
+const handleCategoryChange = (value) => {
+  emit('update:platformCategory', value)
+  emit('category-change', value)
+}
+
+const handleProductChange = (value) => {
+  emit('update:product', value)
+  emit('product-change', value)
+}
+
+const handleRateCardChange = (value) => {
+  emit('update:rateCardId', value)
+  emit('ratecard-change', value)
+
+  // Auto-populate Ad Size with the rate card display name
+  const selectedRateCard = props.rateCards.find(rc => String(rc.id) === String(value))
+  const displayName = selectedRateCard ? getRateCardDisplayName(selectedRateCard) : ''
+  emit('update:adSize', displayName)
+}
+
+const updateAdSize = (value) => {
+  emit('update:adSize', value)
+}
+
+// Update ad type and notify parent
+const updateAdType = (value) => {
+  if (value !== props.adType) {
+    emit('update:adType', value)
+    emit('adtype-change', value)
   }
 }
 
-// Expose computed properties
-defineExpose({
-  selectedCategory,
-  selectedProduct,
-  selectedRateCard,
-  hasRequiredFields: computed(() => {
-    return props.advertTitle && props.platformCategory && props.product && props.rateCardId
-  })
-})
+// Select office location
+const selectOfficeLocation = (locationCode) => {
+  emit('update:officeLocation', locationCode)
+  emit('office-location-selected', locationCode)
+}
+
+const editDetails = () => {
+  emit('edit-ratecard-details')
+}
+
+// Toggle publish on web
+const togglePublishOnWeb = () => {
+  if (!props.disabled) {
+    const newValue = !props.publishOnWeb
+    emit('update:publishOnWeb', newValue)
+  }
+}
 </script>
 
 <style scoped>
 .form-section {
   margin-bottom: 40px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%);
   padding: 30px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
-  border-radius: 14px;
-  border: 1px solid #e6e9f4;
-  box-shadow: 0 6px 15px rgba(42, 75, 140, 0.08);
+  border-radius: 16px;
+  border: 1px solid #e1e8ff;
+  box-shadow: 0 4px 20px rgba(0, 51, 102, 0.08);
+  transition: all 0.3s ease;
+}
+
+.form-section:hover {
+  box-shadow: 0 6px 25px rgba(0, 51, 102, 0.12);
 }
 
 .section-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.section-icon {
+  font-size: 1.8em;
+  background: linear-gradient(135deg, #a0d0ff 0%, #a0d0ff 100%);
+  color: white;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
 }
 
 .section-title {
-  color: #2A4B8C;
-  font-size: 1.3em;
+  color: #003366;
+  font-size: 1.4em;
   font-weight: 700;
   margin: 0;
-  background: linear-gradient(90deg, #2A4B8C 0%, #4A6FDC 100%);
+  background: linear-gradient(135deg, #003366 0%, #0066cc 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.section-badge {
-  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%);
-  color: white;
-  font-size: 0.75em;
-  font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 20px;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.2);
+.section-description {
+  color: #666;
+  font-size: 0.95em;
+  margin-bottom: 25px;
+  padding-left: 60px;
+  line-height: 1.5;
 }
 
+/* Form Rows */
 .form-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
+  gap: 20px;
   margin-bottom: 30px;
 }
 
-.form-group {
-  margin-bottom: 25px;
+/* 60-40 split for Advert Title and Office Location */
+.form-row.split-60-40 {
+  grid-template-columns: 3fr 2fr; /* 60% - 40% ratio (3:2) */
 }
 
-.form-group label {
-  display: block;
+/* Three-column layout */
+.form-row.three-columns {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.form-group {
   margin-bottom: 10px;
-  color: #2A4B8C;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.form-label label {
+  color: #1a365d;
   font-weight: 600;
   font-size: 0.95em;
-  letter-spacing: 0.3px;
 }
 
 .required {
-  color: #FF6B6B;
-  font-weight: 700;
+  color: #e31e24;
+  font-size: 0.85em;
+  font-weight: 600;
+  background: rgba(227, 30, 36, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-.input-wrapper {
+.optional {
+  color: #718096;
+  font-size: 0.85em;
+  font-style: italic;
+}
+
+.input-container {
   position: relative;
-}
-
-.input-wrapper input {
-  width: 100%;
-  padding: 14px 16px 14px 45px;
-  border: 2px solid #e6e9f4;
-  border-radius: 10px;
-  font-size: 1em;
-  transition: all 0.3s ease;
-  background-color: #ffffff;
-  color: #2D3748;
-}
-
-.input-wrapper input:focus {
-  outline: none;
-  border-color: #4A6FDC;
-  box-shadow: 0 0 0 3px rgba(74, 111, 220, 0.15);
-  background-color: #ffffff;
-}
-
-.input-wrapper input:disabled {
-  background-color: #F7F9FC;
-  cursor: not-allowed;
-  opacity: 0.7;
-  border-color: #E2E8F0;
-}
-
-.input-wrapper input::placeholder {
-  color: #94A3B8;
+  display: flex;
+  align-items: center;
 }
 
 .input-icon {
   position: absolute;
   left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+  font-size: 1.1em;
+  color: #0066cc;
+  z-index: 1;
   pointer-events: none;
 }
 
-.select-wrapper {
-  position: relative;
-}
-
-.styled-select {
+.form-input,
+.form-select {
   width: 100%;
-  padding: 14px 45px 14px 16px;
-  border: 2px solid #e6e9f4;
+  padding: 14px 20px 14px 48px;
+  border: 2px solid #e2e8f0;
   border-radius: 10px;
   font-size: 1em;
-  transition: all 0.3s ease;
-  background-color: #ffffff;
-  color: #2D3748;
+  transition: all 0.3s;
+  background: white;
+  color: #2d3748;
+  font-weight: 500;
+}
+
+.form-select {
   appearance: none;
-  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234A6FDC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
+  padding-right: 48px;
 }
 
-.styled-select:focus {
+.form-input:focus,
+.form-select:focus {
   outline: none;
-  border-color: #4A6FDC;
-  box-shadow: 0 0 0 3px rgba(74, 111, 220, 0.15);
+  border-color: #0066cc;
+  box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15);
+  background: linear-gradient(0deg, #ffffff 0%, #f0f7ff 100%);
 }
 
-.styled-select:disabled {
-  background-color: #F7F9FC;
+.form-input:disabled,
+.form-select:disabled {
+  background-color: #f7fafc;
+  border-color: #cbd5e0;
+  color: #a0aec0;
   cursor: not-allowed;
-  opacity: 0.7;
-  border-color: #E2E8F0;
 }
 
-.select-arrow {
+.form-input::placeholder {
+  color: #a0aec0;
+  font-weight: 400;
+}
+
+.select-spinner {
   position: absolute;
   right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: #4A6FDC;
-}
-
-.select-loading {
-  position: absolute;
-  right: 40px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  pointer-events: none;
-}
-
-.spinner-small {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(74, 111, 220, 0.2);
-  border-radius: 50%;
-  border-top-color: #4A6FDC;
-  animation: spin 1s ease-in-out infinite;
+  animation: spin 1s linear infinite;
+  color: #0066cc;
+  font-size: 14px;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-.category-description,
-.product-description {
-  display: block;
-  margin-top: 8px;
-  color: #64748B;
-  font-size: 0.9em;
-  font-style: italic;
-  line-height: 1.4;
-}
-
-.product-info {
+.input-hint {
   font-size: 0.85em;
-  color: #7C8DB5;
-  margin-left: 5px;
+  color: #718096;
+  margin-top: 6px;
+  padding-left: 4px;
 }
 
-.ratecard-info {
-  display: block;
-  margin-top: 8px;
-  color: #4A6FDC;
+.input-error {
   font-size: 0.85em;
-  font-weight: 500;
+  color: #e31e24;
+  margin-top: 6px;
+  padding-left: 4px;
 }
 
-.expired-label {
-  color: #FF6B6B;
+/* Color Type Toggle */
+.color-toggle-container {
+  display: flex;
+  gap: 8px;
+  height: 52px;
+}
+
+.color-toggle-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  color: #4a5568;
   font-weight: 600;
+  font-size: 0.95em;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
 }
 
-.loading-text {
-  display: block;
-  margin-top: 8px;
-  color: #4A6FDC;
-  font-size: 0.85em;
-  font-weight: 500;
+.color-toggle-btn:hover:not(:disabled) {
+  border-color: #0066cc;
+  background: #f0f7ff;
 }
 
-.color-select-wrapper {
-  position: relative;
+.color-toggle-btn.active {
+  border-color: #0066cc;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
+  color: #0066cc;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.15);
 }
 
-.color-preview {
-  position: absolute;
-  right: 45px;
-  top: 50%;
-  transform: translateY(-50%);
+.color-toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.color-indicator {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
-.color-preview.full_color {
-  background: linear-gradient(135deg, #4A6FDC 0%, #7C8DB5 100%);
+.color-indicator.full-color {
+  background: linear-gradient(135deg, #FF6B6B, #4A90E2, #F9CB28);
 }
 
-.color-preview.black_white {
-  background: linear-gradient(135deg, #2D3748 0%, #4A5568 100%);
+.color-indicator.bw {
+  background: linear-gradient(135deg, #333333, #666666);
 }
 
-.ratecard-details-summary {
-  background: linear-gradient(135deg, #F0F4FF 0%, #E6EDFF 100%);
-  padding: 20px;
-  border-radius: 12px;
-  margin-top: 30px;
-  border: 1px solid #D6E4FF;
-  box-shadow: 0 4px 6px rgba(74, 111, 220, 0.1);
+.toggle-text {
+  white-space: nowrap;
 }
 
-.details-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.details-header h4 {
-  margin: 0;
-  color: #2A4B8C;
-  font-size: 1.1em;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-}
-
-.btn-edit-details {
-  background: linear-gradient(135deg, #4A6FDC 0%, #2A4B8C 100%);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 0.9em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-}
-
-.btn-edit-details:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(74, 111, 220, 0.3);
-}
-
-.btn-edit-details:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-.details-content {
+/* Publish on Web Toggle */
+.toggle-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
-.detail-item {
+.toggle-wrapper {
   display: flex;
   align-items: center;
-  gap: 15px;
-  font-size: 0.95em;
-  padding: 10px;
+  gap: 12px;
+}
+
+.toggle-btn {
+  position: relative;
+  width: 60px;
+  height: 30px;
+  background: #e2e8f0;
+  border: 2px solid #cbd5e0;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.3s;
+  padding: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.toggle-btn.active {
+  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+  border-color: #059669;
+}
+
+.toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle-slider {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
   background: white;
-  border-radius: 8px;
-  border: 1px solid #E2E8F0;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease;
 }
 
-.detail-item span {
-  color: #64748B;
-  font-weight: 500;
-  min-width: 100px;
+.toggle-btn.active .toggle-knob {
+  transform: translateX(30px);
 }
 
-.detail-item strong {
-  color: #2A4B8C;
-  font-weight: 700;
+.toggle-label {
+  font-weight: 600;
+  color: #2d3748;
+  min-width: 40px;
 }
 
-.detail-info {
-  color: #7C8DB5;
+.toggle-hint {
   font-size: 0.85em;
-  margin-left: 10px;
 }
 
-.detail-value {
-  display: flex;
+.web-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  color: white;
+  border-radius: 20px;
+  font-weight: 500;
+  font-size: 0.8em;
+}
+
+.web-icon {
+  font-size: 1em;
+}
+
+.no-web-hint {
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 0.85em;
+}
+
+.edit-details-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.edit-details-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.edit-details-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive Styles */
+@media (max-width: 1024px) {
+  .form-row.three-columns {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .form-row.three-columns .form-group:last-child {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 768px) {
@@ -803,9 +830,13 @@ defineExpose({
     padding: 20px;
   }
   
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 25px;
+  .form-row.split-60-40,
+  .form-row.three-columns {
+    grid-template-columns: 1fr; /* Stack on mobile */
+  }
+  
+  .form-row.three-columns .form-group:last-child {
+    grid-column: auto;
   }
   
   .section-header {
@@ -814,22 +845,52 @@ defineExpose({
     gap: 10px;
   }
   
-  .section-badge {
-    align-self: flex-start;
+  .section-description {
+    padding-left: 0;
   }
   
-  .ratecard-details-summary {
-    padding: 15px;
+  .section-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.5em;
   }
   
-  .detail-item {
+  .form-input,
+  .form-select {
+    padding: 12px 16px 12px 44px;
+  }
+  
+  .color-toggle-container {
+    height: auto;
+  }
+  
+  .color-toggle-btn {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-section {
+    padding: 16px;
+    border-radius: 12px;
+  }
+  
+  .section-title {
+    font-size: 1.2em;
+  }
+  
+  .toggle-wrapper {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
   
-  .detail-item span {
+  .toggle-label {
     min-width: auto;
+  }
+  
+  .color-toggle-btn .toggle-text {
+    font-size: 0.9em;
   }
 }
 </style>

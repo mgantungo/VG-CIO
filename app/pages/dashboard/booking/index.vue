@@ -1,166 +1,63 @@
 <!--pages/dashboard/booking/index.vue-->
 <template>
-  <div class="date-range-adverts-page">
-    <div class="page-header">
-      <div class="header-top">
-        <div class="header-title">
-          <h1>
-            <span class="page-icon">📋</span>
-            Adverts Report
-          </h1>
-          <p class="page-subtitle">View adverts captured within a specific date range</p>
+  <div class="rp-page">
+
+    <!-- ── Error banner ── -->
+    <div v-if="error" class="rp-error">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+      <span><strong>Error:</strong> {{ error }}</span>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         FILTER PANEL
+    ═════════════════════════════════════════════════════ -->
+    <section class="filter-panel">
+      <div class="filter-panel__head">
+        <div class="filter-panel__title">
+          <svg class="fp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Adverts Report</span>
         </div>
-        
-        <div class="header-actions">
-          <button 
-            class="btn btn-success"
-            @click="createNewAdvert"
-          >
-            <span class="btn-icon">➕</span>
-            <span class="btn-text">Create New Advert</span>
-          </button>
-        </div>
+        <button class="btn btn-new" @click="createNewAdvert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Advert
+        </button>
       </div>
 
-      <!--Header Section-->
-      <div class="header-stats">
-          <StatsCard
-            icon="📅"
-            label="Date Range"
-            :value="dateRangeDisplay"
-            type="primary"
-          />
-          
-          <StatsCard
-            icon="📋"
-            label="Total Adverts"
-            :value="statistics.totalAdverts"
-            type="success"
-          />
-          
-          <StatsCard
-            icon="💰"
-            label="Total Value"
-            :value="statistics.totalAmount"
-            :format-currency="true"
-            type="warning"
-          />
-          
-          <StatsCard
-            icon="👥"
-            label="Active Users"
-            :value="statistics.uniqueUsers"
-            type="info"
-          />
-        </div>
-
-    </div>
-
-    <!-- Error message display -->
-    <div v-if="error" class="error-message">
-      <strong>Error:</strong> {{ error }}
-    </div>
-
-    <div class="content-card">
-      <!-- Date Range Filter Section -->
-      <div class="date-filter-section">
-        <div class="filter-header">
-          <h3>📅 Filter by Date Range</h3>
-        </div>
-        
-        <div class="date-range-controls">
-          <div class="date-input-group">
-            <label for="startDate">Start Date:</label>
-            <input 
-              type="date" 
-              id="startDate"
-              v-model="startDate"
-              class="date-input"
-              :max="endDate"
-            >
+      <div class="filter-panel__body">
+        <!-- Date inputs -->
+        <div class="fp-row fp-row--dates">
+          <div class="fp-field">
+            <label class="fp-label" for="startDate">From</label>
+            <input type="date" id="startDate" v-model="startDate" class="fp-input" :max="endDate">
           </div>
-          
-          <div class="date-input-group">
-            <label for="endDate">End Date:</label>
-            <input 
-              type="date" 
-              id="endDate"
-              v-model="endDate"
-              class="date-input"
-              :min="startDate"
-              :max="maxDate"
-            >
+          <div class="fp-field">
+            <label class="fp-label" for="endDate">To</label>
+            <input type="date" id="endDate" v-model="endDate" class="fp-input" :min="startDate" :max="maxDate">
           </div>
-          
-          <div class="quick-date-buttons">
-            <button 
-              class="btn btn-outline btn-sm"
-              @click="setDateRange('today')"
-              :class="{ 'btn-active': activeQuickRange === 'today' }"
-            >
-              Today
-            </button>
-            <button 
-              class="btn btn-outline btn-sm"
-              @click="setDateRange('yesterday')"
-              :class="{ 'btn-active': activeQuickRange === 'yesterday' }"
-            >
-              Yesterday
-            </button>
-            <button 
-              class="btn btn-outline btn-sm"
-              @click="setDateRange('thisWeek')"
-              :class="{ 'btn-active': activeQuickRange === 'thisWeek' }"
-            >
-              This Week
-            </button>
-            <button 
-              class="btn btn-outline btn-sm"
-              @click="setDateRange('thisMonth')"
-              :class="{ 'btn-active': activeQuickRange === 'thisMonth' }"
-            >
-              This Month
-            </button>
-            <button 
-              class="btn btn-outline btn-sm"
-              @click="setDateRange('lastMonth')"
-              :class="{ 'btn-active': activeQuickRange === 'lastMonth' }"
-            >
-              Last Month
-            </button>
+          <!-- Quick ranges -->
+          <div class="fp-quick">
+            <button v-for="r in quickRanges" :key="r.key"
+              class="qr-btn"
+              :class="{ active: activeQuickRange === r.key }"
+              @click="setDateRange(r.key)">{{ r.label }}</button>
           </div>
         </div>
-        
-        <!-- Additional Filters -->
-        <div class="additional-filters">
-          <div class="filter-group">
-            <label for="userFilter">Filter by User:</label>
-            <select 
-              id="userFilter" 
-              v-model="selectedUserId"
-              class="filter-select"
-              @change="loadAdverts"
-            >
-              <option value="">All Users</option>
-              <option 
-                v-for="user in availableUsers" 
-                :key="user.id" 
-                :value="user.id"
-              >
+
+        <!-- Additional filters -->
+        <div class="fp-row fp-row--filters">
+          <div class="fp-field">
+            <label class="fp-label" for="userFilter">User</label>
+            <select id="userFilter" v-model="selectedUserId" class="fp-input fp-select" @change="loadAdverts">
+              <option value="">All users</option>
+              <option v-for="user in availableUsers" :key="user.id" :value="user.id">
                 {{ user.name }} ({{ user.role }})
               </option>
             </select>
           </div>
-          
-          <div class="filter-group">
-            <label for="statusFilter">Filter by Status:</label>
-            <select 
-              id="statusFilter" 
-              v-model="selectedStatus"
-              class="filter-select"
-              @change="loadAdverts"
-            >
-              <option value="">All Status</option>
+          <div class="fp-field">
+            <label class="fp-label" for="statusFilter">Status</label>
+            <select id="statusFilter" v-model="selectedStatus" class="fp-input fp-select" @change="loadAdverts">
+              <option value="">All statuses</option>
               <option value="draft">Draft</option>
               <option value="pending_review">Pending Review</option>
               <option value="editor_approved">Editor Approved</option>
@@ -169,205 +66,188 @@
               <option value="manager_rejected">Manager Rejected</option>
             </select>
           </div>
-          
-          <div class="filter-group">
-            <label for="searchQuery">Search:</label>
-            <input 
-              type="text" 
-              id="searchQuery"
-              v-model="searchQuery"
-              class="search-input"
-              placeholder="Search by reference, client, title..."
-              @keyup.enter="applySearch"
-            >
-          </div>
-        </div>
-        
-        <div class="filter-actions">
-          <button 
-            class="btn btn-primary"
-            @click="loadAdverts"
-            :disabled="loading || isDateRangeInvalid"
-          >
-            <span v-if="loading">🔍 Loading...</span>
-            <span v-else>🔍 Apply Filters</span>
-          </button>
-          
-          <button 
-            class="btn btn-secondary"
-            @click="resetFilters"
-          >
-            🔄 Reset
-          </button>
-          
-          <button 
-            class="btn btn-success"
-            @click="exportData"
-            :disabled="adverts.length === 0"
-          >
-            📊 Export Data
-          </button>
-        </div>
-        
-        <div v-if="isDateRangeInvalid" class="date-error">
-          ⚠️ End date must be after start date
-        </div>
-      </div>
-
-      <!-- Results Section -->
-      <div class="results-section">
-        <div class="results-header">
-          <h3>📋 Results ({{ filteredAdverts.length }} adverts)</h3>
-          <div class="results-summary">
-            <span class="summary-item">
-              <span class="summary-label">Total Value:</span>
-              <span class="summary-value">{{ formatCurrency(statistics.totalAmount) }}</span>
-            </span>
-            <span class="summary-item">
-              <span class="summary-label">Avg. Amount:</span>
-              <span class="summary-value">{{ formatCurrency(statistics.averageAmount) }}</span>
-            </span>
-            <span class="summary-item">
-              <span class="summary-label">Total Discount:</span>
-              <span class="summary-value">{{ formatCurrency(statistics.totalDiscount) }}</span>
-            </span>
-          </div>
-        </div>
-
-        <div class="table-container">
-          <table class="adverts-table" v-if="filteredAdverts.length > 0">
-            <thead>
-              <tr>
-                <th>Ref #</th>
-                <th>Captured By</th>
-                <th>Client</th>
-                <th>Advert Title</th>
-                <th>Product</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="advert in filteredAdverts" :key="advert.id">
-                <td class="ref-cell">
-                  <span class="ref-number">{{ advert.reference }}</span>
-                </td>
-                <td class="user-cell">
-                  <div class="user-info">
-                    <div class="user-name">{{ advert.createdBy?.name || 'Unknown' }}</div>
-                    <div class="user-email">{{ advert.createdBy?.email || '' }}</div>
-                    <div class="user-role">{{ advert.createdBy?.role || '' }}</div>
-                  </div>
-                </td>
-                <td class="client-cell">
-                  <div class="client-name">{{ advert.clientName }}</div>
-                  <div class="client-contact">{{ advert.client?.contact_person || '' }}</div>
-                </td>
-                <td class="title-cell">
-                  {{ advert.advertTitle }}
-                </td>
-                <td class="product-cell">
-                  <div>{{ advert.product?.product_name || 'N/A' }}</div>
-                  <div class="product-size" v-if="advert.adSize">{{ advert.adSize }}</div>
-                </td>
-                <td class="amount-cell">
-                  <div class="amount-display">
-                    <span class="amount">{{ formatCurrency(advert.totalAmount) }}</span>
-                    <span v-if="advert.discount > 0" class="discount-badge">
-                      -{{ advert.discount }}%
-                    </span>
-                  </div>
-                </td>
-                <td class="status-cell">
-                  <span :class="`status-badge badge-${getStatusClass(advert.status)}`">
-                    {{ getStatusLabel(advert.status) }}
-                  </span>
-                </td>
-                <td class="date-cell">
-                  <div class="date-display-cell">
-                    <div class="date">{{ formatDate(advert.createdAt) }}</div>
-                    <div class="time">{{ formatTime(advert.createdAt) }}</div>
-                  </div>
-                </td>
-                <td class="actions-cell">
-                  <div class="action-buttons">
-                    <button class="btn btn-info btn-sm" @click="viewAdvert(advert)">
-                      👁️ View
-                    </button>
-                    <button 
-                      v-if="advert.attachments?.length > 0"
-                      class="btn btn-download btn-sm"
-                      @click="downloadAttachments(advert)"
-                      title="View Attachments"
-                    >
-                      📎 {{ advert.attachments.length }}
-                    </button>
-                    <button 
-                      v-if="advert.status === 'draft'"
-                      class="btn btn-warning btn-sm"
-                      @click="editAdvert(advert)"
-                    >
-                      ✏️ Edit
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          
-          <!-- Loading state -->
-          <div v-if="loading" class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading adverts...</p>
-          </div>
-
-          <!-- Empty state -->
-          <div v-if="!loading && filteredAdverts.length === 0" class="empty-state">
-            <div class="empty-icon">📊</div>
-            <h3>No adverts found</h3>
-            <p v-if="searchQuery || selectedUserId || selectedStatus">
-              Try adjusting your filters or date range
-            </p>
-            <p v-else-if="dateRangeDisplay !== 'Today'">
-              No adverts found for the selected date range
-            </p>
-            <p v-else>
-              No adverts have been created today.
-            </p>
-            <div class="empty-state-actions">
-              <button 
-                class="btn btn-success"
-                @click="createNewAdvert"
-              >
-                ➕ Create Your First Advert
-              </button>
-              <button 
-                v-if="searchQuery || selectedUserId || selectedStatus || dateRangeDisplay !== 'Today'"
-                class="btn btn-secondary"
-                @click="resetFilters"
-              >
-                🔄 Clear Filters
-              </button>
+          <div class="fp-field fp-field--search">
+            <label class="fp-label" for="searchQuery">Search</label>
+            <div class="fp-search-wrap">
+              <svg class="fp-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="searchQuery" v-model="searchQuery" class="fp-input fp-input--search"
+                     placeholder="Reference, client, title…" @keyup.enter="applySearch">
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Floating Action Button for Mobile -->
-    <button 
-      class="floating-action-btn"
-      @click="createNewAdvert"
-      title="Create New Advert"
-    >
-      <span class="fab-icon">➕</span>
-      <span class="fab-text">New Advert</span>
+        <!-- Actions -->
+        <div class="fp-actions">
+          <button class="btn btn-apply" @click="loadAdverts" :disabled="loading || isDateRangeInvalid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>{{ loading ? 'Loading…' : 'Apply' }}</span>
+          </button>
+          <button class="btn btn-reset" @click="resetFilters">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+            Reset
+          </button>
+          <button class="btn btn-export" @click="exportData" :disabled="adverts.length === 0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+          <p v-if="isDateRangeInvalid" class="fp-error">⚠ End date must be after start date</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════
+         RESULTS AREA
+    ═════════════════════════════════════════════════════ -->
+    <section class="results-section">
+
+      <!-- Summary strip -->
+      <div class="summary-strip">
+        <div class="ss-left">
+          <span class="ss-count">{{ filteredAdverts.length }}</span>
+          <span class="ss-label">advert{{ filteredAdverts.length !== 1 ? 's' : '' }}</span>
+        </div>
+        <div class="ss-stats">
+          <div class="ss-stat">
+            <span class="ss-stat__label">Total Value</span>
+            <span class="ss-stat__value">{{ formatCurrency(statistics.totalAmount) }}</span>
+          </div>
+          <div class="ss-divider"></div>
+          <div class="ss-stat">
+            <span class="ss-stat__label">Average</span>
+            <span class="ss-stat__value">{{ formatCurrency(statistics.averageAmount) }}</span>
+          </div>
+          <div class="ss-divider"></div>
+          <div class="ss-stat">
+            <span class="ss-stat__label">Discounts</span>
+            <span class="ss-stat__value ss-stat__value--red">{{ formatCurrency(statistics.totalDiscount) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div v-if="loading" class="state-loading">
+        <div class="spinner"></div>
+        <p>Loading adverts…</p>
+      </div>
+
+      <!-- Empty -->
+      <div v-if="!loading && filteredAdverts.length === 0" class="state-empty">
+        <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="8" width="48" height="48" rx="6" stroke="#CBD5E1" stroke-width="3"/><line x1="20" y1="26" x2="44" y2="26" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/><line x1="20" y1="34" x2="36" y2="34" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/></svg>
+        <h3>No adverts found</h3>
+        <p>{{ searchQuery || selectedUserId || selectedStatus ? 'Try adjusting your filters or date range.' : 'No adverts were created in this date range.' }}</p>
+        <div class="state-empty__actions">
+          <button class="btn btn-new" @click="createNewAdvert">Create New Advert</button>
+          <button v-if="searchQuery || selectedUserId || selectedStatus" class="btn btn-reset" @click="resetFilters">Clear Filters</button>
+        </div>
+      </div>
+
+      <!-- ── TABLE ── -->
+      <template v-if="!loading && filteredAdverts.length > 0">
+        <div class="tbl-wrap">
+          <table class="adv-tbl">
+            <thead>
+              <tr>
+                <th class="tc-ref">Ref #</th>
+                <th class="tc-client">Client</th>
+                <th class="tc-title">Advert Title</th>
+                <th class="tc-by">Captured By</th>
+                <th class="tc-product">Product / Size</th>
+                <th class="tc-office">Office / Ref</th>
+                <th class="tc-amount">Amount</th>
+                <th class="tc-status">Status</th>
+                <th class="tc-date">Date</th>
+                <th class="tc-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="advert in filteredAdverts" :key="advert.id" class="adv-row">
+
+                <td class="tc-ref">
+                  <code class="ref-chip">{{ advert.reference }}</code>
+                </td>
+
+                <td class="tc-client">
+                  <span class="c1">{{ advert.clientName || '—' }}</span>
+                  <span v-if="advert.client?.contactPerson" class="c2">{{ advert.client.contactPerson }}</span>
+                </td>
+
+                <td class="tc-title">
+                  <span class="c1">{{ advert.advertTitle || '—' }}</span>
+                </td>
+
+                <td class="tc-by">
+                  <span class="c1">{{ advert.createdBy?.name || 'Unknown' }}</span>
+                  <span class="c2 c-cap">{{ advert.createdBy?.role || '' }}</span>
+                </td>
+
+                <td class="tc-product">
+                  <span class="c1">{{ advert.product?.name || 'N/A' }}</span>
+                  <span v-if="advert.adSize" class="chip chip-size">{{ advert.adSize }}</span>
+                  <span v-if="advert.revenueStream" class="chip chip-rev">{{ advert.revenueStream }}</span>
+                  <span v-if="advert.costStream" class="chip chip-cost">{{ advert.costStream }}</span>
+                </td>
+
+                <td class="tc-office">
+                  <span v-if="advert.officeLocation" class="c1">{{ advert.officeLocation }}</span>
+                  <span v-if="advert.clientRefNo" class="c2">{{ advert.clientRefNo }}</span>
+                  <span v-if="!advert.officeLocation && !advert.clientRefNo" class="c-empty">—</span>
+                </td>
+
+                <td class="tc-amount">
+                  <span class="amount-val">{{ formatCurrency(advert.totalAmount) }}</span>
+                  <span v-if="advert.discount > 0" class="chip chip-disc">-{{ advert.discount }}%</span>
+                </td>
+
+                <td class="tc-status">
+                  <span :class="'sbadge sbadge--' + getStatusClass(advert.status)">
+                    {{ getStatusLabel(advert.status) }}
+                  </span>
+                </td>
+
+                <td class="tc-date">
+                  <span class="c1">{{ formatDate(advert.createdAt) }}</span>
+                  <span class="c2">{{ formatTime(advert.createdAt) }}</span>
+                </td>
+
+                <td class="tc-actions">
+                  <div class="act-group">
+                    <div class="act-wrap">
+                      <button class="act-btn act-view" @click="viewAdvert(advert)" aria-label="View advert">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                      </button>
+                      <span class="act-tip">View</span>
+                    </div>
+                    <div v-if="advert.status === 'draft'" class="act-wrap">
+                      <button class="act-btn act-edit" @click="editAdvert(advert)" aria-label="Edit advert">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                      </button>
+                      <span class="act-tip">Edit draft</span>
+                    </div>
+                    <div v-if="advert.attachments?.length > 0" class="act-wrap">
+                      <button class="act-btn act-file" @click="downloadAttachments(advert)" aria-label="Open attachments">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                        <em class="act-badge">{{ advert.attachments.length }}</em>
+                      </button>
+                      <span class="act-tip">{{ advert.attachments.length }} file{{ advert.attachments.length > 1 ? 's' : '' }}</span>
+                    </div>
+                  </div>
+                </td>
+
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
+    </section>
+
+    <!-- FAB -->
+    <button class="fab" @click="createNewAdvert" title="Create New Advert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span class="fab-label">New Advert</span>
     </button>
+
   </div>
 </template>
-
 <script setup>
 import { useAdverts } from '~/composables/useAdverts'
 import { ref, computed, onMounted } from 'vue'
@@ -387,12 +267,27 @@ const UPLOAD_BASE = config.public.uploadBase
 
 // Reactive data
 const adverts = ref([])
+const expandedIds = ref(new Set())
+
+const toggleExpand = (id) => {
+  const s = new Set(expandedIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  expandedIds.value = s
+}
+const isExpanded = (id) => expandedIds.value.has(id)
 const startDate = ref('')
 const endDate = ref('')
 const selectedUserId = ref('')
 const selectedStatus = ref('')
 const searchQuery = ref('')
 const activeQuickRange = ref('today')
+const quickRanges = [
+  { key: 'today',     label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'thisWeek',  label: 'This Week' },
+  { key: 'thisMonth', label: 'This Month' },
+  { key: 'lastMonth', label: 'Last Month' },
+]
 const availableUsers = ref([])
 const statistics = ref({
   totalAdverts: 0,
@@ -470,7 +365,7 @@ const filteredAdverts = computed(() => {
       advert.advertTitle?.toLowerCase().includes(query) ||
       advert.reference?.toLowerCase().includes(query) ||
       advert.createdBy?.name?.toLowerCase().includes(query) ||
-      advert.product?.product_name?.toLowerCase().includes(query)
+      advert.product?.name?.toLowerCase().includes(query)
     )
   }
   
@@ -511,7 +406,17 @@ const loadAdverts = async () => {
     
     console.log('📥 Adverts loaded:', response.data.length)
     
-    adverts.value = response.data || []
+    // API already returns camelCase — only thing left for the frontend is
+    // resolving relative attachment URLs against UPLOAD_BASE.
+    adverts.value = (response.data || []).map(a => ({
+      ...a,
+      attachments: (a.attachments || []).map(f => ({
+        ...f,
+        fullUrl:      f.url          ? (f.url.startsWith('http')          ? f.url          : `${UPLOAD_BASE}${f.url}`)          : null,
+        thumbnailUrl: f.thumbnailUrl ? (f.thumbnailUrl.startsWith('http') ? f.thumbnailUrl : `${UPLOAD_BASE}${f.thumbnailUrl}`) : null,
+      }))
+    }))
+
     statistics.value = {
       totalAdverts: response.count || 0,
       totalAmount: response.statistics?.totalAmount || 0,
@@ -612,43 +517,51 @@ const exportData = async () => {
   try {
     // Prepare CSV data
     const headers = [
-      'Ref #', 
-      'Captured By', 
-      'Client', 
-      'Advert Title', 
-      'Product', 
+      'Ref #',
+      'Captured By',
+      'Client',
+      'Advert Title',
+      'Product',
       'Ad Size',
-      'Base Price', 
-      'Surcharge', 
-      'Discount', 
+      'Office Location',
+      'Client Ref No',
+      'Revenue Stream',
+      'Cost Stream',
+      'Base Price',
+      'Surcharge',
+      'Discount',
       'Total Amount',
-      'Status', 
-      'Created At', 
-      'Start Date', 
+      'Status',
+      'Created At',
+      'Start Date',
       'End Date',
       'Payment Method',
       'User Email',
       'User Role'
     ]
-    
+
     const csvData = adverts.value.map(advert => [
       advert.reference,
-      advert.createdBy?.name || 'Unknown',
-      advert.clientName,
-      advert.advertTitle,
-      advert.product?.product_name || '',
-      advert.adSize || '',
-      advert.basePrice || 0,
-      advert.surcharge || 0,
-      advert.discount || 0,
-      advert.totalAmount || 0,
+      advert.createdBy?.name    || 'Unknown',
+      advert.clientName         || '',
+      advert.advertTitle        || '',
+      advert.product?.name      || '',
+      advert.adSize             || '',
+      advert.officeLocation     || '',
+      advert.clientRefNo        || '',
+      advert.revenueStream      || '',
+      advert.costStream         || '',
+      advert.basePrice          || 0,
+      advert.surcharge          || 0,
+      advert.discount           || 0,
+      advert.totalAmount        || 0,
       advert.status,
       new Date(advert.createdAt).toLocaleString(),
       advert.startDate ? new Date(advert.startDate).toLocaleDateString() : '',
-      advert.endDate ? new Date(advert.endDate).toLocaleDateString() : '',
-      advert.paymentMethod || '',
-      advert.createdBy?.email || '',
-      advert.createdBy?.role || ''
+      advert.endDate   ? new Date(advert.endDate).toLocaleDateString()   : '',
+      advert.paymentMethod      || '',
+      advert.createdBy?.email   || '',
+      advert.createdBy?.role    || ''
     ])
     
     // Add summary row
@@ -711,12 +624,8 @@ const downloadAttachments = async (advert) => {
   try {
     if (advert.attachments?.length > 0) {
       advert.attachments.forEach(attachment => {
-        if (attachment.url) {
-          // Prepend the upload base URL if it's a relative path
-          const fullUrl = attachment.url.startsWith('http') 
-            ? attachment.url 
-            : `${UPLOAD_BASE}${attachment.url}`
-          window.open(fullUrl, '_blank')
+        if (attachment.fullUrl) {
+          window.open(attachment.fullUrl, '_blank')
         }
       })
     } else {
@@ -802,697 +711,712 @@ onMounted(() => {
   loadAdverts()
 })
 </script>
-
 <style scoped>
-/* ... keep all your existing styles ... */
-.date-range-adverts-page {
+/* ══════════════════════════════════════════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════════════════════════════════════════ */
+.rp-page {
+  --navy:        #003366;
+  --navy-light:  #004080;
+  --red:         #E31E24;
+  --blue:        #0066CC;
+  --blue-lt:     #EEF4FF;
+
+  --surface:     #FFFFFF;
+  --page-bg:     #F0F4F8;
+  --border:      #D1D9E0;
+  --border-lt:   #E8ECF0;
+
+  --text-1:      #0F172A;   /* headings */
+  --text-2:      #334155;   /* body */
+  --text-3:      #64748B;   /* secondary */
+  --text-4:      #94A3B8;   /* hint */
+
+  --green-text:  #166534;
+  --green-bg:    #F0FDF4;
+  --green-bd:    #86EFAC;
+
+  --cyan-text:   #155E75;
+  --cyan-bg:     #ECFEFF;
+  --cyan-bd:     #67E8F9;
+
+  --red-text:    #991B1B;
+  --red-bg:      #FEF2F2;
+  --red-bd:      #FECACA;
+
+  --amber-text:  #78350F;
+  --amber-bg:    #FFFBEB;
+  --amber-bd:    #FCD34D;
+
+  --radius:      2px;
+  --radius-lg:   2px;
+  --radius-xl:   2px;
+
+  --ring:        0 0 0 3px rgba(0, 102, 204, .15);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:   0 4px 16px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.05);
+  --shadow-lg:   0 10px 40px rgba(0,0,0,.10), 0 4px 12px rgba(0,0,0,.06);
+
+  --t: 140ms ease;
+  --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   GOOGLE FONT IMPORT (IBM Plex Sans — clean & professional)
+══════════════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@600&display=swap');
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   PAGE SHELL
+══════════════════════════════════════════════════════════════════════════════ */
+.rp-page {
   width: 100%;
+  min-height: 100vh;
+  background: var(--page-bg);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-2);
+  padding-bottom: 96px;
 }
 
-/* Header Styles */
-.page-header {
-  background: white;
-  padding: 20px 30px;
-  border-radius: 10px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.header-title {
-  flex: 1;
-}
-
-.page-icon {
-  margin-right: 10px;
-}
-
-.page-header h1 {
-  color: #003366;
-  margin-bottom: 5px;
-  font-size: 1.8em;
-}
-
-.page-subtitle {
-  color: #666;
-  margin: 5px 0 0;
-  font-size: 1em;
-}
-
-.header-actions {
-  display: flex;
-  gap: 15px;
-}
-
-.btn {
+/* ══════════════════════════════════════════════════════════════════════════════
+   ERROR BANNER
+══════════════════════════════════════════════════════════════════════════════ */
+.rp-error {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 0.95em;
-  transition: all 0.3s;
-  font-weight: 500;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #218838;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
-}
-
-.header-stats {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  background: white;
-  padding: 15px 20px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  flex: 1;
-  min-width: 200px;
-  border-left: 4px solid;
-}
-
-.stat-icon {
-  font-size: 2em;
-  opacity: 0.8;
-}
-
-.stat-content {
-  flex: 1;
-}
-
-.stat-label {
-  font-size: 0.9em;
-  color: #666;
-  margin-bottom: 5px;
-}
-
-.stat-value {
-  font-size: 1.4em;
-  font-weight: 700;
-}
-
-.stat-primary { border-left-color: #0066CC; }
-.stat-success { border-left-color: #28a745; }
-.stat-warning { border-left-color: #ffc107; }
-.stat-info { border-left-color: #17a2b8; }
-
-/* Content Card */
-.content-card {
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-/* Filter Section */
-.date-filter-section {
-  background: #f8f9fa;
-  padding: 25px;
-  border-radius: 8px;
-  margin-bottom: 30px;
-  border: 1px solid #dee2e6;
-}
-
-.filter-header {
-  margin-bottom: 20px;
-}
-
-.filter-header h3 {
-  color: #003366;
-  margin: 0;
-  font-size: 1.3em;
-}
-
-.date-range-controls {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.date-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 150px;
-}
-
-.date-input-group label {
-  font-size: 0.9em;
-  font-weight: 500;
-  color: #495057;
-}
-
-.date-input {
-  padding: 10px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 5px;
-  font-size: 0.95em;
-  background: white;
-}
-
-.date-input:focus {
-  outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-}
-
-.quick-date-buttons {
-  display: flex;
   gap: 10px;
-  flex-wrap: wrap;
+  margin: 12px 16px;
+  padding: 12px 16px;
+  background: var(--red-bg);
+  color: var(--red-text);
+  border: 1px solid var(--red-bd);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.rp-error svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   FILTER PANEL
+══════════════════════════════════════════════════════════════════════════════ */
+.filter-panel {
+  margin: 16px 16px 0;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
 
-.btn-outline {
-  background: white;
-  color: #0066CC;
-  border: 1px solid #0066CC;
-  padding: 8px 15px;
-}
-
-.btn-outline:hover {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-active {
-  background: #0066CC !important;
-  color: white !important;
-}
-
-.additional-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 25px;
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.filter-group label {
-  font-size: 0.9em;
-  font-weight: 500;
-  color: #495057;
-}
-
-.filter-select, .search-input {
-  padding: 10px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 5px;
-  font-size: 0.95em;
-  background: white;
-  width: 100%;
-}
-
-.filter-actions {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
-.btn-primary {
-  background: #E31E24;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #c01820;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(227, 30, 36, 0.2);
-}
-
-.btn-secondary {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #0052a3;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(0, 102, 204, 0.2);
-}
-
-.date-error {
-  color: #dc3545;
-  margin-top: 10px;
-  font-size: 0.9em;
+/* Head bar */
+.filter-panel__head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--navy);
+  color: #fff;
+}
+
+.filter-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: #fff;
+}
+
+.fp-icon {
+  width: 20px;
+  height: 20px;
+  stroke: #fff;
+  flex-shrink: 0;
+}
+
+/* Body */
+.filter-panel__body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Rows inside body */
+.fp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+/* Field */
+.fp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 130px;
+  flex: 0 0 auto;
+}
+
+.fp-field--search { flex: 1; min-width: 200px; }
+
+.fp-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-3);
+}
+
+.fp-input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-1);
+  background: var(--surface);
+  transition: border-color var(--t), box-shadow var(--t);
+  outline: none;
+}
+.fp-input:focus {
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+.fp-select { cursor: pointer; }
+
+/* Search field */
+.fp-search-wrap {
+  position: relative;
+}
+.fp-search-icon {
+  position: absolute;
+  left: 10px; top: 50%;
+  transform: translateY(-50%);
+  width: 16px; height: 16px;
+  stroke: var(--text-4);
+  pointer-events: none;
+}
+.fp-input--search { padding-left: 36px; width: 100%; }
+
+/* Quick-range pills */
+.fp-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-end;
+  padding-bottom: 1px;
+}
+
+.qr-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 1px;
+  background: #fff;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: all var(--t);
+  white-space: nowrap;
+}
+.qr-btn:hover  { border-color: var(--blue); color: var(--blue); background: var(--blue-lt); }
+.qr-btn.active { border-color: var(--blue); color: #fff; background: var(--blue); }
+
+/* Actions row */
+.fp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-lt);
+}
+
+.fp-error {
+  font-size: 12px;
+  color: var(--red-text);
+  margin: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .filter-panel { margin: 8px 8px 0; border-radius: var(--radius-lg); }
+  .filter-panel__head { padding: 14px 16px; }
+  .filter-panel__body { padding: 14px 16px; gap: 12px; }
+  .fp-row { flex-direction: column; align-items: stretch; }
+  .fp-field { min-width: unset; flex: unset; }
+  .fp-field--search { min-width: unset; }
+  .fp-quick { justify-content: flex-start; }
+  .fp-actions .btn { flex: 1; justify-content: center; min-width: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BUTTONS (shared)
+══════════════════════════════════════════════════════════════════════════════ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t), box-shadow var(--t), transform var(--t), opacity var(--t);
+  outline: none;
+}
+.btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: scale(.97); }
+
+.btn-new    { background: #fff; color: var(--navy); border: none; }
+.btn-new:hover:not(:disabled) { background: #EEF4FF; }
+
+.btn-apply  { background: var(--red); color: #fff; }
+.btn-apply:hover:not(:disabled) { background: #C0181E; box-shadow: 0 4px 12px rgba(227,30,36,.3); }
+
+.btn-reset  { background: var(--blue-lt); color: var(--blue); border: 1.5px solid rgba(0,102,204,.2); }
+.btn-reset:hover:not(:disabled) { background: #dce9ff; }
+
+.btn-export { background: var(--page-bg); color: var(--text-2); border: 1.5px solid var(--border); }
+.btn-export:hover:not(:disabled) { background: #E2E8F0; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESULTS SECTION
+══════════════════════════════════════════════════════════════════════════════ */
+.results-section {
+  margin: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Summary strip */
+.summary-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border-bottom: 1px solid var(--border-lt);
+  box-shadow: var(--shadow-sm);
+}
+
+.ss-left {
+  display: flex;
+  align-items: baseline;
   gap: 5px;
 }
-
-/* Results Section */
-.results-section {
-  margin-top: 30px;
+.ss-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1;
+}
+.ss-label {
+  font-size: 13px;
+  color: var(--text-3);
+  font-weight: 500;
 }
 
-.results-header {
+.ss-stats {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 15px;
+  gap: 0;
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-.results-header h3 {
-  color: #003366;
-  margin: 0;
-}
-
-.results-summary {
+.ss-stat {
   display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  padding: 6px 16px;
+}
+.ss-stat__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-4);
+}
+.ss-stat__value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+.ss-stat__value--red { color: var(--red-text); }
+.ss-divider { width: 1px; background: var(--border-lt); align-self: stretch; }
+
+@media (max-width: 640px) {
+  .results-section { margin: 8px 8px 0; }
+  .summary-strip { padding: 12px 14px; }
+  .ss-stats { flex: 1; }
+  .ss-stat { flex: 1; padding: 6px 10px; }
+  .ss-stat__value { font-size: 12px; }
 }
 
-.summary-item {
+/* ── States ── */
+.state-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 100px;
-}
-
-.summary-label {
-  font-size: 0.85em;
-  color: #666;
-  margin-bottom: 3px;
-}
-
-.summary-value {
-  font-size: 1.1em;
-  font-weight: 600;
-  color: #003366;
-}
-
-/* Table Styles */
-.table-container {
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-}
-
-.adverts-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1000px;
-}
-
-.adverts-table th {
-  background: #f8f9fa;
-  padding: 15px;
-  text-align: left;
-  font-weight: 600;
-  color: #495057;
-  border-bottom: 2px solid #dee2e6;
-}
-
-.adverts-table td {
-  padding: 15px;
-  border-bottom: 1px solid #dee2e6;
-  vertical-align: top;
-}
-
-.adverts-table tr:hover {
-  background-color: #f8f9fa;
-}
-
-/* Table cell specific styles */
-.ref-cell .ref-number {
-  font-family: monospace;
-  font-weight: 600;
-  color: #003366;
-  background: #f0f7ff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.9em;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.user-name {
-  font-weight: 500;
-  color: #003366;
-}
-
-.user-email {
-  font-size: 0.85em;
-  color: #666;
-}
-
-.user-role {
-  font-size: 0.8em;
-  color: #888;
-  font-style: italic;
-}
-
-.client-name {
-  font-weight: 500;
-  color: #333;
-}
-
-.client-contact {
-  font-size: 0.85em;
-  color: #666;
-}
-
-.title-cell {
-  max-width: 250px;
-  word-wrap: break-word;
-}
-
-.product-cell .product-size {
-  font-size: 0.85em;
-  color: #666;
-  background: #f8f9fa;
-  padding: 2px 6px;
-  border-radius: 3px;
-  display: inline-block;
-  margin-top: 4px;
-}
-
-.amount-display {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.amount {
-  font-weight: 500;
-  color: #28a745;
-}
-
-.discount-badge {
-  font-size: 0.8em;
-  color: #dc3545;
-  background: rgba(220, 53, 69, 0.1);
-  padding: 2px 6px;
-  border-radius: 3px;
-  display: inline-block;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.85em;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.badge-draft {
-  background-color: rgba(255, 193, 7, 0.15);
-  color: #856404;
-  border: 1px solid rgba(255, 193, 7, 0.3);
-}
-
-.badge-pending {
-  background-color: rgba(23, 162, 184, 0.15);
-  color: #0c5460;
-  border: 1px solid rgba(23, 162, 184, 0.3);
-}
-
-.badge-approved {
-  background-color: rgba(40, 167, 69, 0.15);
-  color: #155724;
-  border: 1px solid rgba(40, 167, 69, 0.3);
-}
-
-.badge-rejected {
-  background-color: rgba(220, 53, 69, 0.15);
-  color: #721c24;
-  border: 1px solid rgba(220, 53, 69, 0.3);
-}
-
-.badge-default {
-  background-color: rgba(108, 117, 125, 0.15);
-  color: #343a40;
-  border: 1px solid rgba(108, 117, 125, 0.3);
-}
-
-.date-display-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.date {
-  font-size: 0.9em;
-  color: #333;
-}
-
-.time {
-  font-size: 0.85em;
-  color: #666;
-}
-
-.actions-cell .action-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.85em;
-}
-
-.btn-info {
-  background: #17a2b8;
-  color: white;
-}
-
-.btn-info:hover {
-  background: #138496;
-}
-
-.btn-warning {
-  background: #ffc107;
-  color: #333;
-}
-
-.btn-warning:hover {
-  background: #e0a800;
-}
-
-.btn-download {
-  background: #6f42c1;
-  color: white;
-}
-
-.btn-download:hover {
-  background: #5a32a3;
-}
-
-/* Loading State */
-.loading-state {
-  text-align: center;
-  padding: 40px;
+  gap: 14px;
+  padding: 64px 24px;
+  background: var(--surface);
+  color: var(--text-3);
+  border-radius: 1px;
 }
 
 .spinner {
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #0066CC;
+  width: 36px; height: 36px;
+  border: 3px solid var(--border-lt);
+  border-top-color: var(--blue);
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 15px;
+  animation: spin .7s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 40px 20px;
-  color: #666;
-  border: 2px dashed #dee2e6;
-  border-radius: 8px;
-  margin-top: 20px;
-}
-
-.empty-icon {
-  font-size: 3em;
-  margin-bottom: 15px;
-  opacity: 0.5;
-}
-
-.empty-state h3 {
-  color: #333;
-  margin-bottom: 10px;
-  font-weight: 500;
-}
-
-.empty-state p {
-  margin-bottom: 10px;
-}
-
-.empty-state-actions {
+.state-empty {
   display: flex;
-  gap: 15px;
-  margin-top: 20px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.empty-state-actions .btn {
-  min-width: 180px;
-  padding: 12px 20px;
-}
-
-/* Error Message */
-.error-message {
-  background-color: #f8d7da;
-  color: #721c24;
-  padding: 12px 20px;
-  border-radius: 6px;
-  margin-bottom: 20px;
-  border: 1px solid #f5c6cb;
-}
-
-/* Floating Action Button */
-.floating-action-btn {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 50px;
-  padding: 15px 25px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 10px;
+  padding: 56px 24px;
+  background: var(--surface);
+  border-radius: 1px;
+  text-align: center;
+  color: var(--text-3);
+}
+.state-empty svg { width: 64px; height: 64px; opacity: .5; margin-bottom: 4px; }
+.state-empty h3  { font-size: 16px; font-weight: 700; color: var(--text-2); margin: 0; }
+.state-empty p   { font-size: 13px; margin: 0; max-width: 340px; }
+.state-empty__actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TABLE WRAPPER — scrollable
+══════════════════════════════════════════════════════════════════════════════ */
+.tbl-wrap {
+  /* THIS IS THE KEY: overflow must be set HERE and the table gets a min-width */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--surface);
+  border-radius: 1px;
+  box-shadow: var(--shadow-md);
+  /* Custom thin scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.tbl-wrap::-webkit-scrollbar        { height: 6px; }
+.tbl-wrap::-webkit-scrollbar-track  { background: transparent; }
+.tbl-wrap::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 1px; }
+.tbl-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-4); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TABLE  — min-width forces horizontal scroll, no column squishing
+══════════════════════════════════════════════════════════════════════════════ */
+.adv-tbl {
+  width: 100%;
+  min-width: 980px;   /* ← THIS makes horizontal scroll kick in on small screens */
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+/* ── Column widths ── */
+.tc-ref     { width: 180px; }
+.tc-client  { width: 160px; }
+.tc-title   { width: 190px; }
+.tc-by      { width: 140px; }
+.tc-product { width: 160px; }
+.tc-office  { width: 130px; }
+.tc-amount  { width: 110px; }
+.tc-status  { width: 130px; }
+.tc-date    { width: 100px; }
+.tc-actions { width: 100px; }
+
+/* ── Header ── */
+.adv-tbl thead tr {
+  background: var(--navy);
+}
+
+.adv-tbl th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.7);
+  white-space: nowrap;
+  border-right: 1px solid rgba(255,255,255,.07);
+}
+.adv-tbl th:last-child { border-right: none; }
+
+/* Sticky Ref col */
+.adv-tbl th.tc-ref,
+.adv-tbl td.tc-ref {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.adv-tbl th.tc-ref { background: var(--navy); }
+.adv-tbl td.tc-ref {
+  background: #fff;
+  border-right: 1px solid var(--border-lt);
+  box-shadow: 2px 0 6px -2px rgba(0,0,0,.06);
+  overflow: visible;
+  white-space: nowrap;
+}
+.adv-tbl .adv-row:hover td.tc-ref { background: #EEF4FF; }
+
+/* ── Body rows ── */
+.adv-tbl tbody tr {
+  border-bottom: 1px solid var(--border-lt);
+  transition: background var(--t);
+}
+.adv-tbl tbody tr:last-child { border-bottom: none; }
+.adv-tbl tbody tr.adv-row:hover { background: #EEF4FF; }
+
+/* Subtle zebra on non-hover */
+.adv-tbl tbody tr:nth-child(even) { background: #FAFBFC; }
+.adv-tbl tbody tr:nth-child(even):hover { background: #EEF4FF; }
+
+.adv-tbl td {
+  padding: 10px 14px;
+  vertical-align: top;
+  border-right: 1px solid var(--border-lt);
+  overflow: visible;
+}
+.adv-tbl td:last-child { border-right: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CELL CONTENT ATOMS
+══════════════════════════════════════════════════════════════════════════════ */
+
+/* Primary + secondary lines */
+.c1 {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.c2 {
+  display: block;
+  font-size: 11px;
+  color: var(--text-4);
+  line-height: 1.4;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Client and Title columns: always show full text, never truncate */
+.tc-client .c1,
+.tc-client .c2,
+.tc-title  .c1 {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
+}
+
+.c-cap { text-transform: capitalize; }
+.c-empty { color: var(--border); font-size: 13px; }
+
+/* Ref chip */
+.ref-chip {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--blue-lt);
+  border: 1px solid rgba(0,102,204,.15);
+  padding: 3px 8px;
+  border-radius: 1px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+/* Amount */
+.amount-val {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+/* Generic chips */
+.chip {
+  display: inline-block;
+  margin-top: 3px;
+  margin-right: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 1px;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.chip-disc { color: var(--red-text);   background: var(--red-bg);   border: 1px solid var(--red-bd);   }
+.chip-size { color: var(--text-3);     background: var(--page-bg);  border: 1px solid var(--border); white-space: normal; word-break: break-word; }
+.chip-rev  { color: var(--green-text); background: var(--green-bg); border: 1px solid var(--green-bd); }
+.chip-cost { color: var(--cyan-text);  background: var(--cyan-bg);  border: 1px solid var(--cyan-bd);  }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   STATUS BADGES
+══════════════════════════════════════════════════════════════════════════════ */
+.sbadge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 1px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: .03em;
+}
+
+.sbadge--draft    { background: var(--amber-bg); color: var(--amber-text); border: 1px solid var(--amber-bd); }
+.sbadge--pending  { background: #EEF4FF;         color: #1E40AF;           border: 1px solid #BFDBFE;         }
+.sbadge--approved { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-bd); }
+.sbadge--rejected { background: var(--red-bg);   color: var(--red-text);   border: 1px solid var(--red-bd);   }
+.sbadge--default  { background: var(--page-bg);  color: var(--text-3);     border: 1px solid var(--border);   }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ACTION ICON BUTTONS
+══════════════════════════════════════════════════════════════════════════════ */
+.act-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.act-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.act-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--t), transform var(--t);
+  flex-shrink: 0;
+}
+.act-btn svg { width: 15px; height: 15px; pointer-events: none; }
+.act-btn:active { transform: scale(.92); }
+
+.act-view { background: #E0F2FE; color: #0369A1; }
+.act-view:hover { background: #BAE6FD; }
+
+.act-edit { background: var(--amber-bg); color: #B45309; }
+.act-edit:hover { background: var(--amber-bd); }
+
+.act-file { background: #F3E8FF; color: #7C3AED; }
+.act-file:hover { background: #E9D5FF; }
+
+/* file count badge */
+.act-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  background: #7C3AED;
+  color: #fff;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+  font-family: var(--font);
+}
+
+/* Tooltip */
+.act-tip {
+  pointer-events: none;
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%; transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--text-1);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 9px;
+  border-radius: var(--radius);
+  opacity: 0;
+  transition: opacity var(--t);
+  z-index: 9999;
+}
+.act-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 50%; transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--text-1);
+}
+.act-wrap:hover .act-tip { opacity: 1; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   FAB
+══════════════════════════════════════════════════════════════════════════════ */
+.fab {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  display: flex; align-items: center; gap: 8px;
+  height: 48px;
+  padding: 0 22px;
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  border-radius: 1px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,51,102,.35);
   z-index: 100;
-  transition: all 0.3s ease;
+  transition: background var(--t), box-shadow var(--t), transform var(--t);
 }
+.fab svg { width: 18px; height: 18px; flex-shrink: 0; }
+.fab:hover { background: var(--navy-light); box-shadow: 0 6px 28px rgba(0,51,102,.45); transform: translateY(-2px); }
 
-.floating-action-btn:hover {
-  background: #218838;
-  transform: translateY(-3px);
-  box-shadow: 0 6px 15px rgba(40, 167, 69, 0.4);
-}
-
-.fab-icon {
-  font-size: 1.2em;
-}
-
-/* Responsive Styles */
-@media (max-width: 768px) {
-  .page-header,
-  .content-card {
-    padding: 20px;
-  }
-  
-  .header-top {
-    flex-direction: column;
-  }
-  
-  .header-actions {
-    width: 100%;
-  }
-  
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .header-stats {
-    flex-direction: column;
-  }
-  
-  .stat-card {
-    width: 100%;
-  }
-  
-  .date-range-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .date-input-group {
-    width: 100%;
-  }
-  
-  .quick-date-buttons {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .additional-filters {
-    grid-template-columns: 1fr;
-  }
-  
-  .filter-actions {
-    flex-direction: column;
-  }
-  
-  .results-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .results-summary {
-    justify-content: space-between;
-  }
-  
-  .summary-item {
-    min-width: unset;
-    flex: 1;
-  }
-  
-  .fab-text {
-    display: none;
-  }
-  
-  .floating-action-btn {
-    padding: 15px;
-    border-radius: 50%;
-  }
+@media (max-width: 640px) {
+  .fab { width: 52px; height: 52px; padding: 0; justify-content: center; border-radius: 50%; bottom: 20px; right: 16px; }
+  .fab-label { display: none; }
 }
 </style>

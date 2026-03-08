@@ -1,145 +1,128 @@
+<!-- components/editor/BulkPageUpdateModal.vue -->
 <template>
   <Teleport to="body">
-    <div v-if="show" class="modal-overlay" @click.self="handleClose">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>📋 Bulk Page Update</h2>
-          <button class="close-btn" @click="handleClose" aria-label="Close">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="bulk-instructions">
-            <p>Update page numbers for multiple schedules at once. Use the options below to set pages:</p>
+    <div v-if="show" class="bpu-overlay" @click.self="$emit('close')">
+      <div class="bpu-modal">
+
+        <div class="bpu-header">
+          <div class="bpu-header__left">
+            <span class="bpu-header__label">Bulk Edit</span>
+            <span class="bpu-count">{{ schedules.length }} schedule{{ schedules.length !== 1 ? 's' : '' }}</span>
           </div>
-          
-          <!-- Bulk Update Options -->
-          <div class="bulk-options">
-            <div class="option-group">
-              <h3>Quick Actions</h3>
-              <div class="quick-actions">
-                <button class="btn btn-info" @click="setAllToZero">
-                  Set All to 0
-                </button>
-                <button class="btn btn-info" @click="assignSequentialPages">
-                  Assign Sequential Pages
-                </button>
-                <button class="btn btn-info" @click="assignRandomPages">
-                  Assign Random Pages (1-20)
-                </button>
-              </div>
+          <button class="bpu-close" @click="$emit('close')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- Apply-to-all strip -->
+        <div class="bpu-strip">
+          <span class="bpu-strip__label">Apply to all:</span>
+          <div class="bpu-apply-group">
+            <span class="bpu-apply-lbl">Date</span>
+            <div class="bpu-apply-row">
+              <input type="date" class="bpu-inp bpu-inp--date" v-model="applyDate" />
+              <button class="bpu-apply-btn" @click="applyDateAll" :disabled="!applyDate">Apply</button>
             </div>
-            
-            <div class="option-group">
-              <h3>Manual Update</h3>
-              <div class="manual-update">
-                <div class="input-group">
-                  <label>Set all to page:</label>
-                  <div class="input-with-button">
-                    <input 
-                      type="number" 
-                      v-model="manualPage" 
-                      min="0" 
-                      class="page-input"
-                      placeholder="Enter page number"
-                    />
-                    <button class="btn btn-primary" @click="setAllToManualPage">
-                      Apply
-                    </button>
+          </div>
+          <div class="bpu-apply-group">
+            <span class="bpu-apply-lbl">Page / Slot</span>
+            <div class="bpu-apply-row">
+              <input type="number" class="bpu-inp bpu-inp--num" v-model.number="applyPage" min="0" placeholder="e.g. 5" />
+              <button class="bpu-apply-btn" @click="applyPageAll" :disabled="applyPage === null || applyPage === ''">Apply</button>
+            </div>
+          </div>
+          <div class="bpu-apply-group">
+            <span class="bpu-apply-lbl">Sequential pages</span>
+            <div class="bpu-apply-row">
+              <input type="number" class="bpu-inp bpu-inp--num" v-model.number="seqStart" min="1" placeholder="Start" />
+              <button class="bpu-apply-btn" @click="applySequential" :disabled="!seqStart">Apply</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bpu-table-wrap">
+          <table class="bpu-tbl">
+            <thead>
+              <tr>
+                <th class="bc-advert">Advert · Client</th>
+                <th class="bc-curr">Current Date</th>
+                <th class="bc-new">New Date</th>
+                <th class="bc-curr">Cur. Page</th>
+                <th class="bc-new">New Page</th>
+                <th class="bc-diff">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(s, idx) in schedules" :key="s.schedule_id"
+                  class="bpu-row"
+                  :class="{ 'bpu-row--alt': idx%2!==0, 'bpu-row--dirty': rowIsDirty(idx) }">
+                <td class="bc-advert">
+                  <div class="adv-title">{{ s.advert_title }}</div>
+                  <div class="adv-sub">
+                    <span class="ref-chip">ADV-{{ s.advert_id }}</span>
+                    <span class="adv-client">{{ s.company_name }}</span>
                   </div>
-                </div>
-              </div>
-            </div>
+                </td>
+                <td class="bc-curr"><span class="curr-val">{{ fmtDate(s.run_date) }}</span></td>
+                <td class="bc-new">
+                  <input type="date" class="bpu-cell-inp"
+                         :value="updates[idx].run_date"
+                         @change="updates[idx].run_date = $event.target.value" />
+                </td>
+                <td class="bc-curr"><span class="curr-val mono">{{ s.page || '—' }}</span></td>
+                <td class="bc-new">
+                  <input type="number" class="bpu-cell-inp bpu-cell-inp--num"
+                         v-model.number="updates[idx].page" min="0" />
+                </td>
+                <td class="bc-diff">
+                  <template v-if="rowIsDirty(idx)">
+                    <span v-if="updates[idx].run_date !== (s.run_date||'').split('T')[0]" class="diff-chip diff-chip--date">date</span>
+                    <span v-if="updates[idx].page !== (s.page||0)" class="diff-chip diff-chip--page">
+                      {{ s.page||0 }} → {{ updates[idx].page }}
+                    </span>
+                  </template>
+                  <span v-else class="diff-none">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Summary -->
+        <div class="bpu-summary">
+          <div class="bpu-summary__stats">
+            <span class="stat-item"><span class="stat-n">{{ changedCount }}</span> rows changed</span>
+            <span class="stat-sep">·</span>
+            <span class="stat-item"><span class="stat-n">{{ schedules.length - changedCount }}</span> unchanged</span>
           </div>
-          
-          <!-- Schedules List -->
-          <div class="schedules-list-container">
-            <h3>Selected Schedules ({{ schedules.length }})</h3>
-            
-            <div class="table-header">
-              <div class="header-cell">Advert Title</div>
-              <div class="header-cell">Run Date</div>
-              <div class="header-cell">Current Page</div>
-              <div class="header-cell">New Page</div>
-            </div>
-            
-            <div class="schedules-list">
-              <div 
-                v-for="(schedule, index) in schedules" 
-                :key="schedule.schedule_id"
-                class="schedule-item"
-              >
-                <div class="item-cell advert-title">
-                  {{ schedule.advert_title }}
-                </div>
-                <div class="item-cell run-date">
-                  {{ formatDate(schedule.run_date) }}
-                </div>
-                <div class="item-cell current-page">
-                  {{ schedule.page || 0 }}
-                </div>
-                <div class="item-cell new-page">
-                  <input 
-                    type="number" 
-                    v-model="updates[index].page"
-                    min="0"
-                    class="page-input-sm"
-                    @input="validatePageInput(index)"
-                  />
-                </div>
+          <div v-if="changedRows.length" class="bpu-preview">
+            <div v-for="u in changedRows" :key="u.scheduleId" class="preview-row">
+              <span class="preview-name">{{ schedules.find(s=>s.schedule_id===u.scheduleId)?.advert_title }}</span>
+              <div class="preview-chips">
+                <span v-if="u.run_date" class="prev-chip prev-chip--date">
+                  {{ fmtDate(schedules.find(s=>s.schedule_id===u.scheduleId)?.run_date) }} → {{ fmtDate(u.run_date) }}
+                </span>
+                <span v-if="u.page !== undefined" class="prev-chip prev-chip--page">
+                  pg {{ schedules.find(s=>s.schedule_id===u.scheduleId)?.page||0 }} → {{ u.page }}
+                </span>
               </div>
-            </div>
-          </div>
-          
-          <!-- Preview Changes -->
-          <div class="preview-section">
-            <h3>Preview Changes</h3>
-            <div class="preview-stats">
-              <div class="stat-item">
-                <span class="stat-label">Total schedules:</span>
-                <span class="stat-value">{{ schedules.length }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Pages updated:</span>
-                <span class="stat-value">{{ updatedSchedulesCount }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">No change:</span>
-                <span class="stat-value">{{ unchangedSchedulesCount }}</span>
-              </div>
-            </div>
-            
-            <div v-if="updatedSchedulesCount > 0" class="changes-list">
-              <div v-for="(update, index) in updates" :key="index">
-                <div 
-                  v-if="update.page !== (schedules[index].page || 0)"
-                  class="change-item"
-                >
-                  <span class="advert-name">{{ schedules[index].advert_title }}</span>
-                  <span class="page-change">
-                    {{ schedules[index].page || 0 }} → {{ update.page }}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div v-else class="no-changes">
-              No changes detected. Adjust page numbers above.
             </div>
           </div>
         </div>
-        
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="handleClose">
-            Cancel
-          </button>
-          <button 
-            class="btn btn-primary" 
-            @click="handleSave"
-            :disabled="updatedSchedulesCount === 0 || saving"
-          >
-            <span v-if="saving">Saving...</span>
-            <span v-else>Save {{ updatedSchedulesCount }} Changes</span>
-          </button>
+
+        <!-- Footer -->
+        <div class="bpu-footer">
+          <button class="bpu-btn bpu-btn--ghost" @click="resetAll">Reset</button>
+          <div style="display:flex;gap:8px">
+            <button class="bpu-btn bpu-btn--ghost" @click="$emit('close')">Cancel</button>
+            <button class="bpu-btn bpu-btn--save" @click="handleSave" :disabled="changedCount===0||saving">
+              <svg v-if="saving" class="spin-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              {{ saving ? 'Saving…' : `Save ${changedCount} Change${changedCount!==1?'s':''}` }}
+            </button>
+          </div>
         </div>
+
       </div>
     </div>
   </Teleport>
@@ -149,560 +132,128 @@
 import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
-  schedules: {
-    type: Array,
-    default: () => []
-  },
-  show: {
-    type: Boolean,
-    default: false
-  }
+  schedules: { type: Array, default: () => [] },
+  show:      { type: Boolean, default: false }
 })
-
 const emit = defineEmits(['save', 'close'])
 
-// State
-const manualPage = ref('')
-const updates = ref([])
-const saving = ref(false)
+const applyDate = ref('')
+const applyPage = ref('')
+const seqStart  = ref('')
+const updates   = ref([])
+const saving    = ref(false)
 
-// Initialize updates when schedules change
-watch(() => props.schedules, (newSchedules) => {
-  updates.value = newSchedules.map(schedule => ({
-    scheduleId: schedule.schedule_id,
-    page: schedule.page || 0
+watch(() => [props.show, props.schedules], () => {
+  updates.value = props.schedules.map(s => ({
+    scheduleId: s.schedule_id,
+    run_date: (s.run_date||'').split('T')[0],
+    page: s.page || 0
   }))
+  applyDate.value = applyPage.value = seqStart.value = ''
 }, { immediate: true })
 
-// Computed properties
-const updatedSchedulesCount = computed(() => {
-  return updates.value.filter((update, index) => {
-    const currentPage = props.schedules[index].page || 0
-    return update.page !== currentPage
-  }).length
-})
+const applyDateAll = () => { if (!applyDate.value) return; updates.value.forEach(u => u.run_date = applyDate.value); applyDate.value = '' }
+const applyPageAll = () => { const p=parseInt(applyPage.value); if(isNaN(p)) return; updates.value.forEach(u => u.page=p); applyPage.value='' }
+const applySequential = () => { let n=parseInt(seqStart.value); if(isNaN(n)) return; updates.value.forEach(u => u.page=n++); seqStart.value='' }
+const resetAll = () => { updates.value = props.schedules.map(s => ({ scheduleId:s.schedule_id, run_date:(s.run_date||'').split('T')[0], page:s.page||0 })) }
 
-const unchangedSchedulesCount = computed(() => {
-  return props.schedules.length - updatedSchedulesCount.value
-})
-
-// Methods
-const handleClose = () => {
-  emit('close')
+const rowIsDirty = (i) => {
+  const s=props.schedules[i], u=updates.value[i]
+  if (!s||!u) return false
+  return u.run_date !== (s.run_date||'').split('T')[0] || u.page !== (s.page||0)
 }
-
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-UG', {
-    month: 'short',
-    day: 'numeric'
+const changedCount = computed(() => updates.value.filter((_,i) => rowIsDirty(i)).length)
+const changedRows = computed(() =>
+  updates.value.filter((_,i) => rowIsDirty(i)).map((u,_) => {
+    const s = props.schedules.find(s=>s.schedule_id===u.scheduleId)
+    const c = { scheduleId: u.scheduleId }
+    if (u.run_date !== (s?.run_date||'').split('T')[0]) c.run_date = u.run_date
+    if (u.page !== (s?.page||0)) c.page = u.page
+    return c
   })
-}
-
-const validatePageInput = (index) => {
-  const page = updates.value[index].page
-  if (page < 0) {
-    updates.value[index].page = 0
-  }
-}
-
-const setAllToZero = () => {
-  updates.value.forEach(update => {
-    update.page = 0
-  })
-}
-
-const assignSequentialPages = () => {
-  let page = 1
-  updates.value.forEach(update => {
-    update.page = page
-    page++
-  })
-}
-
-const assignRandomPages = () => {
-  updates.value.forEach(update => {
-    update.page = Math.floor(Math.random() * 20) + 1
-  })
-}
-
-const setAllToManualPage = () => {
-  const page = parseInt(manualPage.value)
-  if (!isNaN(page) && page >= 0) {
-    updates.value.forEach(update => {
-      update.page = page
-    })
-    manualPage.value = ''
-  }
-}
+)
 
 const handleSave = async () => {
-  if (updatedSchedulesCount.value === 0) {
-    alert('No changes to save.')
-    return
-  }
-  
+  if (!changedCount.value) return
   saving.value = true
-  try {
-    const changes = updates.value
-      .filter((update, index) => {
-        const currentPage = props.schedules[index].page || 0
-        return update.page !== currentPage
-      })
-      .map(update => ({
-        scheduleId: update.scheduleId,
-        page: update.page
-      }))
-    
-    emit('save', changes)
-  } catch (error) {
-    console.error('Error saving changes:', error)
-    alert('Failed to save changes')
-  } finally {
-    saving.value = false
-  }
+  try { emit('save', changedRows.value) } finally { saving.value = false }
+}
+
+const fmtDate = (d) => {
+  if (!d) return '—'
+  return new Date((d+'').split('T')[0]+'T00:00:00').toLocaleDateString('en-UG',{day:'numeric',month:'short',year:'numeric'})
 }
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-  backdrop-filter: blur(2px);
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  max-width: 800px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.modal-header {
-  padding: 25px 30px;
-  border-bottom: 2px solid #f0f2f5;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #f8f9fa;
-  border-radius: 12px 12px 0 0;
-}
-
-.modal-header h2 {
-  margin: 0;
-  color: #003366;
-  font-size: 1.5em;
-  font-weight: 600;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 2.5em;
-  cursor: pointer;
-  color: #666;
-  line-height: 0.8;
-  padding: 0;
-  width: 35px;
-  height: 35px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.3s;
-}
-
-.close-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #333;
-}
-
-.modal-body {
-  padding: 30px;
-}
-
-.bulk-instructions {
-  background: #e3f2fd;
-  padding: 15px 20px;
-  border-radius: 8px;
-  margin-bottom: 25px;
-  border-left: 4px solid #2196f3;
-}
-
-.bulk-instructions p {
-  margin: 0;
-  color: #1565c0;
-  font-size: 0.95em;
-}
-
-.bulk-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-  margin-bottom: 30px;
-}
-
-@media (max-width: 768px) {
-  .bulk-options {
-    grid-template-columns: 1fr;
-  }
-}
-
-.option-group {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-}
-
-.option-group h3 {
-  margin: 0 0 15px 0;
-  color: #003366;
-  font-size: 1.1em;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #0066CC;
-}
-
-.quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.manual-update {
-  margin-top: 15px;
-}
-
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.input-group label {
-  font-weight: 600;
-  color: #333;
-  font-size: 0.9em;
-}
-
-.input-with-button {
-  display: flex;
-  gap: 10px;
-}
-
-.page-input {
-  flex: 1;
-  padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1em;
-}
-
-.page-input:focus {
-  outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
-}
-
-.schedules-list-container {
-  margin-bottom: 30px;
-}
-
-.schedules-list-container h3 {
-  margin: 0 0 15px 0;
-  color: #003366;
-  font-size: 1.2em;
-}
-
-.table-header {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 10px;
-  padding: 12px 15px;
-  background: #f8f9fa;
-  border-radius: 8px 8px 0 0;
-  border: 1px solid #dee2e6;
-  border-bottom: none;
-  font-weight: 600;
-  color: #333;
-  font-size: 0.9em;
-}
-
-.header-cell {
-  padding: 0 5px;
-}
-
-.schedules-list {
-  border: 1px solid #dee2e6;
-  border-radius: 0 0 8px 8px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.schedule-item {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-  gap: 10px;
-  padding: 12px 15px;
-  border-bottom: 1px solid #eee;
-}
-
-.schedule-item:last-child {
-  border-bottom: none;
-}
-
-.schedule-item:hover {
-  background: #f8f9fa;
-}
-
-.item-cell {
-  padding: 0 5px;
-  display: flex;
-  align-items: center;
-}
-
-.advert-title {
-  font-weight: 600;
-  color: #333;
-  font-size: 0.95em;
-}
-
-.run-date {
-  color: #666;
-  font-size: 0.9em;
-}
-
-.current-page {
-  font-weight: 600;
-  color: #0066CC;
-  font-size: 1em;
-}
-
-.new-page {
-  display: flex;
-  align-items: center;
-}
-
-.page-input-sm {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9em;
-  text-align: center;
-}
-
-.page-input-sm:focus {
-  outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
-}
-
-.preview-section {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-}
-
-.preview-section h3 {
-  margin: 0 0 15px 0;
-  color: #003366;
-  font-size: 1.2em;
-}
-
-.preview-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-@media (max-width: 768px) {
-  .preview-stats {
-    grid-template-columns: 1fr;
-  }
-}
-
-.stat-item {
-  background: white;
-  padding: 15px;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-}
-
-.stat-label {
-  display: block;
-  color: #666;
-  font-size: 0.9em;
-  margin-bottom: 5px;
-}
-
-.stat-value {
-  display: block;
-  font-size: 1.5em;
-  font-weight: 600;
-  color: #0066CC;
-}
-
-.changes-list {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.change-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 15px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-  margin-bottom: 10px;
-}
-
-.advert-name {
-  font-weight: 600;
-  color: #333;
-  font-size: 0.95em;
-}
-
-.page-change {
-  background: #e3f2fd;
-  padding: 6px 12px;
-  border-radius: 12px;
-  font-weight: 600;
-  color: #1565c0;
-  font-size: 0.9em;
-}
-
-.no-changes {
-  text-align: center;
-  padding: 30px;
-  color: #999;
-  font-style: italic;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-}
-
-.modal-footer {
-  padding: 20px 30px;
-  border-top: 2px solid #f0f2f5;
-  display: flex;
-  gap: 15px;
-  justify-content: flex-end;
-  background: #f8f9fa;
-  border-radius: 0 0 12px 12px;
-}
-
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.95em;
-  transition: all 0.3s;
-  min-width: 140px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #5a6268;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(108, 117, 125, 0.3);
-}
-
-.btn-primary {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #0052a3;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 102, 204, 0.3);
-}
-
-.btn-info {
-  background: #17a2b8;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background: #138496;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
-}
-
-@media (max-width: 768px) {
-  .modal-overlay {
-    padding: 10px;
-  }
-  
-  .modal-content {
-    max-height: 95vh;
-  }
-  
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding: 20px;
-  }
-  
-  .table-header,
-  .schedule-item {
-    grid-template-columns: 1fr;
-    gap: 5px;
-  }
-  
-  .header-cell,
-  .item-cell {
-    display: block;
-    padding: 5px 0;
-  }
-  
-  .modal-footer {
-    flex-direction: column;
-  }
-  
-  .btn {
-    width: 100%;
-  }
-}
+.bpu-overlay{position:fixed;inset:0;background:rgba(10,20,40,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;}
+.bpu-modal{background:#fff;border-radius:2px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);font-family:'IBM Plex Sans','Segoe UI',sans-serif;font-size:13px;animation:bpu-in .18s ease-out;}
+@keyframes bpu-in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.bpu-header{background:#1F3864;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:2px solid #E31E24;}
+.bpu-header__left{display:flex;align-items:center;gap:10px;}
+.bpu-header__label{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#9DC3E6;}
+.bpu-count{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:#fff;background:#162d52;border:1px solid #4a6fa5;padding:2px 8px;}
+.bpu-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#9DC3E6;cursor:pointer;padding:4px;border-radius:1px;display:flex;align-items:center;transition:background .12s,color .12s;}
+.bpu-close:hover{background:rgba(255,255,255,.15);color:#fff;}
+.bpu-strip{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;padding:12px 16px;background:#F2F6FB;border-bottom:1px solid #BDD7EE;flex-shrink:0;}
+.bpu-strip__label{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#888;align-self:center;white-space:nowrap;}
+.bpu-apply-group{display:flex;flex-direction:column;gap:4px;}
+.bpu-apply-lbl{font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#999;}
+.bpu-apply-row{display:flex;gap:4px;}
+.bpu-inp{font-family:'IBM Plex Mono',monospace;font-size:12px;border:1px solid #BDD7EE;padding:4px 8px;border-radius:1px;outline:none;background:#fff;}
+.bpu-inp:focus{border-color:#1F3864;box-shadow:0 0 0 2px rgba(31,56,100,.1);}
+.bpu-inp--date{width:140px;}
+.bpu-inp--num{width:72px;text-align:center;}
+.bpu-apply-btn{background:#1F3864;color:#fff;border:none;padding:4px 12px;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;border-radius:1px;}
+.bpu-apply-btn:hover:not(:disabled){background:#162d52;}
+.bpu-apply-btn:disabled{opacity:.4;cursor:not-allowed;}
+.bpu-table-wrap{flex:1;overflow:auto;}
+.bpu-tbl{width:100%;border-collapse:collapse;min-width:680px;}
+.bpu-tbl thead tr{background:#1F3864;color:#fff;}
+.bpu-tbl th{padding:8px 10px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:left;white-space:nowrap;border-right:1px solid #2a4a7c;}
+.bpu-tbl th:last-child{border-right:none;}
+.bc-advert{width:auto;min-width:180px;}
+.bc-curr{width:110px;}
+.bc-new{width:130px;}
+.bc-diff{width:150px;}
+.bpu-row td{padding:7px 10px;border-bottom:1px solid #E8EEF4;border-right:1px solid #F0F4F9;vertical-align:middle;background:#fff;}
+.bpu-row td:last-child{border-right:none;}
+.bpu-row--alt td{background:#F8FAFD;}
+.bpu-row:hover td{background:#EEF4FA !important;}
+.bpu-row--dirty td:first-child{border-left:3px solid #FFB300;}
+.adv-title{font-weight:600;font-size:12px;color:#1F3864;}
+.adv-sub{display:flex;align-items:center;gap:5px;margin-top:2px;}
+.ref-chip{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:#1F3864;background:#DEEAF1;border:1px solid #9DC3E6;padding:0 5px;border-radius:1px;}
+.adv-client{font-size:11px;color:#666;}
+.curr-val{font-size:12px;color:#666;}
+.curr-val.mono{font-family:'IBM Plex Mono',monospace;font-weight:600;color:#1F3864;}
+.bpu-cell-inp{font-family:'IBM Plex Mono',monospace;font-size:12px;border:1px solid #BDD7EE;padding:3px 6px;border-radius:1px;outline:none;width:100%;background:#fff;}
+.bpu-cell-inp:focus{border-color:#1F3864;box-shadow:0 0 0 2px rgba(31,56,100,.1);}
+.bpu-cell-inp--num{text-align:center;max-width:68px;}
+.diff-chip{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:1px;margin-right:3px;}
+.diff-chip--date{background:#DEEAF1;color:#0C5460;border:1px solid #BEE5EB;}
+.diff-chip--page{background:#FFF3CD;color:#856404;border:1px solid #FFEAA0;font-family:'IBM Plex Mono',monospace;}
+.diff-none{color:#ccc;}
+.bpu-summary{border-top:1px solid #E8EEF4;padding:10px 16px;background:#FAFBFD;max-height:130px;overflow-y:auto;flex-shrink:0;}
+.bpu-summary__stats{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.stat-item{font-size:12px;color:#555;}
+.stat-n{font-family:'IBM Plex Mono',monospace;font-weight:700;color:#1F3864;}
+.stat-sep{color:#BDD7EE;}
+.bpu-preview{display:flex;flex-direction:column;gap:3px;}
+.preview-row{display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid #F0F4F9;}
+.preview-row:last-child{border-bottom:none;}
+.preview-name{font-size:11px;font-weight:600;color:#333;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
+.preview-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.prev-chip{font-size:10px;font-weight:600;padding:1px 7px;border-radius:1px;}
+.prev-chip--date{background:#DEEAF1;color:#0C5460;border:1px solid #BEE5EB;}
+.prev-chip--page{background:#FFF3CD;color:#856404;border:1px solid #FFEAA0;font-family:'IBM Plex Mono',monospace;}
+.bpu-footer{padding:10px 16px;border-top:1px solid #E8EEF4;background:#F8FAFD;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.bpu-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 14px;font-size:12px;font-family:inherit;font-weight:500;border:1px solid transparent;cursor:pointer;border-radius:1px;transition:background .12s;}
+.bpu-btn--ghost{background:#fff;border-color:#BDD7EE;color:#555;}
+.bpu-btn--ghost:hover{background:#F2F6FB;}
+.bpu-btn--save{background:#1F3864;color:#fff;border-color:#1F3864;font-weight:600;}
+.bpu-btn--save:hover:not(:disabled){background:#162d52;}
+.bpu-btn--save:disabled{opacity:.6;cursor:not-allowed;}
+.spin-icon{animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>

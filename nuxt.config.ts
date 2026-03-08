@@ -1,4 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   devtools: { enabled: true },
   
@@ -13,6 +14,11 @@ export default defineNuxtConfig({
   css: [
     '@/assets/css/main.css'
   ],
+
+    // Add the Tailwind CSS Vite plugin
+  vite: {
+    plugins: [tailwindcss()],
+  },
 
   runtimeConfig: {
     public: {

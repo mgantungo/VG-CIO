@@ -131,7 +131,9 @@ const handleLogin = async () => {
     })
     
     // Show success message with role
-    alert(`✅ Login successful! Welcome ${result.user.displayRole}`)
+    alert(`✅ Login successful! Welcome ${result.user.displayRole}`);
+
+    //alert(`✅ Login Details - redirect to:  ${result.redirectTo}`);
     
     // Redirect to dashboard
     router.push(result.redirectTo || '/dashboard')
