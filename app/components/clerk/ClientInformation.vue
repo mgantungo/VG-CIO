@@ -32,7 +32,6 @@
         <div v-if="!selectedClient && !disabled && !clientName" class="input-hint">
           Search for existing client or type new client name
         </div>
-        <!-- Show manual entry hint when typing new client -->
         <div v-if="clientName && !selectedClient" class="input-hint new-client-hint">
           <span class="badge">New client: "{{ clientName }}" will be created</span>
         </div>
@@ -60,7 +59,7 @@
       </div>
     </div>
 
-    <!-- Second Row: Email, Phone, and Reference Document (all on one line) -->
+    <!-- Second Row: Email, Phone, and Reference Document -->
     <div class="form-grid three-columns">
       <div class="form-group">
         <div class="form-label">
@@ -109,7 +108,7 @@
         </div>
       </div>
 
-      <!-- Reference Document (now in the same row) -->
+      <!-- Reference Document -->
       <div class="form-group">
         <div class="form-label">
           <label>Reference Document</label>
@@ -141,13 +140,59 @@
       </div>
     </div>
 
+    <!-- Third Row: Market Sector (full-width on its own row) -->
+    <div class="form-grid">
+      <div class="form-group">
+        <div class="form-label">
+          <label>Market Sector</label>
+          <span class="required">*</span>
+        </div>
+        <div class="input-container select-container">
+          <span class="input-icon">🏭</span>
+          <select
+            :value="marketSector"
+            :disabled="disabled || sectorsLoading"
+            @change="updateMarketSector($event.target.value)"
+            class="form-input form-select"
+          >
+            <option value="" disabled>
+              {{ sectorsLoading ? 'Loading sectors…' : 'Select a market sector' }}
+            </option>
+            <option
+              v-for="sector in sectorOptions"
+              :key="sector.code"
+              :value="sector.code"
+            >
+              {{ sector.name }} ({{ sector.code }})
+            </option>
+          </select>
+          <!-- Loading spinner inside the select row -->
+          <span v-if="sectorsLoading" class="select-spinner"></span>
+        </div>
+        <div v-if="sectorsError" class="input-hint" style="color:#e31e24;">
+          {{ sectorsError }}
+          <button class="btn-retry-inline" @click="reloadSectors">Retry</button>
+        </div>
+        <div v-else-if="!marketSector && !disabled" class="input-hint">
+          Choose the industry category that best describes this client
+        </div>
+        <div v-else-if="marketSector" class="input-hint sector-hint">
+          <span class="sector-code-badge">{{ marketSector }}</span>
+          {{ resolvedSectorName }}
+        </div>
+      </div>
+
+      <!-- Placeholder column to keep the 2-col grid balanced -->
+      <div></div>
+    </div>
+
     <!-- Show selected client info when existing client is chosen -->
     <div v-if="selectedClient" class="selected-client-info">
       <span class="info-badge">✓ Existing client selected</span>
       <span v-if="selectedClient.bc_no" class="info-badge bc-badge">BC: {{ selectedClient.bc_no }}</span>
     </div>
 
-    <!-- Validation Summary - exactly as original -->
+    <!-- Validation Summary -->
     <div v-if="hasRequiredInfo" class="validation-summary success">
       <span class="summary-icon">✓</span>
       <span class="summary-text">All required client information is complete</span>
@@ -163,6 +208,8 @@
 import { defineProps, defineEmits, computed, ref, watch, onMounted } from 'vue'
 import ClientDropdown from './ClientDropdown.vue'
 import { useClientDropdownStore } from '~/stores/clientDropdown'
+import { useMarketSectorsStore } from '~/stores/marketSectors'
+import { storeToRefs } from 'pinia'
 
 const props = defineProps({
   clientName: {
@@ -185,13 +232,16 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  /** Market sector code (e.g. "FIN", "HEA") — value stored and passed up */
+  marketSector: {
+    type: String,
+    default: ''
+  },
   disabled: {
     type: Boolean,
     default: false
   }
 })
-
-
 
 const emit = defineEmits([
   'update:clientName',
@@ -200,70 +250,71 @@ const emit = defineEmits([
   'update:phone',
   'update:referenceDocument',
   'update:clientId',
+  'update:marketSector',
   'changed'
 ])
 
-// Store
+// ─── Stores ──────────────────────────────────────────────────────────────────
 const clientStore = useClientDropdownStore()
 
-// Local state
+const marketSectorsStore = useMarketSectorsStore()
+const { sectorOptions, loading: sectorsLoading, error: sectorsError } = storeToRefs(marketSectorsStore)
+
+// ─── Local state ─────────────────────────────────────────────────────────────
 const selectedClient = ref(null)
 const selectedClientId = ref(null)
 const clientDropdownRef = ref(null)
 
-// Computed
+// ─── Computed ─────────────────────────────────────────────────────────────────
 const isValidEmail = computed(() => {
   if (!props.email) return false
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(props.email)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(props.email)
 })
 
 const isValidPhone = computed(() => {
   if (!props.phone) return false
-  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/
-  const cleanPhone = props.phone.replace(/\s+/g, '')
-  return phoneRegex.test(cleanPhone)
+  const clean = props.phone.replace(/\s+/g, '')
+  return /^[\+]?[1-9][\d]{0,15}$/.test(clean)
 })
 
 const hasRequiredInfo = computed(() => {
-  return props.clientName && isValidEmail.value && isValidPhone.value
+  return props.clientName && isValidEmail.value && isValidPhone.value && !!props.marketSector
 })
 
-// Methods
+/** Human-readable name for the currently selected sector code */
+const resolvedSectorName = computed(() => {
+  return marketSectorsStore.nameForCode(props.marketSector)
+})
+
+// ─── Methods ─────────────────────────────────────────────────────────────────
 const loadClients = () => {
-  // Load clients when dropdown is focused
   clientStore.loadInitialClients()
+}
+
+const reloadSectors = () => {
+  marketSectorsStore.loadSectors({ force: true })
 }
 
 const handleClientIdUpdate = (value) => {
   selectedClientId.value = value
-  emit('update:clientId', value)   // ← bubble the ID to new.vue
+  emit('update:clientId', value)
 }
 
 const handleClientSelect = (client) => {
   selectedClient.value = client
-  
+
   if (client) {
-    // Existing client selected - update the clientName
     emit('update:clientName', client.label)
-    
-    // Optionally auto-fill other fields if available
     if (client.email) emit('update:email', client.email)
     if (client.phone) emit('update:phone', client.phone)
     if (client.contact_person) emit('update:contactPerson', client.contact_person)
-    // Don't auto-fill reference document - it's specific to this booking
   } else {
     emit('update:clientName', '')
-    emit('update:clientId', null)   // ← clear the ID in parent too
+    emit('update:clientId', null)
     selectedClient.value = null
   }
-  
-  emit('changed', { field: 'client', value: client })
-}
 
-const updateClientName = (value) => {
-  emit('update:clientName', value)
-  emit('changed', { field: 'clientName', value })
+  emit('changed', { field: 'client', value: client })
 }
 
 const updateContactPerson = (value) => {
@@ -291,25 +342,31 @@ const clearReferenceDocument = () => {
   emit('changed', { field: 'referenceDocument', value: '' })
 }
 
-// Preload clients when component mounts (optional)
+const updateMarketSector = (value) => {
+  emit('update:marketSector', value)
+  emit('changed', { field: 'marketSector', value })
+}
+
+// ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(() => {
-  // Start loading clients in background immediately
-  clientStore.loadInitialClients({ background: true }).catch(err => {
-    console.log('Background loading failed, will load on focus', err)
+  // Background-load clients
+  clientStore.loadInitialClients({ background: true }).catch((err) => {
+    console.log('Background client loading failed, will load on focus', err)
   })
+
+  // Load market sectors (no-op if already loaded)
+  marketSectorsStore.loadSectors()
 })
 
-// Watch for external clientName changes (for new client mode)
 watch(() => props.clientName, (newName) => {
   if (newName && !selectedClient.value) {
-    // User is typing a new client name, clear any selected client
     selectedClient.value = null
     selectedClientId.value = null
   }
 })
 
-// Expose methods
-defineExpose({ 
+// ─── Expose ───────────────────────────────────────────────────────────────────
+defineExpose({
   hasRequiredInfo,
   focusDropdown: () => clientDropdownRef.value?.focus(),
   clearSelection: () => {
@@ -383,7 +440,6 @@ defineExpose({
   margin-bottom: 30px;
 }
 
-/* Three-column layout for email, phone, reference */
 .form-grid.three-columns {
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
@@ -427,6 +483,11 @@ defineExpose({
   align-items: center;
 }
 
+/* Extra right padding room for the spinner */
+.select-container {
+  position: relative;
+}
+
 .input-icon {
   position: absolute;
   left: 16px;
@@ -465,6 +526,77 @@ defineExpose({
 .form-input::placeholder {
   color: #a0aec0;
   font-weight: 400;
+}
+
+/* Native <select> tweaks */
+.form-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 44px; /* room for chevron */
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%230066cc' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Loading spinner inside select row */
+.select-spinner {
+  position: absolute;
+  right: 38px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0, 102, 204, 0.25);
+  border-top-color: #0066cc;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Sector hint below the select */
+.sector-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #2d3748;
+}
+
+.sector-code-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #ebf4ff;
+  color: #0066cc;
+  border: 1px solid #bee3f8;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* Inline retry button for error state */
+.btn-retry-inline {
+  margin-left: 8px;
+  background: none;
+  border: 1px solid #e31e24;
+  color: #e31e24;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-retry-inline:hover {
+  background: #e31e24;
+  color: white;
 }
 
 .input-hint {
@@ -516,9 +648,7 @@ defineExpose({
   text-overflow: ellipsis;
 }
 
-.badge-icon {
-  font-size: 1em;
-}
+.badge-icon { font-size: 1em; }
 
 .badge-text {
   font-weight: 500;
@@ -557,25 +687,11 @@ defineExpose({
   gap: 6px;
 }
 
-.validation-text.valid {
-  color: #38a169;
-  font-weight: 500;
-}
+.validation-text.valid { color: #38a169; font-weight: 500; }
+.validation-text.invalid { color: #e31e24; font-weight: 500; }
 
-.validation-text.invalid {
-  color: #e31e24;
-  font-weight: 500;
-}
-
-.input-validation.invalid .validation-text::before {
-  content: "⚠";
-  margin-right: 4px;
-}
-
-.input-validation.valid .validation-text::before {
-  content: "✓";
-  margin-right: 4px;
-}
+.input-validation.invalid .validation-text::before { content: "⚠"; margin-right: 4px; }
+.input-validation.valid .validation-text::before { content: "✓"; margin-right: 4px; }
 
 /* Selected client info */
 .selected-client-info {
@@ -597,9 +713,7 @@ defineExpose({
   animation: fadeIn 0.3s ease;
 }
 
-.info-badge.bc-badge {
-  background: #3b82f6;
-}
+.info-badge.bc-badge { background: #3b82f6; }
 
 .validation-summary {
   display: flex;
@@ -615,7 +729,7 @@ defineExpose({
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .validation-summary.success {
@@ -650,56 +764,42 @@ defineExpose({
   color: white;
 }
 
-.summary-text {
-  flex: 1;
-}
+.summary-text { flex: 1; }
 
-/* Responsive adjustments */
+/* Responsive */
 @media (max-width: 992px) {
   .form-grid.three-columns {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .form-grid.three-columns .form-group:last-child {
     grid-column: span 2;
   }
 }
 
 @media (max-width: 768px) {
-  .form-section {
-    padding: 20px;
-  }
-  
+  .form-section { padding: 20px; }
+
   .form-grid,
   .form-grid.three-columns {
     grid-template-columns: 1fr;
     gap: 20px;
   }
-  
-  .form-grid.three-columns .form-group:last-child {
-    grid-column: auto;
-  }
-  
+
+  .form-grid.three-columns .form-group:last-child { grid-column: auto; }
+
   .section-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
   }
-  
-  .section-description {
-    padding-left: 0;
-  }
-  
-  .section-icon {
-    width: 40px;
-    height: 40px;
-    font-size: 1.5em;
-  }
-  
-  .form-input {
-    padding: 12px 16px 12px 44px;
-  }
-  
+
+  .section-description { padding-left: 0; }
+
+  .section-icon { width: 40px; height: 40px; font-size: 1.5em; }
+
+  .form-input { padding: 12px 16px 12px 44px; }
+
   .document-badge {
     position: relative;
     top: 0;
@@ -709,23 +809,15 @@ defineExpose({
 }
 
 @media (max-width: 480px) {
-  .form-section {
-    padding: 16px;
-    border-radius: 12px;
-  }
-  
-  .section-title {
-    font-size: 1.2em;
-  }
-  
+  .form-section { padding: 16px; border-radius: 12px; }
+  .section-title { font-size: 1.2em; }
+
   .validation-summary {
     flex-direction: column;
     text-align: center;
     gap: 8px;
   }
-  
-  .selected-client-info {
-    flex-direction: column;
-  }
+
+  .selected-client-info { flex-direction: column; }
 }
 </style>

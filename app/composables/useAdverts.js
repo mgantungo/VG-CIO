@@ -46,6 +46,7 @@ export const useAdverts = () => {
 
   // ── Create advert ───────────────────────────────────────────────────────────
   const createAdvert = async (advertData) => {
+    //This is what is used to post advert data
     loading.value = true
     error.value   = null
     try {
@@ -78,6 +79,7 @@ export const useAdverts = () => {
         email:             advertData.email             || '',
         phone:             advertData.phone             || '',
         referenceDocument: advertData.referenceDocument || '',
+        marketSector:  advertData.marketSector  || '',
 
         // ── Advert info ───────────────────────────────────────────────────────
         advertTitle:      advertData.advertTitle,
@@ -107,6 +109,7 @@ export const useAdverts = () => {
 
         // ── Payment & workflow ────────────────────────────────────────────────
         paymentMethod:       advertData.paymentMethod,
+      
         specialInstructions: advertData.specialInstructions || '',
         status:              advertData.status || 'draft',
 

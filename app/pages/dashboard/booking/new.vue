@@ -44,6 +44,7 @@
           v-model:email="form.email"
           v-model:phone="form.phone"
           v-model:reference-document="form.referenceDocument"
+          v-model:market-sector="form.marketSector"
           :disabled="submitting || categoriesLoading"
           @changed="handleClientInfoChange"
         />
@@ -213,6 +214,7 @@ const form = reactive({
   phone: '',
   referenceDocument: '',
   clientId: '', 
+  marketSector: '', 
   advertTitle: '',
   platformCategory: '',
   product: '',
@@ -311,7 +313,7 @@ const selectedRateCard = computed(() => {
 })
 
 const hasRequiredClientInfo = computed(() => {
-  return form.clientName && form.email && form.phone && form.advertTitle && form.officeLocation
+  return form.clientName && form.email && form.phone && form.advertTitle && form.officeLocation && form.marketSector 
 })
 
 const isFormValid = computed(() => {
@@ -853,6 +855,7 @@ const saveDraft = async () => {
       advertTitle: form.advertTitle,
       clientId: form.clientId || null,
       clientName: form.clientName,
+      marketSector: form.marketSector || '', 
       contactPerson: form.contactPerson || '',
       email: form.email,
       phone: form.phone,
@@ -926,6 +929,7 @@ const submitAdvert = async () => {
       advertTitle: form.advertTitle,
       clientId: form.clientId || null,
       clientName: form.clientName,
+      marketSector: form.marketSector || '', 
       contactPerson: form.contactPerson || '',
       email: form.email,
       phone: form.phone,
