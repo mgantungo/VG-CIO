@@ -93,63 +93,80 @@ const formatCurrency = (amount) => {
 </script>
 
 <style scoped>
-.pricing-calculator {
-  background: #F5F5F5;
-  padding: 20px;
-  border-radius: 10px;
-  margin-top: 20px;
-}
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@600&display=swap');
+
+.pricing-calculator { 
+  --navy:        #003366;
+  --navy-light:  #004080;
+  --red:         #E31E24;
+  --blue:        #0066CC;
+  --blue-lt:     #EEF4FF;
+  --surface:     #FFFFFF;
+  --page-bg:     #F0F4F8;
+  --border:      #D1D9E0;
+  --border-lt:   #E8ECF0;
+  --text-1:      #0F172A;
+  --text-2:      #334155;
+  --text-3:      #64748B;
+  --text-4:      #94A3B8;
+  --green-text:  #166534;
+  --green-bg:    #F0FDF4;
+  --green-bd:    #86EFAC;
+  --cyan-text:   #155E75;
+  --cyan-bg:     #ECFEFF;
+  --cyan-bd:     #67E8F9;
+  --red-text:    #991B1B;
+  --red-bg:      #FEF2F2;
+  --red-bd:      #FECACA;
+  --amber-text:  #78350F;
+  --amber-bg:    #FFFBEB;
+  --amber-bd:    #FCD34D;
+  --radius:      2px;
+  --ring:        0 0 0 3px rgba(0,102,204,.15);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:   0 4px 16px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.05);
+  --t:           140ms ease;
+  --font:        "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+ font-family: var(--font); font-size: 13px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
 
 .pricing-calculator h3 {
-  color: #003366;
-  margin-bottom: 15px;
+  margin: 0; padding: 12px 18px;
+  background: var(--navy); color: #fff;
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
 }
 
-.loading {
-  text-align: center;
-  padding: 20px;
-  color: #666;
-  font-style: italic;
+.loading, .empty-state {
+  padding: 32px 18px; text-align: center;
+  color: var(--text-3); font-size: 13px; font-style: italic;
+  background: var(--surface);
 }
 
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #999;
-  font-style: italic;
-}
-
-.price-details {
-  margin-top: 10px;
-}
+.price-details { border-top: 1px solid var(--border-lt); }
 
 .price-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #DDDDDD;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 18px; border-bottom: 1px solid var(--border-lt);
+  font-size: 13px;
 }
+.price-row:last-child { border-bottom: none; }
+.price-row:nth-child(even) { background: var(--page-bg); }
+.price-row span:first-child { color: var(--text-3); font-weight: 500; }
+.price-row span:last-child { color: var(--text-1); font-weight: 600; }
 
 .price-row.discount-row {
-  background: linear-gradient(135deg, #F0FFF4 0%, #E6FFFA 100%);
-  padding: 10px;
-  border-radius: 6px;
-  margin: 5px 0;
-  border: 1px solid #9AE6B4;
+  background: var(--green-bg) !important;
+  border-color: var(--green-bd);
+  padding: 9px 18px;
 }
-
-.discount-amount {
-  color: #10B981;
-  font-weight: 700;
-}
+.discount-amount { color: var(--green-text) !important; font-weight: 700; }
 
 .price-row.total {
-  border-top: 2px solid #003366;
-  border-bottom: none;
-  font-size: 1.3em;
-  font-weight: bold;
-  color: #003366;
-  padding-top: 15px;
-  margin-top: 10px;
+  background: var(--navy) !important;
+  border: none; padding: 12px 18px;
+  font-size: 14px;
 }
+.price-row.total span { color: rgba(255,255,255,.75) !important; font-weight: 600; }
+.price-row.total span:last-child { color: #fff !important; font-weight: 700; }
+
 </style>

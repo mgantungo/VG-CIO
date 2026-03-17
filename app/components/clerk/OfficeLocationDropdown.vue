@@ -104,119 +104,62 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.form-group {
-  margin-bottom: 25px;
-}
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+.form-group { 
+  --navy:#003366; --navy-light:#004080; --red:#E31E24; --blue:#0066CC; --blue-lt:#EEF4FF;
+  --surface:#FFFFFF; --page-bg:#F0F4F8; --border:#D1D9E0; --border-lt:#E8ECF0;
+  --text-1:#0F172A; --text-2:#334155; --text-3:#64748B; --text-4:#94A3B8;
+  --green-text:#166534; --green-bg:#F0FDF4; --green-bd:#86EFAC;
+  --red-text:#991B1B; --red-bg:#FEF2F2; --red-bd:#FECACA;
+  --amber-text:#78350F; --amber-bg:#FFFBEB; --amber-bd:#FCD34D;
+  --radius:2px; --ring:0 0 0 3px rgba(0,102,204,.15);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.05);
+  --t:140ms ease; --font:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+ margin-bottom: 0; font-family: var(--font); font-size: 13px; }
 
 .form-group label {
-  display: block;
-  margin-bottom: 10px;
-  color: #2A4B8C;
-  font-weight: 600;
-  font-size: 0.95em;
-  letter-spacing: 0.3px;
+  display: block; margin-bottom: 6px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-3);
 }
+.required { color: var(--red); font-weight: 700; margin-left: 2px; }
 
-.required {
-  color: #FF6B6B;
-  font-weight: 700;
-}
-
-.select-wrapper {
-  position: relative;
-}
+.select-wrapper { position: relative; }
 
 .styled-select {
-  width: 100%;
-  padding: 14px 45px 14px 16px;
-  border: 2px solid #e6e9f4;
-  border-radius: 10px;
-  font-size: 1em;
-  transition: all 0.3s ease;
-  background-color: #ffffff;
-  color: #2D3748;
-  appearance: none;
-  cursor: pointer;
+  width: 100%; height: 38px; padding: 0 36px 0 12px;
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+  font-family: var(--font); font-size: 13px; color: var(--text-1);
+  background: var(--surface); appearance: none; cursor: pointer; outline: none;
+  transition: border-color var(--t), box-shadow var(--t); box-sizing: border-box;
 }
+.styled-select:focus { border-color: var(--blue); box-shadow: var(--ring); }
+.styled-select:disabled { background: var(--page-bg); cursor: not-allowed; opacity: .7; color: var(--text-4); }
 
-.styled-select:focus {
-  outline: none;
-  border-color: #4A6FDC;
-  box-shadow: 0 0 0 3px rgba(74, 111, 220, 0.15);
-}
-
-.styled-select:disabled {
-  background-color: #F7F9FC;
-  cursor: not-allowed;
-  opacity: 0.7;
-  border-color: #E2E8F0;
-}
-
-.select-arrow {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: #4A6FDC;
-}
+.select-arrow { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-3); }
 
 .select-loading {
-  position: absolute;
-  right: 40px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  pointer-events: none;
+  position: absolute; right: 34px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; pointer-events: none;
 }
-
 .spinner-small {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(74, 111, 220, 0.2);
-  border-radius: 50%;
-  border-top-color: #4A6FDC;
-  animation: spin 1s ease-in-out infinite;
+  width: 14px; height: 14px; border: 2px solid var(--border);
+  border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.error-message {
-  display: block;
-  margin-top: 8px;
-  color: #FF6B6B;
-  font-size: 0.85em;
-  font-weight: 500;
-}
-
-.helper-text {
-  display: block;
-  margin-top: 8px;
-  color: #64748B;
-  font-size: 0.85em;
-}
+.error-message { display: block; margin-top: 4px; color: var(--red-text); font-size: 11px; font-weight: 500; }
+.helper-text { display: block; margin-top: 4px; color: var(--text-4); font-size: 11px; font-style: italic; }
 
 .retry-button {
-  margin-top: 8px;
-  background: none;
-  border: 1px solid #4A6FDC;
-  color: #4A6FDC;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.85em;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  transition: all 0.2s ease;
+  margin-top: 6px; background: none; border: 1.5px solid var(--blue);
+  color: var(--blue); padding: 0 12px; height: 30px; border-radius: var(--radius);
+  font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; transition: all var(--t);
 }
+.retry-button:hover { background: var(--blue); color: #fff; }
 
-.retry-button:hover {
-  background: #4A6FDC;
-  color: white;
-}
 </style>

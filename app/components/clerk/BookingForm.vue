@@ -570,177 +570,132 @@ watch(() => form.value.productId, handleProductChange)
 </script>
 
 <style scoped>
-.booking-form {
-  width: 100%;
-}
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+.booking-form { 
+  --navy:        #003366;
+  --navy-light:  #004080;
+  --red:         #E31E24;
+  --blue:        #0066CC;
+  --blue-lt:     #EEF4FF;
+  --surface:     #FFFFFF;
+  --page-bg:     #F0F4F8;
+  --border:      #D1D9E0;
+  --border-lt:   #E8ECF0;
+  --text-1:      #0F172A;
+  --text-2:      #334155;
+  --text-3:      #64748B;
+  --text-4:      #94A3B8;
+  --green-text:  #166534;
+  --green-bg:    #F0FDF4;
+  --green-bd:    #86EFAC;
+  --cyan-text:   #155E75;
+  --cyan-bg:     #ECFEFF;
+  --cyan-bd:     #67E8F9;
+  --red-text:    #991B1B;
+  --red-bg:      #FEF2F2;
+  --red-bd:      #FECACA;
+  --amber-text:  #78350F;
+  --amber-bg:    #FFFBEB;
+  --amber-bd:    #FCD34D;
+  --radius:      2px;
+  --ring:        0 0 0 3px rgba(0,102,204,.15);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:   0 4px 16px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.05);
+  --t:           140ms ease;
+  --font:        "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+ width: 100%; font-family: var(--font); font-size: 13px; }
 
 .form-section {
-  margin-bottom: 40px;
-  padding-bottom: 30px;
-  border-bottom: 2px solid #F5F5F5;
-}
-
-.form-section:last-child {
-  border-bottom: none;
-  margin-bottom: 20px;
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 16px;
 }
 
 .form-section h3 {
-  color: #003366;
-  margin-bottom: 20px;
-  font-size: 1.3em;
-  padding-left: 10px;
-  border-left: 4px solid #E31E24;
+  margin: 0; padding: 12px 20px;
+  background: var(--navy); color: #fff;
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  border-left: none;
 }
 
 .form-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0; border-bottom: 1px solid var(--border-lt);
 }
 
 .form-group {
-  margin-bottom: 20px;
+  padding: 14px 20px; border-right: 1px solid var(--border-lt);
+  background: var(--surface);
 }
+.form-group:last-child { border-right: none; }
+.form-section > .form-group { border-bottom: 1px solid var(--border-lt); border-right: none; padding: 14px 20px; }
 
 .form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #333333;
-  font-weight: 500;
+  display: block; margin-bottom: 6px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-3);
 }
 
-.form-group label::after {
-  content: ' *';
-  color: #E31E24;
-  font-weight: bold;
-}
-
+.form-group label::after { content: ' *'; color: var(--red); font-weight: 700; }
 .form-group label:has(+ input:not([required]))::after,
 .form-group label:has(+ select:not([required]))::after,
-.form-group label:has(+ textarea:not([required]))::after {
-  content: '';
-}
+.form-group label:has(+ textarea:not([required]))::after { content: ''; }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
-  width: 100%;
-  padding: 12px 15px;
-  border: 1px solid #DDDDDD;
-  border-radius: 5px;
-  font-size: 1em;
-  transition: border-color 0.3s, box-shadow 0.3s;
-  background-color: white;
+  width: 100%; height: 38px; padding: 0 12px;
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+  font-family: var(--font); font-size: 13px; color: var(--text-1);
+  background: var(--surface); outline: none; box-sizing: border-box;
+  transition: border-color var(--t), box-shadow var(--t);
 }
+
+.form-group textarea { height: auto; min-height: 90px; padding: 10px 12px; resize: vertical; }
 
 .form-group input:focus,
 .form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #0066CC;
-  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-}
+.form-group textarea:focus { border-color: var(--blue); box-shadow: var(--ring); }
+
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled { background: var(--page-bg); color: var(--text-4); cursor: not-allowed; }
 
 .form-group input.error,
 .form-group select.error,
-.form-group textarea.error {
-  border-color: #dc3545;
-  background-color: rgba(220, 53, 69, 0.05);
-}
+.form-group textarea.error { border-color: var(--red); background: var(--red-bg); }
 
-.form-group input.error:focus,
-.form-group select.error:focus,
-.form-group textarea.error:focus {
-  border-color: #dc3545;
-  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 100px;
-  font-family: inherit;
-}
-
-.error-message {
-  color: #dc3545;
-  font-size: 0.85em;
-  margin-top: 5px;
-  padding-left: 5px;
-}
+.error-message { font-size: 11px; color: var(--red-text); margin-top: 4px; }
 
 .form-actions {
-  display: flex;
-  gap: 15px;
-  justify-content: flex-end;
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 2px solid #F5F5F5;
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 16px 20px; border-top: 1px solid var(--border-lt);
+  background: var(--page-bg);
 }
 
 .btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1em;
-  font-weight: 500;
-  transition: all 0.3s;
-  min-width: 150px;
-  text-align: center;
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 38px; padding: 0 18px; border: none; border-radius: var(--radius);
+  font-family: var(--font); font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--t), box-shadow var(--t), opacity var(--t);
+  outline: none; min-width: 130px; justify-content: center;
 }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: scale(.97); }
 
-.btn-primary {
-  background: #E31E24;
-  color: white;
-}
+.btn-primary { background: var(--red); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #C0181E; box-shadow: 0 4px 12px rgba(227,30,36,.3); }
 
-.btn-primary:hover:not(:disabled) {
-  background: #c01820;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(227, 30, 36, 0.2);
-}
-
-.btn-primary:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #0066CC;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #0052a3;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 102, 204, 0.2);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
+.btn-secondary { background: var(--blue-lt); color: var(--blue); border: 1.5px solid rgba(0,102,204,.2); }
+.btn-secondary:hover:not(:disabled) { background: #dce9ff; }
 
 @media (max-width: 768px) {
-  .form-section {
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 15px;
-  }
-  
-  .form-actions {
-    flex-direction: column;
-  }
-  
-  .btn {
-    width: 100%;
-    min-width: auto;
-  }
+  .form-row { grid-template-columns: 1fr; }
+  .form-group { border-right: none; border-bottom: 1px solid var(--border-lt); }
+  .form-actions { flex-direction: column; }
+  .btn { width: 100%; min-width: auto; }
 }
+
 </style>

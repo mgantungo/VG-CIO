@@ -342,164 +342,97 @@ const saveDetails = () => {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 20px;
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+.modal-overlay { 
+  --navy:#003366; --navy-light:#004080; --red:#E31E24; --blue:#0066CC; --blue-lt:#EEF4FF;
+  --surface:#FFFFFF; --page-bg:#F0F4F8; --border:#D1D9E0; --border-lt:#E8ECF0;
+  --text-1:#0F172A; --text-2:#334155; --text-3:#64748B; --text-4:#94A3B8;
+  --green-text:#166534; --green-bg:#F0FDF4; --green-bd:#86EFAC;
+  --red-text:#991B1B; --red-bg:#FEF2F2; --red-bd:#FECACA;
+  --amber-text:#78350F; --amber-bg:#FFFBEB; --amber-bd:#FCD34D;
+  --radius:2px; --ring:0 0 0 3px rgba(0,102,204,.15);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.05);
+  --t:140ms ease; --font:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; justify-content: center; align-items: center;
+  z-index: 1000; padding: 16px; font-family: var(--font); font-size: 13px;
 }
 
 .modal-content {
-  background: white;
-  border-radius: 10px;
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  background: var(--surface); border-radius: var(--radius);
+  width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25); overflow: hidden;
 }
 
 .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #eee;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 20px; background: var(--navy);
 }
-
-.modal-header h3 {
-  margin: 0;
-  color: #003366;
-  font-size: 1.3em;
-}
-
+.modal-header h3 { margin: 0; color: #fff; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .modal-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: background-color 0.3s;
+  background: none; border: none; font-size: 20px; cursor: pointer;
+  color: rgba(255,255,255,.7); width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius); transition: all var(--t);
 }
+.modal-close:hover { color: #fff; background: rgba(255,255,255,.1); }
 
-.modal-close:hover {
-  background-color: #f5f5f5;
-}
+.modal-body { padding: 20px; max-height: calc(90vh - 120px); overflow-y: auto; }
 
-.modal-body {
-  padding: 20px;
-}
-
-.input-group {
-  margin-bottom: 20px;
-}
-
+.input-group { margin-bottom: 18px; }
 .input-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #333;
+  display: block; margin-bottom: 6px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-3);
 }
-
 .input-group input {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 16px;
-  margin-bottom: 15px;
+  width: 100%; height: 38px; padding: 0 12px;
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+  font-family: var(--font); font-size: 13px; color: var(--text-1);
+  background: var(--surface); outline: none; box-sizing: border-box;
+  margin-bottom: 0; transition: border-color var(--t), box-shadow var(--t);
 }
+.input-group input:focus { border-color: var(--blue); box-shadow: var(--ring); }
 
-.input-group input:focus {
-  outline: none;
-  border-color: #0066cc;
-  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
-}
-
-.help-text {
-  display: block;
-  color: #666;
-  font-size: 0.85em;
-  margin-top: 5px;
-}
+.help-text { display: block; color: var(--text-4); font-size: 11px; margin-top: 5px; font-style: italic; }
 
 .ratecard-info {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 6px;
-  margin-top: 20px;
-  border: 1px solid #e9ecef;
+  background: var(--page-bg); border: 1px solid var(--border-lt);
+  border-radius: var(--radius); margin-top: 18px; overflow: hidden;
+  border-top: 2px solid var(--navy);
 }
-
 .info-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e9ecef;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 14px; border-bottom: 1px solid var(--border-lt);
+  font-size: 13px; transition: background var(--t);
 }
-
-.info-row:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.estimated-price {
-  color: #003366;
-  font-size: 1.1em;
-}
+.info-row:last-child { border-bottom: none; }
+.info-row:nth-child(even) { background: var(--surface); }
+.info-row span:first-child { color: var(--text-3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.estimated-price { color: var(--navy); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .modal-footer {
-  padding: 20px;
-  border-top: 1px solid #eee;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  padding: 14px 20px; border-top: 1px solid var(--border-lt);
+  background: var(--page-bg); display: flex; justify-content: flex-end; gap: 8px;
 }
 
 .btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s;
+  display: inline-flex; align-items: center; height: 38px; padding: 0 18px;
+  border: none; border-radius: var(--radius); font-family: var(--font);
+  font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: all var(--t); outline: none;
 }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: scale(.97); }
 
-.btn-primary {
-  background: #0066cc;
-  color: white;
-}
+.btn-primary { background: var(--navy); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--navy-light); }
 
-.btn-primary:hover:not(:disabled) {
-  background: #0052a3;
-}
+.btn-secondary { background: var(--page-bg); color: var(--text-2); border: 1.5px solid var(--border); }
+.btn-secondary:hover { background: #E2E8F0; }
 
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #5a6268;
-}
 </style>
