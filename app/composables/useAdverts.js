@@ -1,4 +1,4 @@
-//composables/useAdverts.js
+// composables/useAdverts.js
 import { ref } from 'vue'
 import { useRuntimeConfig } from '#imports'
 
@@ -46,81 +46,48 @@ export const useAdverts = () => {
 
   // ── Create advert ───────────────────────────────────────────────────────────
   const createAdvert = async (advertData) => {
-    //This is what is used to post advert data
     loading.value = true
     error.value   = null
     try {
       const vgamsUser = JSON.parse(localStorage.getItem('vgams_user'))
       if (!vgamsUser?.id) throw new Error('User not authenticated. Please log in.')
 
-      // ── Compile every data field from all form sections ──────────────────────
-      //
-      //  Source components:
-      //    ClientInformation  → clientId, clientName, contactPerson, email,
-      //                         phone, referenceDocument
-      //    AdvertInformation  → advertTitle, platformCategory, product,
-      //                         rateCard (rateCardId), adSize, adType,
-      //                         officeLocation, publishOnWeb
-      //    SchedulePricing    → startDate, endDate, datesList, dateCount,
-      //                         frequency, paymentMethod, discount,
-      //                         basePrice, surcharge, totalAmount
-      //    SalesAgentSelection→ salesAgentId
-      //    AdditionalInfo     → specialInstructions (includes encoded dates)
-      //    FileUpload         → files
-      //    VGAMS session      → vgamsUserId, vgamsUserName, etc.
-      //
       const data = {
-        // ── Client (required – selected from dropdown) ───────────────────────
-        clientId:          advertData.clientId   || null,   // ← FK used by controller
-        clientName:        advertData.clientName || '',     // ← display / fallback
+        clientId:          advertData.clientId   || null,
+        clientName:        advertData.clientName || '',
         contactPerson:     advertData.contactPerson     || '',
         contactEmail:      advertData.contactEmail      || advertData.email || '',
         contactNumber:     advertData.contactNumber     || advertData.phone || '',
         email:             advertData.email             || '',
         phone:             advertData.phone             || '',
         referenceDocument: advertData.referenceDocument || '',
-        marketSector:  advertData.marketSector  || '',
-
-        // ── Advert info ───────────────────────────────────────────────────────
-        advertTitle:      advertData.advertTitle,
-        platformCategory: advertData.platformCategory || '',
-        product:          advertData.product          || null,
-        rateCard:         advertData.rateCard         || null,
-        adSize:           advertData.adSize           || '',
-        adType:           advertData.adType           || 'full_color',
-        officeLocation:   advertData.officeLocation   || '',
-        publishOnWeb:     Boolean(advertData.publishOnWeb),
-
-        // ── Schedule & dates ──────────────────────────────────────────────────
-        startDate:      advertData.startDate,
-        endDate:        advertData.endDate        || null,
-        datesList:      advertData.datesList      || [],   // full array of selected ISO dates
-        publishingDates: advertData.publishingDates || [], // merged + sorted, saved to DB
-        dateCount:      advertData.dateCount      || 1,    // count used in price calculation
-
-        // ── Frequency ────────────────────────────────────────────────────────
-        frequency: parseInt(advertData.frequency) || 1,
-
-        // ── Pricing (base × freq × dateCount, then surcharge – discount) ─────
-        basePrice:   parseFloat(advertData.basePrice)   || 0,
-        surcharge:   parseFloat(advertData.surcharge)   || 0,
-        discount:    parseFloat(advertData.discount)    || 0,
-        totalAmount: parseFloat(advertData.totalAmount) || 0,
-
-        // ── Payment & workflow ────────────────────────────────────────────────
-        paymentMethod:       advertData.paymentMethod,
-      
+        marketSector:      advertData.marketSector  || '',
+        advertTitle:       advertData.advertTitle,
+        platformCategory:  advertData.platformCategory || '',
+        product:           advertData.product          || null,
+        rateCard:          advertData.rateCard         || null,
+        adSize:            advertData.adSize           || '',
+        adType:            advertData.adType           || 'full_color',
+        officeLocation:    advertData.officeLocation   || '',
+        publishOnWeb:      Boolean(advertData.publishOnWeb),
+        startDate:         advertData.startDate,
+        endDate:           advertData.endDate        || null,
+        datesList:         advertData.datesList      || [],
+        publishingDates:   advertData.publishingDates || [],
+        dateCount:         advertData.dateCount      || 1,
+        frequency:         parseInt(advertData.frequency) || 1,
+        basePrice:         parseFloat(advertData.basePrice)   || 0,
+        surcharge:         parseFloat(advertData.surcharge)   || 0,
+        discount:          parseFloat(advertData.discount)    || 0,
+        totalAmount:       parseFloat(advertData.totalAmount) || 0,
+        paymentMethod:     advertData.paymentMethod,
         specialInstructions: advertData.specialInstructions || '',
-        status:              advertData.status || 'draft',
-
-        // ── Sales agent ───────────────────────────────────────────────────────
-        salesAgentId: advertData.salesAgentId || null,
-
-        // ── VGAMS session user ────────────────────────────────────────────────
-        vgamsUserId:    vgamsUser.id,
-        vgamsUserName:  vgamsUser.name,
-        vgamsUserEmail: vgamsUser.email,
-        vgamsUserRole:  vgamsUser.role,
+        status:            advertData.status || 'draft',
+        salesAgentId:      advertData.salesAgentId || null,
+        vgamsUserId:       vgamsUser.id,
+        vgamsUserName:     vgamsUser.name,
+        vgamsUserEmail:    vgamsUser.email,
+        vgamsUserRole:     vgamsUser.role,
       }
 
       console.log('📤 Sending advert data:', {
@@ -135,7 +102,6 @@ export const useAdverts = () => {
         userId:        vgamsUser.id,
       })
 
-      // Use FormData so files and JSON travel in one multipart request
       const formData = new FormData()
       formData.append('data', JSON.stringify(data))
 
@@ -148,14 +114,15 @@ export const useAdverts = () => {
       const response = await $fetch(`${API_BASE}/adverts`, {
         method: 'POST',
         body:   formData
-        // Let browser set Content-Type + boundary automatically
       })
 
       console.log('✅ API response:', response)
 
       const newAdvert = {
         id:            response.data.id,
-        reference:     response.data.reference_number || `ADV-${response.data.id}`,
+        reference:     response.data.reference || response.data.reference_number,
+        bc_reference:  response.data.bc_reference,
+        bc_sync_success: response.data.bc_sync_success,
         revenueStream: response.revenue_stream || null,
         costStream:    response.cost_stream    || null,
         ...response.data
@@ -167,6 +134,28 @@ export const useAdverts = () => {
     } catch (err) {
       error.value = err.message || 'Failed to create advert'
       console.error('❌ Failed to create advert:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // ── Get BC Sync Status by Reference ───────────────────────────────────────
+  const getBcSyncStatus = async (reference) => {
+    loading.value = true
+    error.value = null
+    try {
+      // Use GET with query parameter instead of POST
+      const response = await $fetch(`${API_BASE}/adverts/bc-status/${reference}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      console.log('📊 BC Sync Status Response:', response)
+      return response
+    } catch (err) {
+      error.value = err.message || 'Failed to get BC sync status'
+      console.error('Failed to get BC sync status:', err)
       throw err
     } finally {
       loading.value = false
@@ -292,19 +281,15 @@ export const useAdverts = () => {
       const { mediaFiles, existingAttachmentIds, runDate, runTime, isPublished } = scheduleData
 
       const formData = new FormData()
-
-      // ── Flat fields — controller reads body.advertId, body.runDate etc. directly ──
       formData.append('advertId',   String(advertId))
       formData.append('runDate',    runDate)
       if (runTime)      formData.append('runTime',    JSON.stringify(runTime))
       if (isPublished !== undefined) formData.append('isPublished', String(isPublished))
 
-      // ── Existing CMS attachment IDs to link to the schedule ──
       if (Array.isArray(existingAttachmentIds) && existingAttachmentIds.length > 0) {
         formData.append('existingAttachmentIds', JSON.stringify(existingAttachmentIds))
       }
 
-      // ── New files — controller checks files.files ──
       if (Array.isArray(mediaFiles) && mediaFiles.length > 0) {
         mediaFiles.forEach(file => {
           if (file instanceof File) formData.append('files', file)
@@ -314,7 +299,6 @@ export const useAdverts = () => {
       return await $fetch(`${API_BASE}/advert-daily-schedules/schedule`, {
         method: 'POST',
         body:   formData
-        // Do NOT set Content-Type — browser sets multipart/form-data + boundary automatically
       })
     } catch (err) {
       error.value = err.message || 'Failed to schedule advert'
@@ -461,6 +445,7 @@ export const useAdverts = () => {
     }
   }
 
+  // Return all methods
   return {
     adverts,
     loading,
@@ -473,6 +458,7 @@ export const useAdverts = () => {
     getAdvertById,
     calculatePrice,
     getDateRangeAdverts,
+    getBcSyncStatus, 
     scheduleAdvert,
     getAdvertSchedules,
     getSchedulesByDateRange,

@@ -163,7 +163,8 @@
               <tr v-for="advert in filteredAdverts" :key="advert.id" class="adv-row">
 
                 <td class="tc-ref">
-                  <code class="ref-chip">{{ advert.reference }}</code>
+                  <p><code class="ref-chip">{{ advert.reference}}</code></p></br>
+                  <p><code class="ref-chip">{{ advert.bcReference}}</code></p>
                 </td>
 
                 <td class="tc-client">

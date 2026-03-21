@@ -15,7 +15,7 @@
             :disabled="submitting || categoriesLoading"
           >
             <span v-if="savingDraft">Saving...</span>
-            <span v-else>Save as Draft</span>
+            <span v-else>Save Advert</span>
           </button>
         </div>
       </div>
@@ -131,7 +131,7 @@
             :disabled="submitting || categoriesLoading || savingDraft || !hasRequiredClientInfo"
           >
             <span v-if="savingDraft">Saving...</span>
-            <span v-else>Save as Draft</span>
+            <span v-else>Save Advert</span>
           </button>
           <!----
           <button 
@@ -156,6 +156,17 @@
       @close="handleModalClose"
       @save="handleModalSave"
     />
+
+    <!-- Full Page Mask -->
+    <FullPageMask
+      :visible="maskVisible"
+      :type="maskType"
+      :title="maskTitle"
+      :message="maskMessage"
+      :details="maskDetails"
+      :auto-close="maskAutoClose"
+      @close="closeMask"
+    />
   </div>
 </template>
 
@@ -170,14 +181,15 @@ import AdvertInformation from '~/components/clerk/AdvertInformation.vue'
 import SchedulePricing from '~/components/clerk/SchedulePricing.vue'
 import AdditionalInformation from '~/components/clerk/AdditionalInformation.vue'
 import SalesAgentSelection from '~/components/clerk/SalesAgentSelection.vue'
-
+import FullPageMask from '~/components/clerk/FullPageMask.vue'
 // Import composables and stores
 import { useProducts } from '~/composables/useProducts'
-import { useAdverts } from '~/composables/useAdverts'
+import { useAdverts} from '~/composables/useAdverts'
 import { useOfficeLocationsStore } from '~/stores/officeLocation'
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from '#imports'
 import { storeToRefs } from 'pinia'
+
 
 const router = useRouter()
 
@@ -194,7 +206,7 @@ const {
   getProductById
 } = useProducts()
 
-const { createAdvert } = useAdverts()
+const { createAdvert, getBcSyncStatus } = useAdverts()
 
 // Use office locations store
 const officeLocationsStore = useOfficeLocationsStore()
@@ -255,6 +267,43 @@ const selectedCurrency = ref('UGX')
 const isPrintMedia = computed(() => {
   return form.platformCategory === 'print'
 })
+
+// Add a new ref for polling
+let pollingInterval = null
+
+// Mask state
+const maskVisible = ref(false)
+const maskType = ref('info') // 'success', 'error', 'loading'
+const maskTitle = ref('')
+const maskMessage = ref('')
+const maskDetails = ref('')
+const maskAutoClose = ref(3000) // 3 seconds auto close for success
+
+// Mask methods
+const showMask = ({ type, title, message, details, autoClose = 3000 }) => {
+  maskType.value = type
+  maskTitle.value = title
+  maskMessage.value = message
+  maskDetails.value = details || ''
+  maskAutoClose.value = autoClose
+  maskVisible.value = true
+}
+
+const closeMask = () => {
+  maskVisible.value = false
+  // Reset after animation
+  setTimeout(() => {
+    if (!maskVisible.value) {
+      maskType.value = 'info'
+      maskTitle.value = ''
+      maskMessage.value = ''
+      maskDetails.value = ''
+    }
+  }, 300)
+}
+
+
+
 
 // Watch platform category changes and lock frequency to 1 for print media
 watch(() => form.platformCategory, (newCategory) => {
@@ -833,6 +882,7 @@ const formatDate = (dateString) => {
   }
 }
 
+/*
 const saveDraft = async () => {
   console.log('[DRAFT-SAVE] Save draft requested')
   
@@ -903,7 +953,118 @@ const saveDraft = async () => {
     savingDraft.value = false
   }
 }
+*/
+/*
+const saveDraft = async () => {
+  console.log('[DRAFT-SAVE] Save draft requested')
+  
+  if (!hasRequiredClientInfo.value) {
+    console.log('[DRAFT-SAVE] ERROR - Missing required client info')
+    showMask({
+      type: 'error',
+      title: 'Missing Information',
+      message: 'Please fill in all required client information before saving draft.',
+      autoClose: 5000
+    })
+    return
+  }
+  
+  console.log('[DRAFT-SAVE] Form discount value:', form.discount)
 
+  try {
+    savingDraft.value = true
+    
+    // Show loading mask
+    showMask({
+      type: 'loading',
+      title: 'Saving Draft',
+      message: 'Please wait while we save your advert...',
+      autoClose: 0 // Don't auto close loading state
+    })
+    
+    // Get pricing data from SchedulePricing component
+    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
+    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
+    
+    const advertData = {
+      advertTitle: form.advertTitle,
+      clientId: form.clientId || null,
+      clientName: form.clientName,
+      marketSector: form.marketSector || '', 
+      contactPerson: form.contactPerson || '',
+      email: form.email,
+      phone: form.phone,
+      referenceDocument: form.referenceDocument || '',
+      officeLocation: form.officeLocation,
+      publishOnWeb: form.publishOnWeb,
+      platformCategory: form.platformCategory,
+      product: form.product,
+      rateCard: form.rateCardId,
+      adSize: form.adSize || '',
+      adType: form.adType,
+      frequency: parseInt(form.frequency) || 1,
+      startDate: form.startDate,
+      endDate: form.endDate || null,
+      datesList: form.datesList,
+      publishingDates: buildPublishingDates(),
+      dateCount: dateCount,
+      basePrice: priceCalculation.value?.basePrice || 0,
+      surcharge: priceCalculation.value?.surcharge || 0,
+      discount: parseFloat(form.discount) || 0,
+      totalAmount: finalTotal,
+      paymentMethod: form.paymentMethod,
+      specialInstructions: form.specialInstructions?.trim() || '',
+      contactEmail: form.email,
+      contactNumber: form.phone,
+      status: 'draft',
+      files: form.files,
+      rateCardDetails: rateCardDetails.value,
+      salesAgentId: form.salesAgentId || null,
+      vgamsUserId: 1 // You need to get this from your auth store
+    }
+    
+    console.log('[DRAFT-SAVE] Sending advert data:', advertData)
+    
+    const result = await createAdvert(advertData)
+    
+    console.log('[DRAFT-SAVE] SUCCESS - Draft saved:', result)
+    
+    // Close loading mask and show success
+    closeMask()
+    showMask({
+      type: 'success',
+      title: 'Draft Saved Successfully!',
+      message: `Your advert draft has been saved.`,
+      details: `Reference Number: ${result.bcReference || result.data?.bcReference || 'N/A'}`,
+      autoClose: 3000
+    })
+    
+    // Navigate after mask closes
+    setTimeout(() => {
+      router.push('/dashboard/booking/')
+    }, 3000)
+    
+  } catch (error) {
+    console.error('[DRAFT-SAVE] ERROR - Failed to save draft:', error)
+    
+    // Close loading mask if it's still showing
+    closeMask()
+    
+    // Show error mask
+    showMask({
+      type: 'error',
+      title: 'Failed to Save Draft',
+      message: error.message || 'An unexpected error occurred while saving your draft.',
+      details: error.response?.data?.message || error.toString(),
+      autoClose: 5000
+    })
+  } finally {
+    savingDraft.value = false
+  }
+}
+*/
+
+/*
 const submitAdvert = async () => {
   console.log('[SUBMIT] Submit advert requested')
   
@@ -977,6 +1138,693 @@ const submitAdvert = async () => {
     submitting.value = false
   }
 }
+*/
+/*
+const saveDraft = async () => {
+  console.log('[DRAFT-SAVE] Save draft requested')
+  
+  if (!hasRequiredClientInfo.value) {
+    console.log('[DRAFT-SAVE] ERROR - Missing required client info')
+    showMask({
+      type: 'error',
+      title: 'Missing Information',
+      message: 'Please fill in all required client information before saving draft.',
+      autoClose: 5000
+    })
+    return
+  }
+  
+  console.log('[DRAFT-SAVE] Form discount value:', form.discount)
+
+  try {
+    savingDraft.value = true
+    
+    // Show loading mask
+    showMask({
+      type: 'loading',
+      title: 'Saving Draft',
+      message: 'Please wait while we save your advert...',
+      autoClose: 0
+    })
+    
+    // Get pricing data from SchedulePricing component
+    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
+    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
+    
+    const advertData = {
+      advertTitle: form.advertTitle,
+      clientId: form.clientId || null,
+      clientName: form.clientName,
+      marketSector: form.marketSector || '', 
+      contactPerson: form.contactPerson || '',
+      email: form.email,
+      phone: form.phone,
+      referenceDocument: form.referenceDocument || '',
+      officeLocation: form.officeLocation,
+      publishOnWeb: form.publishOnWeb,
+      platformCategory: form.platformCategory,
+      product: form.product,
+      rateCard: form.rateCardId,
+      adSize: form.adSize || '',
+      adType: form.adType,
+      frequency: parseInt(form.frequency) || 1,
+      startDate: form.startDate,
+      endDate: form.endDate || null,
+      datesList: form.datesList,
+      publishingDates: buildPublishingDates(),
+      dateCount: dateCount,
+      basePrice: priceCalculation.value?.basePrice || 0,
+      surcharge: priceCalculation.value?.surcharge || 0,
+      discount: parseFloat(form.discount) || 0,
+      totalAmount: finalTotal,
+      paymentMethod: form.paymentMethod,
+      specialInstructions: form.specialInstructions?.trim() || '',
+      contactEmail: form.email,
+      contactNumber: form.phone,
+      status: 'draft',
+      files: form.files,
+      rateCardDetails: rateCardDetails.value,
+      salesAgentId: form.salesAgentId || null,
+      vgamsUserId: 1 // You need to get this from your auth store
+    }
+    
+    console.log('[DRAFT-SAVE] Sending advert data:', advertData)
+    
+    const result = await createAdvert(advertData)
+    
+    console.log('[DRAFT-SAVE] SUCCESS - Draft saved:', result)
+    
+    // Get the reference number from the response
+    const referenceNumber = result.reference || result.data?.reference
+    const bcReference = result.bc_reference || result.data?.bc_reference
+    const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
+    
+    console.log('[DRAFT-SAVE] Reference:', referenceNumber)
+    console.log('[DRAFT-SAVE] BC Reference:', bcReference)
+    console.log('[DRAFT-SAVE] BC Sync Success:', bcSyncSuccess)
+    
+    // If BC sync is already complete and successful, show success immediately
+    if (bcSyncSuccess && bcReference) {
+      closeMask()
+      showMask({
+        type: 'success',
+        title: 'Draft Saved Successfully!',
+        message: 'Your advert draft has been saved and synced with Business Central.',
+        details: `Strapi Reference: ${referenceNumber}\nBC Reference: ${bcReference}\nBC Sync: ✓ Successful`,
+        autoClose: 5000
+      })
+      
+      setTimeout(() => {
+        router.push('/dashboard/booking/')
+      }, 5000)
+    } 
+    // If BC sync is not complete yet, show initial success and poll for status
+    else if (referenceNumber) {
+      // Show initial success with pending BC status
+      closeMask()
+      showMask({
+        type: 'info',
+        title: 'Draft Saved Successfully!',
+        message: 'Your advert has been saved. Syncing with Business Central...',
+        details: `Strapi Reference: ${referenceNumber}\nBC Sync: ⏳ In Progress\n\nPlease wait while we sync with Business Central...`,
+        autoClose: 0 // Don't auto close while polling
+      })
+      
+      // Start polling for BC status
+      try {
+        const bcStatus = await pollBcStatus(referenceNumber, 15, 2000) // 15 attempts, 2 second intervals = 30 seconds max
+        
+        // After polling completes, update the mask
+        if (bcStatus && bcStatus.bc_reference_number) {
+          updateMaskWithBcStatus(bcStatus)
+        }
+      } catch (error) {
+        console.error('[DRAFT-SAVE] Polling error:', error)
+        // Show error for BC sync failure
+        closeMask()
+        showMask({
+          type: 'warning',
+          title: 'Draft Saved - BC Sync Pending',
+          message: 'Your draft was saved but BC sync is taking longer than expected.',
+          details: `Strapi Reference: ${referenceNumber}\nYou can check the status later from the adverts list.`,
+          autoClose: 5000
+        })
+      }
+      
+      setTimeout(() => {
+        router.push('/dashboard/booking/')
+      }, 8000)
+    } else {
+      // Fallback if no reference
+      closeMask()
+      showMask({
+        type: 'success',
+        title: 'Draft Saved Successfully!',
+        message: 'Your advert draft has been saved.',
+        autoClose: 3000
+      })
+      
+      setTimeout(() => {
+        router.push('/dashboard/booking/')
+      }, 3000)
+    }
+    
+  } catch (error) {
+    console.error('[DRAFT-SAVE] ERROR - Failed to save draft:', error)
+    
+    // Close loading mask if it's still showing
+    closeMask()
+    
+    // Show error mask
+    showMask({
+      type: 'error',
+      title: 'Failed to Save Draft',
+      message: error.message || 'An unexpected error occurred while saving your draft.',
+      details: error.response?.data?.message || error.toString(),
+      autoClose: 5000
+    })
+  } finally {
+    savingDraft.value = false
+    // Clear any existing polling interval
+    if (pollingInterval) {
+      clearInterval(pollingInterval)
+      pollingInterval = null
+    }
+  }
+}
+  */
+
+const saveDraft = async () => {
+  console.log('[DRAFT-SAVE] Save draft requested')
+  
+  if (!hasRequiredClientInfo.value) {
+    console.log('[DRAFT-SAVE] ERROR - Missing required client info')
+    showMask({
+      type: 'error',
+      title: 'Missing Information',
+      message: 'Please fill in all required client information before saving draft.',
+      autoClose: 0
+    })
+    return
+  }
+  
+  console.log('[DRAFT-SAVE] Form discount value:', form.discount)
+
+  try {
+    savingDraft.value = true
+    
+    // Show loading mask
+    showMask({
+      type: 'loading',
+      title: 'Saving Draft',
+      message: 'Please wait while we save your advert...',
+      autoClose: 0
+    })
+    
+    // Get pricing data from SchedulePricing component
+    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
+    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
+    
+    const advertData = {
+      advertTitle: form.advertTitle,
+      clientId: form.clientId || null,
+      clientName: form.clientName,
+      marketSector: form.marketSector || '', 
+      contactPerson: form.contactPerson || '',
+      email: form.email,
+      phone: form.phone,
+      referenceDocument: form.referenceDocument || '',
+      officeLocation: form.officeLocation,
+      publishOnWeb: form.publishOnWeb,
+      platformCategory: form.platformCategory,
+      product: form.product,
+      rateCard: form.rateCardId,
+      adSize: form.adSize || '',
+      adType: form.adType,
+      frequency: parseInt(form.frequency) || 1,
+      startDate: form.startDate,
+      endDate: form.endDate || null,
+      datesList: form.datesList,
+      publishingDates: buildPublishingDates(),
+      dateCount: dateCount,
+      basePrice: priceCalculation.value?.basePrice || 0,
+      surcharge: priceCalculation.value?.surcharge || 0,
+      discount: parseFloat(form.discount) || 0,
+      totalAmount: finalTotal,
+      paymentMethod: form.paymentMethod,
+      specialInstructions: form.specialInstructions?.trim() || '',
+      contactEmail: form.email,
+      contactNumber: form.phone,
+      status: 'draft',
+      files: form.files,
+      rateCardDetails: rateCardDetails.value,
+      salesAgentId: form.salesAgentId || null,
+      vgamsUserId: 1 // You need to get this from your auth store
+    }
+    
+    console.log('[DRAFT-SAVE] Sending advert data:', advertData)
+    
+    const result = await createAdvert(advertData)
+    
+    console.log('[DRAFT-SAVE] SUCCESS - Draft saved:', result)
+    
+    // Get the reference number from the response
+    const referenceNumber = result.reference || result.data?.reference
+    const bcReference = result.bc_reference || result.data?.bc_reference
+    const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
+    
+    console.log('[DRAFT-SAVE] Reference:', referenceNumber)
+    console.log('[DRAFT-SAVE] BC Reference:', bcReference)
+    console.log('[DRAFT-SAVE] BC Sync Success:', bcSyncSuccess)
+    
+    // If BC sync is already complete and successful, show success immediately
+    if (bcSyncSuccess && bcReference) {
+      closeMask()
+      showMask({
+        type: 'success',
+        title: '✓ Draft Saved Successfully!',
+        message: 'Your advert draft has been saved and synced with Business Central.',
+        details: `Strapi Reference: ${referenceNumber}\nBC Reference: ${bcReference}\nBC Sync: ✓ Successful\n\nStatus: ${result.status || 'draft'}\nClient: ${form.clientName}\nTitle: ${form.advertTitle}`,
+        autoClose: 0
+      })
+    } 
+    // If BC sync is not complete yet, show initial success and poll for status
+    else if (referenceNumber) {
+      // Show initial success with pending BC status
+      closeMask()
+      showMask({
+        type: 'info',
+        title: '✓ Draft Saved Successfully!',
+        message: 'Your advert has been saved.',
+        details: `Strapi Reference: ${referenceNumber}\nBC Sync: ⏳ In Progress\n\nSyncing with Business Central...\n\nPlease wait while we complete the sync.`,
+        autoClose: 0
+      })
+      
+      // Start polling for BC status
+      try {
+        await pollBcStatus(referenceNumber, 20, 2000) // 20 attempts, 2 second intervals = 40 seconds max
+      } catch (error) {
+        console.error('[DRAFT-SAVE] Polling error:', error)
+        // Error already handled in pollBcStatus
+      }
+    } else {
+      // Fallback if no reference
+      closeMask()
+      showMask({
+        type: 'success',
+        title: '✓ Draft Saved Successfully!',
+        message: 'Your advert draft has been saved.',
+        details: 'The advert has been created successfully.',
+        autoClose: 0
+      })
+    }
+    
+  } catch (error) {
+    console.error('[DRAFT-SAVE] ERROR - Failed to save draft:', error)
+    
+    // Close loading mask if it's still showing
+    closeMask()
+    
+    // Show error mask - NO AUTO CLOSE
+    showMask({
+      type: 'error',
+      title: '✗ Failed to Save Draft',
+      message: error.message || 'An unexpected error occurred while saving your draft.',
+      details: error.response?.data?.message || error.toString(),
+      autoClose: 0
+    })
+  } finally {
+    savingDraft.value = false
+  }
+}
+
+
+
+  /*
+const submitAdvert = async () => {
+  console.log('[SUBMIT] Submit advert requested')
+  
+  if (!isFormValid.value) {
+    console.log('[SUBMIT] ERROR - Form validation failed')
+    showMask({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'Please fill in all required fields and ensure price is calculated.',
+      autoClose: 5000
+    })
+    return
+  }
+  
+  if (!confirm('Submit this advert for review? Once submitted, you cannot make changes until it\'s reviewed.')) {
+    console.log('[SUBMIT] CANCELLED - User cancelled submission')
+    return
+  }
+  
+  try {
+    submitting.value = true
+    
+    // Show loading mask
+    showMask({
+      type: 'loading',
+      title: 'Submitting Advert',
+      message: 'Please wait while we submit your advert for review...',
+      autoClose: 0
+    })
+    
+    // Get pricing data from SchedulePricing component
+    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
+    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
+    
+    const advertData = {
+      advertTitle: form.advertTitle,
+      clientId: form.clientId || null,
+      clientName: form.clientName,
+      marketSector: form.marketSector || '', 
+      contactPerson: form.contactPerson || '',
+      email: form.email,
+      phone: form.phone,
+      referenceDocument: form.referenceDocument || '',
+      officeLocation: form.officeLocation,
+      publishOnWeb: form.publishOnWeb,
+      platformCategory: form.platformCategory,
+      product: form.product,
+      rateCard: form.rateCardId,
+      adSize: form.adSize || '',
+      adType: form.adType,
+      frequency: parseInt(form.frequency) || 1,
+      startDate: form.startDate,
+      endDate: form.endDate || null,
+      datesList: form.datesList,
+      publishingDates: buildPublishingDates(),
+      dateCount: dateCount,
+      basePrice: priceCalculation.value?.basePrice || 0,
+      surcharge: priceCalculation.value?.surcharge || 0,
+      discount: parseFloat(form.discount) || 0,
+      totalAmount: finalTotal,
+      paymentMethod: form.paymentMethod,
+      specialInstructions: form.specialInstructions?.trim() || '',
+      contactEmail: form.email,
+      contactNumber: form.phone,
+      status: 'pending_review',
+      files: form.files,
+      rateCardDetails: rateCardDetails.value,
+      salesAgentId: form.salesAgentId || null,
+      vgamsUserId: 1 // You need to get this from your auth store
+    }
+    
+    console.log('[SUBMIT] Sending advert data:', advertData)
+    
+    const result = await createAdvert(advertData)
+    
+    console.log('[SUBMIT] SUCCESS - Advert submitted:', result)
+    
+    // Close loading mask and show success
+    closeMask()
+    showMask({
+      type: 'success',
+      title: 'Advert Submitted Successfully!',
+      message: `Your advert has been submitted for review.`,
+      details: `Reference Number: ${result.bcReference || result.data?.bcReference || 'N/A'}`,
+      autoClose: 3000
+    })
+    
+    // Navigate after mask closes
+    setTimeout(() => {
+      router.push('/dashboard/booking')
+    }, 3000)
+    
+  } catch (error) {
+    console.error('[SUBMIT] ERROR - Submission failed:', error)
+    
+    // Close loading mask if it's still showing
+    closeMask()
+    
+    // Show error mask
+    showMask({
+      type: 'error',
+      title: 'Failed to Submit Advert',
+      message: error.message || 'An unexpected error occurred while submitting your advert.',
+      details: error.response?.data?.message || error.toString(),
+      autoClose: 5000
+    })
+  } finally {
+    submitting.value = false
+  }
+}
+*/
+
+const submitAdvert = async () => {
+  console.log('[SUBMIT] Submit advert requested')
+  
+  if (!isFormValid.value) {
+    console.log('[SUBMIT] ERROR - Form validation failed')
+    showMask({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'Please fill in all required fields and ensure price is calculated.',
+      autoClose: 0
+    })
+    return
+  }
+  
+  if (!confirm('Submit this advert for review? Once submitted, you cannot make changes until it\'s reviewed.')) {
+    console.log('[SUBMIT] CANCELLED - User cancelled submission')
+    return
+  }
+  
+  try {
+    submitting.value = true
+    
+    // Show loading mask
+    showMask({
+      type: 'loading',
+      title: 'Submitting Advert',
+      message: 'Please wait while we submit your advert for review...',
+      autoClose: 0
+    })
+    
+    // Get pricing data from SchedulePricing component
+    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
+    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
+    
+    const advertData = {
+      advertTitle: form.advertTitle,
+      clientId: form.clientId || null,
+      clientName: form.clientName,
+      marketSector: form.marketSector || '', 
+      contactPerson: form.contactPerson || '',
+      email: form.email,
+      phone: form.phone,
+      referenceDocument: form.referenceDocument || '',
+      officeLocation: form.officeLocation,
+      publishOnWeb: form.publishOnWeb,
+      platformCategory: form.platformCategory,
+      product: form.product,
+      rateCard: form.rateCardId,
+      adSize: form.adSize || '',
+      adType: form.adType,
+      frequency: parseInt(form.frequency) || 1,
+      startDate: form.startDate,
+      endDate: form.endDate || null,
+      datesList: form.datesList,
+      publishingDates: buildPublishingDates(),
+      dateCount: dateCount,
+      basePrice: priceCalculation.value?.basePrice || 0,
+      surcharge: priceCalculation.value?.surcharge || 0,
+      discount: parseFloat(form.discount) || 0,
+      totalAmount: finalTotal,
+      paymentMethod: form.paymentMethod,
+      specialInstructions: form.specialInstructions?.trim() || '',
+      contactEmail: form.email,
+      contactNumber: form.phone,
+      status: 'pending_review',
+      files: form.files,
+      rateCardDetails: rateCardDetails.value,
+      salesAgentId: form.salesAgentId || null,
+      vgamsUserId: 1 // You need to get this from your auth store
+    }
+    
+    console.log('[SUBMIT] Sending advert data:', advertData)
+    
+    const result = await createAdvert(advertData)
+    
+    console.log('[SUBMIT] SUCCESS - Advert submitted:', result)
+    
+    // Get the reference number from the response
+    const referenceNumber = result.reference || result.data?.reference
+    const bcReference = result.bc_reference || result.data?.bc_reference
+    const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
+    
+    // If BC sync is already complete and successful
+    if (bcSyncSuccess && bcReference) {
+      closeMask()
+      showMask({
+        type: 'success',
+        title: '✓ Advert Submitted Successfully!',
+        message: 'Your advert has been submitted for review and synced with Business Central.',
+        details: `Strapi Reference: ${referenceNumber}\nBC Reference: ${bcReference}\nBC Sync: ✓ Successful\n\nStatus: ${result.status || 'pending_review'}\nClient: ${form.clientName}\nTitle: ${form.advertTitle}`,
+        autoClose: 0
+      })
+    } 
+    // If BC sync is not complete yet, show initial success and poll for status
+    else if (referenceNumber) {
+      closeMask()
+      showMask({
+        type: 'info',
+        title: '✓ Advert Submitted Successfully!',
+        message: 'Your advert has been submitted for review.',
+        details: `Strapi Reference: ${referenceNumber}\nBC Sync: ⏳ In Progress\n\nSyncing with Business Central...\n\nPlease wait while we complete the sync.`,
+        autoClose: 0
+      })
+      
+      // Start polling for BC status
+      try {
+        await pollBcStatus(referenceNumber, 20, 2000)
+      } catch (error) {
+        console.error('[SUBMIT] Polling error:', error)
+        // Error already handled in pollBcStatus
+      }
+    } else {
+      closeMask()
+      showMask({
+        type: 'success',
+        title: '✓ Advert Submitted Successfully!',
+        message: 'Your advert has been submitted for review.',
+        details: 'The advert has been created and submitted successfully.',
+        autoClose: 0
+      })
+    }
+    
+  } catch (error) {
+    console.error('[SUBMIT] ERROR - Submission failed:', error)
+    
+    // Close loading mask if it's still showing
+    closeMask()
+    
+    // Show error mask - NO AUTO CLOSE
+    showMask({
+      type: 'error',
+      title: '✗ Failed to Submit Advert',
+      message: error.message || 'An unexpected error occurred while submitting your advert.',
+      details: error.response?.data?.message || error.toString(),
+      autoClose: 0
+    })
+  } finally {
+    submitting.value = false
+  }
+}
+
+// Add cleanup on component unmount
+onUnmounted(() => {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
+})
+
+
+// Function to poll BC status
+const pollBcStatus = async (reference, maxAttempts = 15, interval = 2000) => {
+  let attempts = 0
+  
+  return new Promise((resolve, reject) => {
+    pollingInterval = setInterval(async () => {
+      attempts++
+      
+      try {
+        console.log(`[BC-POLL] Attempt ${attempts}/${maxAttempts} for reference: ${reference}`)
+        
+        const response = await getBcSyncStatus(reference)
+        
+        if (response.success && response.data) {
+          const bcStatus = response.data
+          
+          console.log('[BC-POLL] Status update:', {
+            bc_reference_number: bcStatus.bc_reference_number,
+            bc_share_success: bcStatus.bc_share_success
+          })
+          
+          // If BC sync is complete (successful or has reference)
+          if (bcStatus.bc_share_success === true || bcStatus.bc_reference_number !== null) {
+            clearInterval(pollingInterval)
+            pollingInterval = null
+            
+            // Update the mask with BC status
+            updateMaskWithBcStatus(bcStatus)
+            resolve(bcStatus)
+          }
+          
+          // If we've reached max attempts, stop polling
+          if (attempts >= maxAttempts) {
+            clearInterval(pollingInterval)
+            pollingInterval = null
+            console.log('[BC-POLL] Max attempts reached, stopping polling')
+            
+            // Show timeout message
+            showMask({
+              type: 'warning',
+              title: 'BC Sync Still Processing',
+              message: 'Business Central sync is taking longer than expected.',
+              details: `Reference: ${reference}\nStatus: ${bcStatus.bc_share_success ? 'Completed' : 'In Progress'}\n\nYou can close this window and check the status later.`,
+              autoClose: 0
+            })
+            resolve(bcStatus)
+          }
+        }
+      } catch (error) {
+        console.error('[BC-POLL] Error fetching status:', error)
+        
+        if (attempts >= maxAttempts) {
+          clearInterval(pollingInterval)
+          pollingInterval = null
+          
+          showMask({
+            type: 'error',
+            title: 'BC Sync Status Check Failed',
+            message: 'Unable to check Business Central sync status.',
+            details: error.message || 'Please check the advert details later.',
+            autoClose: 0
+          })
+          reject(error)
+        }
+      }
+    }, interval)
+  })
+}
+
+// Function to update mask with BC status
+const updateMaskWithBcStatus = (bcStatus) => {
+  const hasBCReference = bcStatus.bc_reference_number !== null && bcStatus.bc_reference_number !== ''
+  const bcSyncSuccess = bcStatus.bc_share_success === true
+  
+  let details = `Strapi Reference: ${bcStatus.reference}\n`
+  
+  if (hasBCReference) {
+    details += `BC Reference: ${bcStatus.bc_reference_number}\n`
+    details += `BC Sync: ${bcSyncSuccess ? '✓ Successful' : '⚠ Failed'}`
+  } else {
+    details += `BC Sync: ${bcSyncSuccess ? '✓ Completed' : '⏳ In Progress or Failed'}`
+  }
+  
+  details += `\n\nStatus: ${bcStatus.status || 'N/A'}`
+  details += `\nClient: ${bcStatus.clientName || 'N/A'}`
+  details += `\nTitle: ${bcStatus.advertTitle || 'N/A'}`
+  
+  // Update the mask with BC details - NO AUTO CLOSE
+  showMask({
+    type: bcSyncSuccess ? 'success' : 'warning',
+    title: bcSyncSuccess ? '✓ BC Sync Complete!' : '⚠ BC Sync Status',
+    message: bcSyncSuccess 
+      ? 'Advert successfully synced with Business Central' 
+      : hasBCReference 
+        ? 'BC sync completed with issues' 
+        : 'BC sync is still processing',
+    details: details,
+    autoClose: 0 // User must click close button
+  })
+}
+
+
 
 const resetForm = () => {
   console.log('[RESET] Resetting form...')
