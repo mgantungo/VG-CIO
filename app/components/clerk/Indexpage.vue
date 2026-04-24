@@ -1,4 +1,4 @@
-<!--pages/dashboard/booking/index.vue-->
+<!--components/clerk/Indexpage.vue-->
 <template>
   <div class="rp-page">
 

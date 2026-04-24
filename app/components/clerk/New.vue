@@ -1,4 +1,4 @@
-<!--components/clerk/new.vue-->
+<!--components/clerk/New.vue-->
 <template>
   <div class="booking-page">
     <div class="page-header">

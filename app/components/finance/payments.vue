@@ -1,4 +1,4 @@
-<!--pages/dashboard/finance/payments.vue-->
+<!--components/finance/payments.vue-->
 <template>
   <div class="pm-page">
 

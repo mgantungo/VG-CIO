@@ -1,4 +1,4 @@
-<!-- pages/dashboard/booking/edit/[id].vue -->
+<!-- components/clerk/edit/[id].vue -->
 <template>
   <div class="edit-booking-page">
     <div class="page-header">

@@ -1,4 +1,4 @@
-<!--pages/dashboard/finance/index.vue-->
+<!--components/finance/index.vue-->
 <template>
   <div class="fd-page">
 

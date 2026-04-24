@@ -1,4 +1,4 @@
-<!-- pages/editor/index.vue -->
+<!-- components/editor/index.vue -->
 <template>
   <div class="editor-page">
 
