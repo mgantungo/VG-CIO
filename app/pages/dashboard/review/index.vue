@@ -1,4 +1,4 @@
-<!-- pages/editor/index.vue -->
+<!-- pages/review/index.vue -->
 <template>
   <div class="editor-page">
 

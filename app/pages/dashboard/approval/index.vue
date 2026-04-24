@@ -1,3 +1,4 @@
+<!--pages/dashboard/approval/index.vue-->
 <template>
   <div class="approval-page">
     <div class="page-header">
