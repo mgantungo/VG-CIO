@@ -84,6 +84,10 @@
           <span v-html="ic.bar"></span>Reports
         </button>
 
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'settings' }" @click="go('settings')">
+          <span v-html="ic.settings"></span>Settings
+        </button>
+
       </div><!-- /rail__scroll -->
 
       <div class="rail__foot">
@@ -207,6 +211,10 @@
           <FinanceReports />
         </div>
 
+        <div v-show="s === 'settings'" class="bare">
+          <Settings />
+        </div>
+
       </div><!-- /body -->
     </div><!-- /main -->
   </div><!-- /admin-shell -->
@@ -236,6 +244,8 @@ import DesignIndex from '~/components/design/Index.vue'          // design house
 import { useAuth }     from '~/composables/useAuth'
 import { useAdverts }  from '~/composables/useAdverts'
 import { usePayments } from '~/composables/usePayments'
+
+import Settings from '~/components/admin/Settings.vue'
 
 // ── layout: 'admin' ──────────────────────────────────────────────────────────
 // Uses layouts/admin.vue — a bare full-screen wrapper with no AppHeader,
@@ -298,6 +308,7 @@ const ic = {
   card:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="22" height="16" rx="1"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,
   bar:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
   arr:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
+  settings: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H5.78a1.65 1.65 0 0 0-1.51 1 1.65 1.65 0 0 0 .33 1.82l.03.03A10 10 0 0 0 12 17.66a10 10 0 0 0 6.37-2.63z"/></svg>`,
 }
 
 // ── Overview tiles ─────────────────────────────────────────────────────────
@@ -310,6 +321,7 @@ const workspaces = [
   { id:'finance_index',       label:'Finance Dashboard', desc:'Revenue overview and financial KPIs.',            key:'finance_team',        icon:ic.dollar, cls:'ws-ic--finance' },
   { id:'finance_payments',    label:'Payments',          desc:'Record payments, track collections.',             key:'finance_team',        icon:ic.card,   cls:'ws-ic--finance' },
   { id:'finance_reports',     label:'Reports',           desc:'Generate and export revenue reports.',            key:'finance_team',        icon:ic.bar,    cls:'ws-ic--finance' },
+  { id:'settings', label:'Settings', desc:'System configuration and client sync.', key:'administrator', icon:ic.settings, cls:'ws-ic--settings' },
 ]
 
 // ── KPI ────────────────────────────────────────────────────────────────────
