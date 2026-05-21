@@ -2,7 +2,7 @@
 import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   devtools: { enabled: true },
-  
+
   modules: [
     '@pinia/nuxt'
   ],
@@ -10,14 +10,15 @@ export default defineNuxtConfig({
     port: parseInt(process.env.PORT || '3130')
   },
 
-
   css: [
     '@/assets/css/main.css'
   ],
 
-    // Add the Tailwind CSS Vite plugin
   vite: {
     plugins: [tailwindcss()],
+    server: {
+      allowedHosts: process.env.NODE_ENV === 'production' ? [] : true
+    }
   },
 
   runtimeConfig: {
@@ -33,10 +34,10 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { 
-          key: 'description', 
-          name: 'description', 
-          content: 'Manage advertising across Vision Group platforms' 
+        {
+          key: 'description',
+          name: 'description',
+          content: 'Manage advertising across Vision Group platforms'
         }
       ],
       link: [
