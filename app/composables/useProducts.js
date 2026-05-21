@@ -9,7 +9,12 @@ export const useProducts = () => {
   const error = ref(null)
   
   // API base URL from environment
-  const API_BASE = process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'
+  //const API_BASE = process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'
+
+  // Runtime config
+  const config = useRuntimeConfig()
+  // API base URL from environment
+  const API_BASE = config.public.apiBase;
   
   // Load categories
   const loadCategories = async (params = {}) => {

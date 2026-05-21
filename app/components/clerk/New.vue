@@ -172,6 +172,7 @@
 
 <script setup>
 // Import components
+//requiresDetails defines when to fire category check
 import FileUpload from './FileUpload.vue'
 import RateCardDetailsModal from './RateCardDetailsModal.vue'
 

@@ -1,322 +1,404 @@
-<!--pages/index.vue-->
+<!-- app/pages/index.vue -->
 <template>
-  <div class="landing-page">
-    <div class="hero-section">
-      <div class="hero-content">
-        <div class="hero-logo">
-          <img src="/favicon_VG-1-150x150.png" alt="Vision Group Logo">
-        </div>
-        <h1>Vision Group Adverts Management System</h1>
-        <p>Streamlining advertising operations across Print, TV, Radio, Digital, and more. From booking to billing, manage everything in one powerful platform.</p>
-        <button class="cta-button" @click="navigateTo('/login')">Get Started →</button>
-      </div>
-    </div>
+  <div class="portal-root">
 
-    <div class="features-section">
-      <h2>What You Can Do</h2>
-      <p>A comprehensive solution for managing advertising across all Vision Group platforms</p>
+    <Head>
+      <Title>VGAMS — Select Portal</Title>
+      <Link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+    </Head>
 
-      <div class="features-grid">
-        <div v-for="feature in features" :key="feature.title" class="feature-card">
-          <div class="feature-icon">{{ feature.icon }}</div>
-          <h3>{{ feature.title }}</h3>
-          <p>{{ feature.description }}</p>
+    <!-- ── Background grid texture ─────────────────────────────── -->
+    <div class="bg-grid" aria-hidden="true" />
+
+    <!-- ── Main tree layout ────────────────────────────────────── -->
+    <div class="tree-wrap">
+
+      <!-- Root node -->
+      <div class="root-node">
+        <div class="root-emblem">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="1" y="1" width="26" height="26" rx="5" stroke="#0066CC" stroke-width="1.5"/>
+            <path d="M7 14h14M14 7v14" stroke="#0066CC" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="14" cy="14" r="3" fill="#003366"/>
+          </svg>
         </div>
+        <div class="root-text">
+          <span class="root-label">VGAMS</span>
+          <span class="root-sub">Vision Group Advertising Management System</span>
+        </div>
+        <div class="root-badge">newvision.co.ug</div>
       </div>
-    </div>
+
+      <!-- Trunk line -->
+      <div class="trunk" aria-hidden="true" />
+
+      <!-- Branch connector -->
+      <div class="branch-row" aria-hidden="true">
+        <div class="branch-arm branch-arm--left" />
+        <div class="branch-arm branch-arm--right" />
+      </div>
+
+      <!-- Portal cards -->
+      <div class="portals">
+
+        <!-- ── VGAMS Staff Login ──────────────────────────────── -->
+        <NuxtLink to="/login" class="portal-card portal-card--primary" tabindex="0">
+          <div class="portal-stem portal-stem--left" aria-hidden="true" />
+          <div class="portal-icon-wrap">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="16" cy="10" r="5" stroke="#003366" stroke-width="1.5"/>
+              <path d="M6 26c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke="#003366" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="portal-body">
+            <h2 class="portal-title">Ads Booking Portal</h2>
+            <p class="portal-desc">Booking clerks, editors, finance team, design house & advertising managers</p>
+            <ul class="portal-roles">
+              <li>Booking Clerk</li>
+              <li>Sub Editor</li>
+              <li>Advertising Manager</li>
+              <li>Design House</li>
+              <li>Finance Team</li>
+            </ul>
+          </div>
+          <div class="portal-action">
+            <span class="portal-action-label">Enter Portal</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </NuxtLink>
+
+        <!-- ── SFA Login ──────────────────────────────────────── -->
+        <NuxtLink to="/sfa-login" class="portal-card portal-card--secondary" tabindex="0">
+          <div class="portal-stem portal-stem--right" aria-hidden="true" />
+          <div class="portal-icon-wrap portal-icon-wrap--alt">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="5" y="8" width="22" height="16" rx="2" stroke="#1A5276" stroke-width="1.5"/>
+              <path d="M5 13h22M11 8v5M21 8v5" stroke="#1A5276" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="16" cy="19" r="2" fill="#1A5276"/>
+            </svg>
+          </div>
+          <div class="portal-body">
+            <h2 class="portal-title">Sales Force Automation Portal</h2>
+            <p class="portal-desc">Sales force automation — field agents, account managers & sales operations</p>
+            <ul class="portal-roles">
+              <li>Sales Agents</li>
+              <li>Sales Person</li>
+              <li>Group Supervisors</li>
+              <li>Sales Operations</li>
+            </ul>
+          </div>
+          <div class="portal-action portal-action--alt">
+            <span class="portal-action-label">Enter Portal</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </NuxtLink>
+
+      </div><!-- /portals -->
+
+    </div><!-- /tree-wrap -->
+
+    <!-- Footer -->
+    <footer class="portal-footer">
+      <span>© {{ new Date().getFullYear() }} Vision Group Ltd</span>
+      <span class="footer-dot" aria-hidden="true">·</span>
+      <span>VGAMS v2</span>
+      <span class="footer-dot" aria-hidden="true">·</span>
+      <span>All access is logged and monitored</span>
+    </footer>
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-const navigateTo = useRouter().push
-
-// Specify layout for this page
-definePageMeta({
-  layout: 'auth' // Use the auth layout which doesn't have AppHeader/SideMenu
-})
-
-const features = ref([
-  {
-    icon: '📝',
-    title: 'Advert Booking',
-    description: 'Clerks can create and book adverts across multiple platforms (New Vision, Bukedde, TV, Radio, Digital). Upload supporting documents, images, videos, and PDFs. Real-time pricing calculation based on comprehensive rate cards.'
-  },
-  {
-    icon: '✓',
-    title: 'Editorial Review',
-    description: 'Sub-editors review submitted adverts for compliance and quality. Approve or reject with comments. Assign adverts to specific platforms and time slots.'
-  },
-  {
-    icon: '👨‍💼',
-    title: 'Manager Approval',
-    description: 'Advertising managers review revenue projections vs costs. Financial oversight and final approval. Download advert attachments for review.'
-  },
-  {
-    icon: '🎨',
-    title: 'Design House',
-    description: 'Access approved adverts and download all attachments. Upload newly developed creative materials. Version control for design iterations.'
-  },
-  {
-    icon: '💰',
-    title: 'Finance & Billing',
-    description: 'Track payments against bookings. Multiple payment methods (Cash, Credit, PDC). Revenue reporting and analytics. Payment collection workflow.'
-  },
-  {
-    icon: '📊',
-    title: 'Analytics Dashboard',
-    description: 'Real-time revenue tracking across all platforms. Performance metrics by product category. Client activity and payment status monitoring.'
-  },
-  {
-    icon: '🔐',
-    title: 'Role-Based Access',
-    description: 'Secure login for different user types. Clerks, Editors, Managers, Design Team, Finance. Customized dashboards per role.'
-  },
-  {
-    icon: '📱',
-    title: 'Multi-Platform Support',
-    description: 'Manage adverts for Print (New Vision, Bukedde, supplements). Broadcast (UBC TV, Bukedde TV, Radio stations). Digital (Websites, Apps, Social Media).'
-  },
-  {
-    icon: '📄',
-    title: 'Document Management',
-    description: 'Centralized storage for all advert materials. Support for Word documents, PDFs, images, videos. Easy retrieval and reference system.'
-  }
-])
-
-// Disable right-click
-const disableRightClick = (e) => {
-  e.preventDefault()
-  return false
-}
-
-// Prevent horizontal scrolling
-const preventHorizontalScroll = (e) => {
-  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-    e.preventDefault()
-    return false
-  }
-}
-
-// Add event listeners
-onMounted(() => {
-  window.addEventListener('contextmenu', disableRightClick)
-  window.addEventListener('keydown', preventHorizontalScroll)
-  
-  // Also prevent wheel/touchpad horizontal scrolling
-  window.addEventListener('wheel', (e) => {
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-      e.preventDefault()
-      return false
-    }
-  }, { passive: false })
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('contextmenu', disableRightClick)
-  window.removeEventListener('keydown', preventHorizontalScroll)
-})
+definePageMeta({ layout: false })
 </script>
 
 <style scoped>
-.landing-page {
-  width: 100%;
-  max-width: 100vw;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
-  position: relative;
-}
-
-/* Apply to body as well through component */
-:global(body) {
-  overflow-x: hidden !important;
-  max-width: 100vw !important;
-  position: relative !important;
-}
-
-/* Hero Section with vertical centering */
-.hero-section {
-  background: linear-gradient(135deg, #003366 0%, #0066CC 100%);
-  color: white;
-  padding: 20px;
-  text-align: center;
-  width: 100%;
-  max-width: 100vw;
-  box-sizing: border-box;
-  height: 97vh !important;
+/* ── Root shell ────────────────────────────────────────────────── */
+.portal-root {
+  font-family: 'IBM Plex Sans', sans-serif;
+  height: 98vh;
+  background: #F0F4F8;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
 }
 
-.hero-content {
-  max-width: 900px;
-  margin: 0 auto;
+/* ── Subtle dot-grid background ───────────────────────────────── */
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, #CBD5E3 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ── Tree wrapper ─────────────────────────────────────────────── */
+.tree-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  flex: 1;
-  padding: 20px;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 820px;
+  padding: 0 24px;
 }
 
-.hero-section h1 {
-  font-size: clamp(2em, 5vw, 3em);
-  margin-bottom: 20px;
+/* ── Root node ────────────────────────────────────────────────── */
+.root-node {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #ffffff;
+  border: 1.5px solid #D1D9E0;
+  border-radius: 10px;
+  padding: 16px 28px;
+  box-shadow: 0 2px 12px rgba(0, 51, 102, 0.07);
+}
+
+.root-emblem {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  background: #EBF1FA;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.root-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.root-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 1.2;
-  padding: 0 10px;
+  color: #003366;
+  letter-spacing: 1.5px;
 }
 
-.hero-section p {
-  font-size: clamp(1em, 2vw, 1.3em);
-  margin-bottom: 30px;
-  max-width: 800px;
+.root-sub {
+  font-size: 11.5px;
+  color: #5A7A9A;
+  font-weight: 400;
+  max-width: 340px;
+}
+
+.root-badge {
   margin-left: auto;
-  margin-right: auto;
-  padding: 0 15px;
-  line-height: 1.6;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0066CC;
+  background: #EBF1FA;
+  border: 1px solid #B8CFEA;
+  border-radius: 4px;
+  padding: 3px 9px;
+  letter-spacing: 0.5px;
 }
 
-.hero-logo {
-  width: clamp(60px, 15vw, 80px);
-  height: clamp(60px, 15vw, 80px);
-  margin: 0 auto 30px;
-  background: white;
-  border-radius: 50%;
+/* ── Trunk ────────────────────────────────────────────────────── */
+.trunk {
+  width: 2px;
+  height: 36px;
+  background: #B8CFEA;
+  flex-shrink: 0;
+}
+
+/* ── Branch arms ──────────────────────────────────────────────── */
+.branch-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2em;
-  font-weight: bold;
-  color: #E31E24;
-  box-sizing: border-box;
+  width: 540px;
+  position: relative;
 }
 
-.hero-logo img {
+.branch-arm {
+  height: 2px;
+  width: 50%;
+  background: #B8CFEA;
+}
+
+.branch-arm--left {
+  border-radius: 2px 0 0 0;
+  align-self: flex-start;
+  margin-top: 0;
+  position: relative;
+}
+
+.branch-arm--left::before {
+  content: '';
+  position: absolute;
+  left: 0; top: -16px;
+  width: 2px; height: 16px;
+  background: #B8CFEA;
+}
+
+.branch-arm--right {
+  border-radius: 0 2px 0 0;
+}
+
+.branch-arm--right::before {
+  content: '';
+  position: absolute;
+  right: 0; top: -16px;
+  width: 2px; height: 16px;
+  background: #B8CFEA;
+}
+
+/* ── Portal cards row ─────────────────────────────────────────── */
+.portals {
+  display: flex;
+  gap: 32px;
   width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 50%;
+  max-width: 820px;
 }
 
-.cta-button {
-  background: #E31E24;
-  color: white;
-  padding: clamp(12px, 3vw, 15px) clamp(30px, 5vw, 40px);
-  border: none;
-  border-radius: 5px;
-  font-size: clamp(1em, 2vw, 1.1em);
+/* ── Portal card ──────────────────────────────────────────────── */
+.portal-card {
+  position: relative;
+  flex: 1;
+  background: #ffffff;
+  border: 1.5px solid #D1D9E0;
+  border-radius: 10px;
+  padding: 28px 26px 22px;
   cursor: pointer;
   text-decoration: none;
-  display: inline-block;
-  transition: background 0.3s;
-  font-weight: 600;
-  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 51, 102, 0.05);
 }
 
-.cta-button:hover {
-  background: #c01820;
+.portal-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 51, 102, 0.11);
 }
 
-.features-section {
-  padding: clamp(40px, 8vw, 80px) clamp(15px, 3vw, 20px);
-  max-width: 1200px;
-  margin: 0 auto;
-  background: white;
-  width: 100%;
-  box-sizing: border-box;
+.portal-card--primary:hover { border-color: #0066CC; }
+.portal-card--secondary:hover { border-color: #1A5276; }
+
+/* stem drop from branch arm down to card top */
+.portal-stem {
+  position: absolute;
+  top: -18px;
+  width: 2px;
+  height: 18px;
+  background: #B8CFEA;
 }
 
-.features-section h2 {
-  text-align: center;
-  color: #003366;
-  font-size: clamp(1.8em, 4vw, 2.5em);
-  margin-bottom: 20px;
-  font-weight: 700;
-  padding: 0 10px;
-}
+.portal-stem--left  { left: 50%; transform: translateX(-50%); }
+.portal-stem--right { left: 50%; transform: translateX(-50%); }
 
-.features-section > p {
-  text-align: center;
-  color: #666;
-  max-width: 800px;
-  margin: 0 auto clamp(30px, 5vw, 50px);
-  font-size: clamp(0.95em, 2vw, 1.1em);
-  padding: 0 15px;
-  line-height: 1.6;
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: clamp(20px, 3vw, 30px);
-  margin-top: clamp(30px, 5vw, 50px);
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0 clamp(10px, 2vw, 15px);
-}
-
-.feature-card {
-  background: white;
-  padding: clamp(20px, 3vw, 30px);
+/* ── Icon ─────────────────────────────────────────────────────── */
+.portal-icon-wrap {
+  width: 56px;
+  height: 56px;
+  background: #EBF1FA;
   border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  border-left: 4px solid #E31E24;
-  transition: transform 0.3s;
-  width: 100%;
-  box-sizing: border-box;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-}
-
-.feature-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-}
-
-.feature-icon {
-  width: 60px;
-  height: 60px;
-  background: #0066CC;
-  color: white;
-  border-radius: 50%;
+  border: 1.5px solid #C5D8EF;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5em;
-  margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
-.feature-card h3 {
+.portal-icon-wrap--alt {
+  background: #EAF0F8;
+  border-color: #B8CEEA;
+}
+
+/* ── Card body ────────────────────────────────────────────────── */
+.portal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.portal-title {
+  font-size: 17px;
+  font-weight: 700;
   color: #003366;
-  margin-bottom: 15px;
-  font-size: clamp(1.1em, 2vw, 1.3em);
-  line-height: 1.3;
-  overflow-wrap: break-word;
+  margin: 0;
+  letter-spacing: 0.2px;
 }
 
-.feature-card p {
-  color: #666;
-  line-height: 1.8;
-  font-size: clamp(0.9em, 1.8vw, 1em);
-  overflow-wrap: break-word;
+.portal-desc {
+  font-size: 12.5px;
+  color: #5A7A9A;
+  line-height: 1.55;
+  margin: 0;
 }
 
-/* Prevent any element from causing horizontal overflow */
-* {
-  max-width: 100%;
+.portal-roles {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-/* Media query for very small screens */
-@media (max-width: 320px) {
-  .features-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .feature-card {
-    padding: 15px;
-  }
+.portal-roles li {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #3A6B99;
+  background: #EBF1FA;
+  border: 1px solid #C5D8EF;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.2px;
 }
+
+/* ── Action row ───────────────────────────────────────────────── */
+.portal-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid #E8EDF3;
+  color: #0066CC;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: gap 0.15s;
+}
+
+.portal-action--alt { color: #1A5276; }
+
+.portal-card:hover .portal-action { gap: 10px; }
+
+.portal-action-label { flex: 1; }
+
+/* ── Footer ───────────────────────────────────────────────────── */
+.portal-footer {
+  position: absolute;
+  bottom: 16px;
+  left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #8A9BB5;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+.footer-dot { opacity: 0.4; }
 </style>

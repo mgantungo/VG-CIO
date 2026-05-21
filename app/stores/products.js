@@ -12,6 +12,7 @@ export const useProductsStore = defineStore('products', () => {
   const error = ref(null)
   
   // API base URL from environment
+  const config = useRuntimeConfig();
   const API_BASE = config.public.apiBase;//process.env.NUXT_PUBLIC_API_BASE;// || 'https://cms-vgad.visiongroup.co.ug/api'
   
   // Getters

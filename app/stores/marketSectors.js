@@ -8,8 +8,10 @@ export const useMarketSectorsStore = defineStore('marketSectors', () => {
   const loading = ref(false)
   const error = ref(null)
   const loaded = ref(false) // guard against redundant fetches
+    // Runtime config
+  const config = useRuntimeConfig()
 
-  const API_BASE = import.meta.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'
+  const API_BASE = config.public.apiBase;// || 'https://cms-vgad.visiongroup.co.ug/api'
 
   // ─── Getters ─────────────────────────────────────────────────────────────────
 

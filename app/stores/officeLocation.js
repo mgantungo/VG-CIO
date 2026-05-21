@@ -8,6 +8,9 @@ export const useOfficeLocationsStore = defineStore('officeLocations', () => {
   const loading = ref(false)
   const error = ref(null)
   const selectedLocation = ref(null)
+    // Runtime config
+  const config = useRuntimeConfig()
+  const API_BASE = config.public.apiBase;
 
   // Fetch office locations from API
   const fetchOfficeLocations = async () => {
@@ -16,7 +19,7 @@ export const useOfficeLocationsStore = defineStore('officeLocations', () => {
     
     try {
       console.log('[OFFICE-STORE] Fetching office locations...')
-      const response = await fetch('https://cms-vgad.visiongroup.co.ug/api/advert/get-office-location')
+      const response = await fetch(`${API_BASE}/advert/get-office-location`)
       const data = await response.json()
       
       console.log('[OFFICE-STORE] Raw API response:', data)

@@ -22,9 +22,12 @@ export const useClientDropdownStore = defineStore('clientDropdown', () => {
   const backgroundCurrentPage = ref(1)
   const backgroundTotalPages = ref(0)
   const backgroundError = ref(null)
+
+    // Runtime config
+  const config = useRuntimeConfig()
   
   // API base URL from environment
-  const API_BASE = process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug';
+  const API_BASE = config.public.apiBase;// || 'https://cms-vgad.visiongroup.co.ug/api';
   
   // Cache for quick lookup
   const clientMap = ref(new Map())
@@ -76,7 +79,7 @@ export const useClientDropdownStore = defineStore('clientDropdown', () => {
     loading.value = true
     
     try {
-      const { data, error } = await useFetch(`${API_BASE}/api/clients/get-ad-client`, {
+      const { data, error } = await useFetch(`${API_BASE}/clients/get-ad-client`, {
         query: {
           page: 1,
           pageSize: pageSize.value,
@@ -124,7 +127,7 @@ export const useClientDropdownStore = defineStore('clientDropdown', () => {
     loadingMore.value = true
     
     try {
-      const { data, error } = await useFetch(`${API_BASE}/api/clients/get-ad-client`, {
+      const { data, error } = await useFetch(`${API_BASE}/clients/get-ad-client`, {
         query: {
           page: nextPage,
           pageSize: pageSize.value,
@@ -162,7 +165,7 @@ export const useClientDropdownStore = defineStore('clientDropdown', () => {
     if (page <= currentPage.value) return // Already loaded
     
     try {
-      const { data, error } = await useFetch(`${API_BASE}/api/clients/get-ad-client`, {
+      const { data, error } = await useFetch(`${API_BASE}/clients/get-ad-client`, {
         query: {
           page: page,
           pageSize: pageSize.value,
@@ -290,7 +293,7 @@ export const useClientDropdownStore = defineStore('clientDropdown', () => {
 
   const loadBackgroundPage = async (page) => {
     try {
-      const { data, error } = await useFetch(`${API_BASE}/api/clients/get-ad-client`, {
+      const { data, error } = await useFetch(`${API_BASE}/clients/get-ad-client`, {
         query: {
           page,
           pageSize: pageSize.value,
@@ -429,7 +432,7 @@ export const useClientDropdownStore = defineStore('clientDropdown', () => {
       }
 
       // If not enough local results, fetch from API
-      const { data, error } = await useFetch(`${API_BASE}/api/clients/search`, {
+      const { data, error } = await useFetch(`${API_BASE}/clients/search`, {
         query: { 
           q: query, 
           limit: 50,

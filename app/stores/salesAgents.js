@@ -8,7 +8,8 @@ export const useSalesAgentsStore = defineStore('salesAgents', () => {
   const error = ref(null)
 
   // API base URL from environment
-  const API_BASE = process.env.NUXT_PUBLIC_API_BASE || 'https://cms-vgad.visiongroup.co.ug/api'
+  const config = useRuntimeConfig()
+  const API_BASE = config.public.apiBase;// || 'https://cms-vgad.visiongroup.co.ug/api'
 
   // Getters
   const activeAgents = computed(() => {
