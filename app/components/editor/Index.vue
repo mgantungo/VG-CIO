@@ -9,6 +9,11 @@
         <h1 class="page-hd__title">Schedule Queue</h1>
         <p class="page-hd__sub">Assign page/slot numbers, adjust run dates and times, and manage publication status.</p>
       </div>
+      <div class="page-hd__right">
+        <button class="pager-trigger" @click="pagerOpen = true">
+          📰 Pager
+        </button>
+      </div>
     </div>
 
     <!-- FILTER / TOOLBAR BAR -->
@@ -86,6 +91,71 @@
       </div>
     </div>
 
+    <!-- PRINT QUEUE SELECTION — check off today's adverts to auto-map onto the Pager -->
+    <div class="pq-band">
+      <div class="pq-band__head">
+        <div>
+          <div class="pq-band__title">Print Queue Selection</div>
+          <div class="pq-band__sub">Check the adverts to include, pick a publication, and send — they'll be spread across its pages automatically.</div>
+        </div>
+        <button class="pq-collapse-btn" @click="pqCollapsed = !pqCollapsed">{{ pqCollapsed ? 'Show' : 'Hide' }}</button>
+      </div>
+
+      <div v-if="!pqCollapsed" class="pq-band__body">
+        <div class="pq-toolbar">
+          <label class="pq-selectall">
+            <input type="checkbox" :checked="allChecked" @change="toggleAll($event.target.checked)">
+            Select all ({{ checkedIds.size }} / {{ filteredSchedules.length }})
+          </label>
+
+          <select v-model="targetPublicationId" class="pq-pub-select">
+            <option value="" disabled>Select target publication…</option>
+            <option v-for="p in pagerPublications" :key="p.id" :value="p.id">
+              {{ p.publication_code }} · {{ p.total_pages }}pg · {{ p.status }}
+            </option>
+          </select>
+
+          <button
+            class="pq-send-btn"
+            :disabled="checkedIds.size === 0 || !targetPublicationId || sendingToPager"
+            @click="sendCheckedToPager"
+          >{{ sendingToPager ? 'Sending…' : `Send ${checkedIds.size} to Pager` }}</button>
+        </div>
+
+        <div class="pq-table-wrap">
+          <table class="pq-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Client</th>
+                <th>Advert</th>
+                <th>Ad Size</th>
+                <th>Ref</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in filteredSchedules" :key="s.schedule_id">
+                <td>
+                  <input
+                    type="checkbox"
+                    :checked="checkedIds.has(s.advert_id)"
+                    @change="toggleOne(s.advert_id, $event.target.checked)"
+                  >
+                </td>
+                <td>{{ s.company_name || '—' }}</td>
+                <td>{{ s.advert_title || '—' }}</td>
+                <td class="mono">{{ s.ad_size || '—' }}</td>
+                <td class="mono">{{ s.advert_id }}</td>
+              </tr>
+              <tr v-if="filteredSchedules.length === 0">
+                <td colspan="5" class="pq-empty">No schedules in the current filter.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ERROR BANNER -->
     <div v-if="pageError" class="err-banner">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -131,6 +201,42 @@
       @save="onBulkSave"
     />
 
+    <!-- PAGER POPUP -->
+    <PagerPopup v-model:open="pagerOpen" :checked-advert-ids="Array.from(checkedIds)" />
+
+    <!-- CONFLICT ALERT — blocking, no click-outside dismiss on purpose -->
+    <div v-if="showConflictModal" class="cf-overlay">
+      <div class="cf-panel">
+        <div class="cf-head">
+          <span class="cf-head__icon">⚠</span>
+          <div>
+            <div class="cf-head__title">Some adverts need your attention</div>
+            <div class="cf-head__sub">
+              {{ pagerConflicts.length }} advert{{ pagerConflicts.length !== 1 ? 's' : '' }} could not be sent —
+              please resolve these before they can be placed.
+            </div>
+          </div>
+        </div>
+
+        <div class="cf-list">
+          <div v-for="c in pagerConflicts" :key="c.advertId" class="cf-row">
+            <div class="cf-row__main">
+              <span class="cf-row__title">{{ c.advert_title }}</span>
+              <span class="cf-row__client">{{ c.company_name }}</span>
+            </div>
+            <div class="cf-row__reason" :class="{ 'cf-row__reason--conflict': !!c.conflictPageNumber }">
+              {{ c.reason }}
+            </div>
+          </div>
+        </div>
+
+        <div class="cf-actions">
+          <button class="cf-btn cf-btn--ghost" @click="showConflictModal = false">Dismiss</button>
+          <button class="cf-btn cf-btn--primary" @click="openPagerToFix">Open Pager to Fix</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -139,7 +245,9 @@ import { ref, computed, onMounted } from 'vue'
 import ScheduleReviewQueue  from './ScheduleReviewQueue.vue'
 import ScheduleDetailsModal from './ScheduleDetailsModal.vue'
 import BulkPageUpdateModal  from './BulkPageUpdateModal.vue'
+import PagerPopup           from '~/components/pager/PagerPopup.vue'
 import { useAdverts } from '~/composables/useAdverts'
+import { usePager } from '~/composables/usePager'
 
 definePageMeta({
   layout: 'default',
@@ -157,6 +265,8 @@ const {
   bulkUpdateSchedulePages,
 } = useAdverts()
 
+const pager = usePager()
+
 // ── STATE ──────────────────────────────────────────────────────────────────
 const schedules     = ref([])
 const pageError     = ref('')
@@ -165,6 +275,16 @@ const showEditModal = ref(false)
 const editTarget    = ref(null)
 const showBulkModal = ref(false)
 const bulkTargets   = ref([])
+const pagerOpen     = ref(false)
+
+// ── PRINT QUEUE SELECTION ────────────────────────────────────────────────────
+const pqCollapsed         = ref(false)
+const checkedIds          = ref(new Set())
+const targetPublicationId = ref('')
+const pagerPublications   = ref([])
+const sendingToPager      = ref(false)
+const showConflictModal   = ref(false)
+const pagerConflicts      = ref([])
 
 const filters = ref({
   dateFrom: '',
@@ -337,8 +457,82 @@ const onBulkSave = async (changes) => {
   }
 }
 
+// ── PRINT QUEUE SELECTION ────────────────────────────────────────────────────
+const allChecked = computed(() =>
+  filteredSchedules.value.length > 0 &&
+  filteredSchedules.value.every(s => checkedIds.value.has(s.advert_id))
+)
+
+const toggleOne = (advertId, checked) => {
+  const next = new Set(checkedIds.value)
+  checked ? next.add(advertId) : next.delete(advertId)
+  checkedIds.value = next
+}
+
+const toggleAll = (checked) => {
+  checkedIds.value = checked
+    ? new Set(filteredSchedules.value.map(s => s.advert_id))
+    : new Set()
+}
+
+const loadPagerPublications = async () => {
+  try {
+    pagerPublications.value = await pager.fetchPublications()
+  } catch (e) {
+    // non-fatal — the panel just shows an empty publication list
+  }
+}
+
+const sendCheckedToPager = async () => {
+  if (!targetPublicationId.value || checkedIds.value.size === 0) return
+  sendingToPager.value = true
+  try {
+    const result = await pager.queueAdvertsToPublication(
+      targetPublicationId.value,
+      Array.from(checkedIds.value)
+    )
+    const assignedIds = new Set((result?.assigned || []).map(a => a.advertId))
+    checkedIds.value = new Set(Array.from(checkedIds.value).filter(id => !assignedIds.has(id)))
+
+    if (result?.skipped?.length > 0) {
+      // Enrich with readable labels from the schedules we already have, and
+      // surface this as a blocking modal — a silent toast let conflicts pass
+      // unnoticed, which is exactly what put adverts on two different pages.
+      pagerConflicts.value = result.skipped.map(s => {
+        const match = filteredSchedules.value.find(sc => sc.advert_id === s.advertId)
+        return {
+          ...s,
+          company_name: match?.company_name || '—',
+          advert_title: match?.advert_title || `Advert #${s.advertId}`,
+        }
+      })
+      showConflictModal.value = true
+    }
+
+    const assignedCount = result?.assigned?.length || 0
+    if (assignedCount > 0) {
+      showToast(`${assignedCount} advert${assignedCount !== 1 ? 's' : ''} sent to pager`)
+    }
+  } catch (e) {
+    pageError.value = e.message || 'Failed to send adverts to the pager'
+  } finally {
+    sendingToPager.value = false
+  }
+}
+
+const openPagerToFix = () => {
+  showConflictModal.value = false
+  pagerOpen.value = true
+  if (targetPublicationId.value) {
+    pager.loadLayout(targetPublicationId.value)
+  }
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────
-onMounted(() => { applyRange({ label: 'This Week', days: 7 }) })
+onMounted(() => {
+  applyRange({ label: 'This Week', days: 7 })
+  loadPagerPublications()
+})
 </script>
 
 <style scoped>
@@ -355,10 +549,72 @@ onMounted(() => { applyRange({ label: 'This Week', days: 7 }) })
   padding: 0 0 16px 0;
   border-bottom: 2px solid #DEEAF1;
   margin-bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .page-hd__eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9DC3E6; }
 .page-hd__title   { font-size: 22px; font-weight: 700; color: #1F3864; margin: 4px 0 4px; }
 .page-hd__sub     { font-size: 12px; color: #888; margin: 0; }
+.page-hd__right   { flex-shrink: 0; }
+
+.pager-trigger {
+  font-size: 12px; font-weight: 700; padding: 8px 16px;
+  background: #1F3864; color: #fff; border: none; border-radius: 2px;
+  cursor: pointer; font-family: inherit;
+}
+.pager-trigger:hover { background: #0066CC; }
+
+/* PRINT QUEUE SELECTION */
+.pq-band {
+  background: #fff; border: 1px solid #DEEAF1; border-top: none;
+}
+.pq-band__head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 12px 14px; gap: 12px;
+}
+.pq-band__title { font-size: 13px; font-weight: 700; color: #1F3864; }
+.pq-band__sub   { font-size: 11px; color: #888; margin-top: 2px; }
+.pq-collapse-btn {
+  font-size: 11px; font-weight: 600; padding: 5px 12px;
+  border: 1px solid #BDD7EE; background: #F7FBFE; color: #6081a3; cursor: pointer; font-family: inherit;
+  flex-shrink: 0;
+}
+.pq-collapse-btn:hover { background: #DEEAF1; color: #1F3864; }
+
+.pq-band__body { padding: 0 14px 14px; }
+
+.pq-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.pq-selectall {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: #444; cursor: pointer;
+}
+.pq-pub-select {
+  border: 1px solid #BDD7EE; padding: 6px 10px; font-size: 12px;
+  font-family: inherit; background: #fff; color: #222; min-width: 240px;
+}
+.pq-send-btn {
+  font-size: 12px; font-weight: 700; padding: 7px 16px;
+  background: #1F3864; color: #fff; border: none; border-radius: 2px; cursor: pointer; font-family: inherit;
+  margin-left: auto;
+}
+.pq-send-btn:hover:not(:disabled) { background: #0066CC; }
+.pq-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.pq-table-wrap { max-height: 260px; overflow-y: auto; border: 1px solid #DEEAF1; }
+.pq-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pq-table th {
+  position: sticky; top: 0; background: #F0F4F8; text-align: left;
+  padding: 7px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .4px; color: #888; border-bottom: 1.5px solid #DEEAF1;
+}
+.pq-table td { padding: 6px 10px; border-bottom: 1px solid #F0F4F8; color: #333; }
+.pq-table tr:hover td { background: #F7FBFE; }
+.pq-table .mono { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+.pq-empty { text-align: center; color: #aaa; padding: 20px; }
 
 /* FILTER BAR */
 .filter-bar {
@@ -432,5 +688,40 @@ onMounted(() => { applyRange({ label: 'This Week', days: 7 }) })
   .filter-bar   { flex-direction: column; align-items: stretch; }
   .stats-band   { flex-wrap: wrap; }
   .stat-cell    { min-width: 50%; }
+  .page-hd      { flex-direction: column; align-items: stretch; }
 }
+
+/* CONFLICT ALERT MODAL */
+.cf-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 8000;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.cf-panel {
+  background: #fff; width: 100%; max-width: 520px; max-height: 80vh;
+  display: flex; flex-direction: column; border-top: 4px solid #E31E24;
+  box-shadow: 0 24px 64px rgba(0,0,0,.4);
+}
+.cf-head { display: flex; gap: 12px; padding: 18px 20px; border-bottom: 1px solid #DEEAF1; }
+.cf-head__icon { font-size: 22px; flex-shrink: 0; }
+.cf-head__title { font-size: 14px; font-weight: 700; color: #1F3864; }
+.cf-head__sub   { font-size: 12px; color: #888; margin-top: 3px; line-height: 1.4; }
+
+.cf-list { flex: 1; overflow-y: auto; padding: 8px 20px; }
+.cf-row { padding: 9px 0; border-bottom: 1px solid #F0F4F8; }
+.cf-row__main { display: flex; justify-content: space-between; gap: 10px; }
+.cf-row__title  { font-size: 12px; font-weight: 600; color: #1F3864; }
+.cf-row__client { font-size: 11px; color: #888; flex-shrink: 0; }
+.cf-row__reason { font-size: 11px; color: #9C5700; margin-top: 2px; }
+.cf-row__reason--conflict { color: #9C0006; font-weight: 600; }
+
+.cf-actions {
+  display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #DEEAF1;
+}
+.cf-btn {
+  font-size: 12px; font-weight: 700; padding: 8px 16px; border-radius: 2px; cursor: pointer; font-family: inherit;
+}
+.cf-btn--ghost   { background: #fff; border: 1.5px solid #D1D9E0; color: #555; }
+.cf-btn--ghost:hover { background: #F0F4F8; }
+.cf-btn--primary { background: #1F3864; border: 1.5px solid #1F3864; color: #fff; }
+.cf-btn--primary:hover { background: #0066CC; border-color: #0066CC; }
 </style>

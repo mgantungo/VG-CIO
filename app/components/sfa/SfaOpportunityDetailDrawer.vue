@@ -184,6 +184,7 @@
                   :opportunity-id="opportunityId"
                   :current-funnel-stage="opp?.funnel_stage || 'opportunity_created'"
                   @stage-advanced="onStageAdvanced"
+                  @convert-to-order="onConvertToOrder"
                 />
               </template>
 
@@ -392,6 +393,13 @@ function onConverted(order) {
 async function onStageAdvanced() {
   await loadDetail()
   emit('updated')
+}
+
+// Called when agent confirms "Convert to Order" from the activity log modal
+// (stage just moved to 'approved'). Open the conversion modal immediately.
+async function onConvertToOrder() {
+  await loadDetail()      // reload so opp.funnel_stage = 'approved'
+  showConvert.value = true
 }
 
 function close() { emit('update:modelValue', false) }

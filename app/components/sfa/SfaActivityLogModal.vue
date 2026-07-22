@@ -1,9 +1,11 @@
 <!-- components/sfa/SfaActivityLogModal.vue -->
 <!--
-  Logs an activity against an opportunity.
-  After saving, if the activity type suggests progress (call, visit, meeting, email)
-  and the current stage has a natural next stage, the user is asked whether to
-  advance the opportunity to the next funnel stage.
+  Phase 1: Log activity
+  Phase 2 (stage): Prompt to advance stage
+    - For all stages except approved → standard advance
+    - For approved → "Mark as Won & Convert to Order" button
+      which emits 'convert-to-order' so the drawer opens
+      SfaConvertToOrderModal immediately
 -->
 <template>
   <Teleport to="body">
@@ -11,7 +13,7 @@
       <div v-if="modelValue" class="modal-backdrop" @click.self="phase === 'log' && close()">
         <div class="modal">
 
-          <!-- ── Phase: log activity ───────────────────────────────────── -->
+          <!-- ── Phase 1: Log activity ──────────────────────────────────── -->
           <template v-if="phase === 'log'">
             <div class="modal-header">
               <div class="modal-header-icon">📝</div>
@@ -43,7 +45,7 @@
 
               <div class="field-grid">
                 <div class="field">
-                  <label class="field-label">Date & Time <span class="req">*</span></label>
+                  <label class="field-label">Date &amp; Time <span class="req">*</span></label>
                   <input v-model="form.activity_date" class="field-input" type="datetime-local"
                     :class="{ 'field-input--error': errors.activity_date }" />
                   <span v-if="errors.activity_date" class="field-error">{{ errors.activity_date }}</span>
@@ -68,7 +70,6 @@
                     placeholder="What was agreed or decided?" />
                 </div>
 
-                <!-- Attachments -->
                 <div class="field field--full">
                   <label class="field-label">Attachments (optional)</label>
                   <div class="file-zone" @click="$refs.fileInput.click()"
@@ -97,51 +98,106 @@
             </div>
           </template>
 
-          <!-- ── Phase: stage progression prompt ─────────────────────── -->
+          <!-- ── Phase 2: Stage progression prompt ─────────────────────── -->
           <template v-if="phase === 'stage'">
-            <div class="modal-header">
-              <div class="modal-header-icon">🚀</div>
-              <div>
-                <div class="modal-title">Activity Logged</div>
-                <div class="modal-sub">Would you like to advance this opportunity?</div>
-              </div>
-            </div>
 
-            <div class="modal-body stage-body">
-
-              <div class="stage-logged">
-                ✓ Activity logged successfully
-              </div>
-
-              <div class="stage-question">
-                Based on this {{ ACTIVITY_TYPE_MAP[form.type]?.label?.toLowerCase() }},
-                should this opportunity move to the next stage?
-              </div>
-
-              <!-- Current → Next stage visual -->
-              <div class="stage-flow">
-                <div class="stage-pill stage-pill--current" :style="{ borderColor: currentStage?.color, color: currentStage?.color }">
-                  <span class="stage-pill-icon">{{ currentStage?.icon }}</span>
-                  <span>{{ currentStage?.label }}</span>
-                </div>
-                <span class="stage-arrow">→</span>
-                <div class="stage-pill stage-pill--next" :style="{ borderColor: nextStage?.color, color: nextStage?.color, background: nextStage?.color + '12' }">
-                  <span class="stage-pill-icon">{{ nextStage?.icon }}</span>
-                  <span>{{ nextStage?.label }}</span>
+            <!-- Approved → Convert to Order -->
+            <template v-if="nextStage?.id === 'approved'">
+              <div class="modal-header">
+                <div class="modal-header-icon">🎉</div>
+                <div>
+                  <div class="modal-title">Client Approved!</div>
+                  <div class="modal-sub">This opportunity is ready to become an order</div>
                 </div>
               </div>
 
-              <div class="stage-actions">
-                <button class="btn-stage-skip" @click="skipStage">
-                  No, keep at <strong>{{ currentStage?.label }}</strong>
-                </button>
-                <button class="btn-stage-advance" :disabled="advancing"
-                  :style="{ background: nextStage?.color }"
-                  @click="advanceStage">
-                  {{ advancing ? 'Moving…' : `Yes, move to ${nextStage?.label}` }}
-                </button>
+              <div class="modal-body stage-body">
+                <div class="stage-logged">✓ Activity logged successfully</div>
+
+                <div class="convert-banner">
+                  <div class="cb-icon">📦</div>
+                  <div class="cb-body">
+                    <div class="cb-title">Ready to convert to Order</div>
+                    <div class="cb-text">
+                      When a client approves, the opportunity immediately becomes an active order.
+                      You will need to select the accepted quotation and upload confirmation.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="stage-flow">
+                  <div class="stage-pill stage-pill--current"
+                    :style="{ borderColor: currentStage?.color, color: currentStage?.color }">
+                    <span class="stage-pill-icon">{{ currentStage?.icon }}</span>
+                    <span>{{ currentStage?.label }}</span>
+                  </div>
+                  <span class="stage-arrow">→</span>
+                  <div class="stage-pill stage-pill--approved">
+                    <span class="stage-pill-icon">📦</span>
+                    <span>Order</span>
+                  </div>
+                </div>
+
+                <div class="stage-actions">
+                  <button class="btn-stage-skip" @click="skipStage">
+                    Not yet — keep current stage
+                  </button>
+                  <button
+                    class="btn-stage-advance btn-convert"
+                    :disabled="advancing"
+                    @click="advanceToOrder"
+                  >
+                    {{ advancing ? 'Processing…' : '📦 Convert to Order' }}
+                  </button>
+                </div>
               </div>
-            </div>
+            </template>
+
+            <!-- All other stages → standard advance prompt -->
+            <template v-else>
+              <div class="modal-header">
+                <div class="modal-header-icon">🚀</div>
+                <div>
+                  <div class="modal-title">Activity Logged</div>
+                  <div class="modal-sub">Would you like to advance this opportunity?</div>
+                </div>
+              </div>
+
+              <div class="modal-body stage-body">
+                <div class="stage-logged">✓ Activity logged successfully</div>
+
+                <div class="stage-question">
+                  Based on this {{ ACTIVITY_TYPE_MAP[form.type]?.label?.toLowerCase() }},
+                  should this opportunity move to the next stage?
+                </div>
+
+                <div class="stage-flow">
+                  <div class="stage-pill stage-pill--current"
+                    :style="{ borderColor: currentStage?.color, color: currentStage?.color }">
+                    <span class="stage-pill-icon">{{ currentStage?.icon }}</span>
+                    <span>{{ currentStage?.label }}</span>
+                  </div>
+                  <span class="stage-arrow">→</span>
+                  <div class="stage-pill stage-pill--next"
+                    :style="{ borderColor: nextStage?.color, color: nextStage?.color, background: nextStage?.color + '12' }">
+                    <span class="stage-pill-icon">{{ nextStage?.icon }}</span>
+                    <span>{{ nextStage?.label }}</span>
+                  </div>
+                </div>
+
+                <div class="stage-actions">
+                  <button class="btn-stage-skip" @click="skipStage">
+                    No, keep at <strong>{{ currentStage?.label }}</strong>
+                  </button>
+                  <button class="btn-stage-advance" :disabled="advancing"
+                    :style="{ background: nextStage?.color }"
+                    @click="advanceStage">
+                    {{ advancing ? 'Moving…' : `Yes, move to ${nextStage?.label}` }}
+                  </button>
+                </div>
+              </div>
+            </template>
+
           </template>
 
         </div>
@@ -156,12 +212,17 @@ import { useSfaActivities, ACTIVITY_TYPES, ACTIVITY_TYPE_MAP } from '~/composabl
 import { useSfaOpportunities, SFA_STAGES, STAGE_MAP }          from '~/composables/useSfaOpportunities'
 
 const props = defineProps({
-  modelValue:       Boolean,
-  opportunityId:    { type: [Number, String], required: true },
+  modelValue:         Boolean,
+  opportunityId:      { type: [Number, String], required: true },
   currentFunnelStage: { type: String, default: 'opportunity_created' },
 })
 
-const emit = defineEmits(['update:modelValue', 'logged', 'stage-advanced'])
+const emit = defineEmits([
+  'update:modelValue',
+  'logged',
+  'stage-advanced',
+  'convert-to-order',   // emitted when agent confirms approved → triggers ConvertToOrderModal
+])
 
 const { logActivity }  = useSfaActivities()
 const { changeStage }  = useSfaOpportunities()
@@ -173,8 +234,8 @@ const nextStage    = computed(() => {
   return next ? STAGE_MAP[next] : null
 })
 
-// Only prompt for progression on client-facing activity types
-// and only if there is a next stage (not already at approved/closed_lost)
+// Prompt for progression on client-facing activities only,
+// and only if there is a next stage (not already terminal)
 const shouldPromptStage = computed(() =>
   ['call', 'email', 'visit', 'meeting'].includes(form.value.type) &&
   !!nextStage.value &&
@@ -182,9 +243,8 @@ const shouldPromptStage = computed(() =>
 )
 
 // ── Form state ─────────────────────────────────────────────────────────────
-const phase    = ref('log')  // 'log' | 'stage'
-const now      = new Date()
-now.setSeconds(0, 0)
+const phase = ref('log') // 'log' | 'stage'
+const now   = new Date(); now.setSeconds(0, 0)
 
 const form = ref({
   type:               'call',
@@ -226,11 +286,9 @@ async function submit() {
       attachments:        attachments.value,
     })
 
-    // If activity type warrants it, show stage progression prompt
     if (shouldPromptStage.value) {
       phase.value = 'stage'
     } else {
-      // Internal notes / no next stage — just close
       emit('logged')
       resetForm()
     }
@@ -241,7 +299,7 @@ async function submit() {
   }
 }
 
-// ── Stage progression ──────────────────────────────────────────────────────
+// ── Stage progression — standard advance ──────────────────────────────────
 async function advanceStage() {
   if (!nextStage.value) return
   advancing.value = true
@@ -252,6 +310,23 @@ async function advanceStage() {
     advancing.value = false
     emit('logged')
     resetForm()
+  }
+}
+
+// ── Advance to approved → trigger order conversion ────────────────────────
+// Moves stage to 'approved' then closes the modal and tells the parent
+// to immediately open SfaConvertToOrderModal.
+async function advanceToOrder() {
+  advancing.value = true
+  try {
+    await changeStage(props.opportunityId, 'approved')
+    emit('stage-advanced', 'approved')
+    emit('logged')
+    // Signal the drawer to open the Convert to Order modal right away
+    emit('convert-to-order')
+    resetForm()
+  } finally {
+    advancing.value = false
   }
 }
 
@@ -325,11 +400,11 @@ function resetForm() {
 .type-tab:hover { border-color: #8094B8; }
 
 /* Fields */
-.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field--full { grid-column: 1 / -1; }
-.field { display: flex; flex-direction: column; gap: 4px; }
+.field       { display: flex; flex-direction: column; gap: 4px; }
 .field-label { font-size: 11px; font-weight: 600; color: #3B4F70; }
-.req { color: #C9252D; }
+.req         { color: #C9252D; }
 .field-input {
   padding: 7px 10px; border: 1.5px solid #D1D9E0; border-radius: 2px;
   font-size: 12px; color: #0D1830; background: #FFFFFF; font-family: inherit;
@@ -342,7 +417,7 @@ function resetForm() {
 /* File zone */
 .file-zone {
   border: 1.5px dashed #D5DDEF; border-radius: 4px;
-  padding: 14px; text-align: center; cursor: pointer; transition: border-color 0.12s;
+  padding: 14px; text-align: center; cursor: pointer;
 }
 .file-zone:hover { border-color: #0066CC; background: #F0F4FA; }
 .fz-icon { font-size: 18px; display: block; margin-bottom: 4px; }
@@ -372,8 +447,8 @@ function resetForm() {
 .btn-submit:hover    { background: #002244; }
 .btn-submit:disabled { background: #8094B8; cursor: not-allowed; }
 
-/* ── Stage progression phase ─────────────────────────────────────────────── */
-.stage-body { display: flex; flex-direction: column; gap: 20px; padding: 24px 20px; }
+/* Stage phase */
+.stage-body { display: flex; flex-direction: column; gap: 18px; padding: 22px 20px; }
 
 .stage-logged {
   text-align: center; font-size: 13px; font-weight: 600;
@@ -385,6 +460,17 @@ function resetForm() {
   text-align: center; font-size: 14px; color: #0D1830; line-height: 1.5;
 }
 
+/* Approved/convert banner */
+.convert-banner {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: #EBF0FF; border: 1.5px solid #003366;
+  border-radius: 8px; padding: 14px;
+}
+.cb-icon   { font-size: 28px; flex-shrink: 0; }
+.cb-title  { font-size: 13px; font-weight: 700; color: #003366; margin-bottom: 5px; }
+.cb-text   { font-size: 12px; color: #3B4F70; line-height: 1.6; }
+
+/* Stage flow */
 .stage-flow {
   display: flex; align-items: center; justify-content: center; gap: 12px;
 }
@@ -393,13 +479,13 @@ function resetForm() {
   padding: 8px 16px; border-radius: 20px; border: 2px solid;
   font-size: 13px; font-weight: 600;
 }
-.stage-pill--current { background: #F7F9FC; }
-.stage-pill-icon     { font-size: 16px; }
-.stage-arrow         { font-size: 20px; color: #8094B8; }
+.stage-pill--current  { background: #F7F9FC; }
+.stage-pill--approved { border-color: #24A148; color: #24A148; background: #EDFAF2; }
+.stage-pill-icon { font-size: 16px; }
+.stage-arrow     { font-size: 20px; color: #8094B8; }
 
-.stage-actions {
-  display: flex; flex-direction: column; gap: 8px;
-}
+/* Stage actions */
+.stage-actions { display: flex; flex-direction: column; gap: 8px; }
 .btn-stage-skip {
   padding: 10px; border-radius: 6px; font-size: 13px;
   background: none; border: 1.5px solid #D5DDEF; color: #3B4F70;
@@ -413,6 +499,7 @@ function resetForm() {
 }
 .btn-stage-advance:hover    { opacity: 0.88; }
 .btn-stage-advance:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-convert { background: #003366 !important; font-size: 14px; padding: 14px; }
 
 /* Transitions */
 .modal-enter-active, .modal-leave-active { transition: all 0.2s ease; }

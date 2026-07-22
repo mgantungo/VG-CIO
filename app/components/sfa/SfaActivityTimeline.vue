@@ -58,6 +58,7 @@
       :current-funnel-stage="currentFunnelStage"
       @logged="onLogged"
       @stage-advanced="onStageAdvanced"
+      @convert-to-order="emit('convert-to-order')"
     />
 
   </div>
@@ -74,7 +75,7 @@ const props = defineProps({
   currentFunnelStage: { type: String, default: 'opportunity_created' },
 })
 
-const emit = defineEmits(['stage-advanced'])
+const emit = defineEmits(['stage-advanced', 'convert-to-order'])
 
 const { activities, loading, fetchActivities } = useSfaActivities()
 const showLogModal = ref(false)
