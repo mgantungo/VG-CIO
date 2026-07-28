@@ -59,15 +59,7 @@
         
         <!-- Per word -->
         <div v-else-if="sizeDimension === 'per word'" class="input-group">
-          <label>Number of Words:</label>
-          <input 
-            type="number" 
-            v-model.number="details.words"
-            min="1"
-            placeholder="Enter word count"
-            @input="validateInput"
-          >
-          <small class="help-text">Estimated reading time: {{ estimatedReadingTime }}</small>
+          <ClassifiedTextBuilder :disabled="false" />
         </div>
         
         <!-- Classified photo/Logo -->
@@ -126,6 +118,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import ClassifiedTextBuilder from './ClassifiedTextBuilder.vue'
+import { useClassifiedAdStore } from '~/stores/classifiedAd'
 
 const props = defineProps({
   showModal: {
@@ -156,7 +150,19 @@ const details = ref({
   photos: null
 })
 
-// Reset details when modal opens/closes
+// Classified ("per word") state now lives in a Pinia store so it survives
+// modal re-opens (e.g. switching Full Colour / Black & White re-selects the
+// rate card and re-opens this modal) instead of being wiped every time.
+const classifiedStore = useClassifiedAdStore()
+
+// Keep details.words in sync with the store's live word count for pricing
+watch(() => classifiedStore.wordCount, (newCount) => {
+  details.value.words = newCount
+}, { immediate: true })
+
+// Reset details when modal opens/closes. Note: classifiedStore is intentionally
+// NOT cleared here - it persists across opens/closes so progress isn't lost.
+// Use the "Start Over" button inside ClassifiedTextBuilder to clear it explicitly.
 watch(() => props.showModal, (newVal) => {
   if (newVal) {
     console.log('[MODAL] ===== RATE CARD DETAILS MODAL OPENED =====')
@@ -170,7 +176,7 @@ watch(() => props.showModal, (newVal) => {
     details.value = {
       cm: null,
       columns: null,
-      words: null,
+      words: classifiedStore.wordCount,
       photos: null
     }
   }
@@ -218,7 +224,7 @@ const isValidInput = computed(() => {
   } else if (sizeDimension.value === 'per column') {
     return details.value.columns > 0
   } else if (sizeDimension.value === 'per word') {
-    return details.value.words > 0
+    return classifiedStore.isComplete && classifiedStore.wordCount > 0
   } else if (props.selectedRateCard?.ad_type === 'classified photo/Logo') {
     return details.value.photos > 0
   }
@@ -323,6 +329,8 @@ const saveDetails = () => {
   } else if (sizeDimension.value === 'per column') {
     detailsToSave.columns = details.value.columns
   } else if (sizeDimension.value === 'per word') {
+    // Only 'words' goes into details.details, since that object gets spread
+    // directly into the backend price-calculation request body.
     detailsToSave.words = details.value.words
   } else if (props.selectedRateCard?.ad_type === 'classified photo/Logo') {
     detailsToSave.photos = details.value.photos
@@ -333,7 +341,12 @@ const saveDetails = () => {
     sizeDimension: sizeDimension.value,
     adType: props.selectedRateCard.ad_type,
     details: detailsToSave,
-    calculatedPrice: calculatedPrice.value
+    calculatedPrice: calculatedPrice.value,
+    // Top-level convenience fields (not spread into the price API): the assembled
+    // classified ad copy + which template produced it. New.vue uses `composedText`
+    // to populate Special Instructions.
+    templateId: sizeDimension.value === 'per word' ? classifiedStore.templateId : null,
+    composedText: sizeDimension.value === 'per word' ? classifiedStore.text : null
   }
   
   console.log('[MODAL-SAVE] Emitting save event with:', JSON.stringify(emitData, null, 2))

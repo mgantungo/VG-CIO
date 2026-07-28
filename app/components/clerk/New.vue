@@ -5,9 +5,27 @@
       <div class="header-content">
         <div>
           <h1>Book New Advert</h1>
-          <p>Create a new advertising booking across Vision Group platforms</p>
+          <p>Create a new advert booking across Vision Group platforms</p>
         </div>
         <div class="header-actions">
+          <button
+            type="button"
+            class="btn btn-outline"
+            @click="downloadOrderSummary"
+            :disabled="!hasRequiredClientInfo || printingSummary"
+          >
+            <span v-if="printingSummary">Generating...</span>
+            <span v-else>Download PDF</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline"
+            @click="printOrderSummary"
+            :disabled="!hasRequiredClientInfo || printingSummary"
+          >
+            <span v-if="printingSummary">Generating...</span>
+            <span v-else>Print</span>
+          </button>
           <button 
             type="button" 
             class="btn btn-secondary"
@@ -147,7 +165,7 @@
       </form>
     </div>
     
-    <!-- Rate Card Details Modal -->
+    <!-- Rate Card Details Modal. This is the popup model that supports Word Counter and Size-->
     <RateCardDetailsModal
       :show-modal="showRateCardModal"
       :selected-rate-card="selectedRateCard"
@@ -183,10 +201,15 @@ import SchedulePricing from './SchedulePricing.vue'
 import AdditionalInformation from './AdditionalInformation.vue'
 import SalesAgentSelection from './SalesAgentSelection.vue'
 import FullPageMask from './FullPageMask.vue'
+// PDF generation for the order print summary
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+
 // Import composables and stores
 import { useProducts } from '~/composables/useProducts'
 import { useAdverts} from '~/composables/useAdverts'
 import { useOfficeLocationsStore } from '~/stores/officeLocation'
+import { useClassifiedAdStore } from '~/stores/classifiedAd'
 import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from '#imports'
 import { storeToRefs } from 'pinia'
@@ -212,6 +235,10 @@ const { createAdvert, getBcSyncStatus } = useAdverts()
 // Use office locations store
 const officeLocationsStore = useOfficeLocationsStore()
 const { locations: officeLocations, loading: officeLocationsLoading } = storeToRefs(officeLocationsStore)
+
+// Classified ad ('per word' rate card) builder state - persists across ad type
+// toggles within a booking, cleared explicitly on full form reset
+const classifiedAdStore = useClassifiedAdStore()
 
 // Today's date for date validation
 const today = ref(new Date().toISOString().split('T')[0])
@@ -255,6 +282,7 @@ const rateCardsLoading = ref(false)
 const priceLoading = ref(false)
 const submitting = ref(false)
 const savingDraft = ref(false)
+const printingSummary = ref(false)
 
 // Modal state
 const showRateCardModal = ref(false)
@@ -831,6 +859,14 @@ const handleModalSave = (details) => {
   console.log('[MODAL-SAVE] Modal saved with details:', details)
   showRateCardModal.value = false
   rateCardDetails.value = details
+
+  // For 'per word' (classified) rate cards, the modal assembles the actual
+  // ad copy from the chosen text-type template. Push it into Special Instructions.
+  if (details.composedText) {
+    form.specialInstructions = details.composedText
+    console.log('[MODAL-SAVE] Special Instructions populated from classified text builder')
+  }
+
   console.log('[MODAL-SAVE] SUCCESS - Details stored, triggering price calculation...')
   
   performPriceCalculationWithDetails(details)
@@ -880,6 +916,177 @@ const formatDate = (dateString) => {
     })
   } catch (error) {
     return dateString
+  }
+}
+
+// Builds the order summary jsPDF document (client/advert info, pricing
+// breakdown, and special-instructions/ad-copy content). Returns the doc
+// without saving or printing it, so callers can either download or print it.
+const buildOrderSummaryPdf = () => {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const margin = 40
+  let y = 50
+
+  // Header
+  doc.setFontSize(16)
+  doc.setFont(undefined, 'bold')
+  doc.text('VGAMS - Advert Order Summary', margin, y)
+  y += 18
+  doc.setFontSize(9)
+  doc.setFont(undefined, 'normal')
+  doc.setTextColor(100)
+  doc.text(`Generated: ${new Date().toLocaleString('en-UG')}`, margin, y)
+  doc.setTextColor(0)
+  y += 20
+
+  // Client Information
+  doc.setFontSize(12)
+  doc.setFont(undefined, 'bold')
+  doc.text('Client Information', margin, y)
+  y += 6
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    styles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: [0, 51, 102] },
+    head: [['Field', 'Value']],
+    body: [
+      ['Client Name', form.clientName || '-'],
+      ['Contact Person', form.contactPerson || '-'],
+      ['Email', form.email || '-'],
+      ['Phone', form.phone || '-'],
+      ['Market Sector', form.marketSector || '-']
+    ]
+  })
+  y = doc.lastAutoTable.finalY + 20
+
+  // Advert Information
+  doc.setFontSize(12)
+  doc.setFont(undefined, 'bold')
+  doc.text('Advert Information', margin, y)
+  y += 6
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    styles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: [0, 51, 102] },
+    head: [['Field', 'Value']],
+    body: [
+      ['Advert Title', form.advertTitle || '-'],
+      ['Platform', form.platformCategory || '-'],
+      ['Ad Type', form.adType || '-'],
+      ['Office Location', form.officeLocation || '-'],
+      ['Publish on Web', form.publishOnWeb ? 'Yes' : 'No'],
+      ['Start Date', formatDate(form.startDate) || '-'],
+      ['End Date', formatDate(form.endDate) || '-'],
+      ['Frequency', `${form.frequency || 1} insertion(s)`]
+    ]
+  })
+  y = doc.lastAutoTable.finalY + 20
+
+  // Pricing Breakdown
+  doc.setFontSize(12)
+  doc.setFont(undefined, 'bold')
+  doc.text('Pricing Breakdown', margin, y)
+  y += 6
+
+  const finalTotal = schedulePricingRef.value?.calculateFinalTotal?.() || priceCalculation.value?.total || 0
+  const pricingRows = [
+    ['Base Price', formatCurrency(priceCalculation.value?.basePrice || 0)],
+    ['Surcharge', `${formatCurrency(priceCalculation.value?.surcharge || 0)} (${priceCalculation.value?.surchargePercentage || 0}%)`],
+    ['Subtotal', formatCurrency(priceCalculation.value?.subtotal || 0)],
+    ['Discount', formatNumber(form.discount || 0) + '%'],
+    ['Frequency', `${priceCalculation.value?.frequency || form.frequency || 1}`],
+    ['Final Total', formatCurrency(finalTotal)]
+  ]
+
+  if (rateCardDetails.value?.sizeDimension === 'per word' && rateCardDetails.value?.details?.words) {
+    pricingRows.splice(1, 0, ['Word Count', `${rateCardDetails.value.details.words} word(s)`])
+  }
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    styles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: [0, 51, 102] },
+    head: [['Item', 'Value']],
+    body: pricingRows,
+    didParseCell: (data) => {
+      if (data.row.index === pricingRows.length - 1) {
+        data.cell.styles.fontStyle = 'bold'
+      }
+    }
+  })
+  y = doc.lastAutoTable.finalY + 20
+
+  // Special Instructions / Classified Ad Content
+  if (form.specialInstructions) {
+    if (y > 700) {
+      doc.addPage()
+      y = 50
+    }
+    doc.setFontSize(12)
+    doc.setFont(undefined, 'bold')
+    doc.text('Special Instructions / Ad Content', margin, y)
+    y += 16
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'normal')
+    const wrapped = doc.splitTextToSize(form.specialInstructions, pageWidth - margin * 2)
+    wrapped.forEach((line) => {
+      if (y > 780) {
+        doc.addPage()
+        y = 50
+      }
+      doc.text(line, margin, y)
+      y += 13
+    })
+  }
+
+  return doc
+}
+
+// Downloads the order summary as a PDF file
+const downloadOrderSummary = async () => {
+  console.log('[PRINT-SUMMARY] Generating order summary PDF for download...')
+  printingSummary.value = true
+
+  try {
+    const doc = buildOrderSummaryPdf()
+    const safeClientName = (form.clientName || 'client').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+    const dateStamp = new Date().toISOString().split('T')[0]
+    doc.save(`advert-summary-${safeClientName}-${dateStamp}.pdf`)
+    console.log('[PRINT-SUMMARY] SUCCESS - PDF downloaded')
+  } catch (error) {
+    console.error('[PRINT-SUMMARY] ERROR - Failed to generate PDF:', error)
+    alert('Failed to generate the print summary. Please try again.')
+  } finally {
+    printingSummary.value = false
+  }
+}
+
+// Opens the order summary PDF in a new tab and triggers the browser print dialog
+const printOrderSummary = async () => {
+  console.log('[PRINT-SUMMARY] Generating order summary PDF for printing...')
+  printingSummary.value = true
+
+  try {
+    const doc = buildOrderSummaryPdf()
+    doc.autoPrint()
+    const blobUrl = doc.output('bloburl')
+    const printWindow = window.open(blobUrl, '_blank')
+    if (!printWindow) {
+      alert('Please allow pop-ups for this site to print the summary.')
+    }
+    console.log('[PRINT-SUMMARY] SUCCESS - PDF opened for printing')
+  } catch (error) {
+    console.error('[PRINT-SUMMARY] ERROR - Failed to generate PDF for printing:', error)
+    alert('Failed to generate the print summary. Please try again.')
+  } finally {
+    printingSummary.value = false
   }
 }
 
@@ -1851,6 +2058,7 @@ const resetForm = () => {
   priceCalculation.value = null
   rateCardDetails.value = null
   selectedCurrency.value = 'UGX'
+  classifiedAdStore.clear()
   console.log('[RESET] SUCCESS - Form reset complete')
 }
 </script>
@@ -2023,6 +2231,17 @@ const resetForm = () => {
   background: linear-gradient(135deg, #0052a3 0%, #004080 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 102, 204, 0.3);
+}
+
+.btn-outline {
+  background: white;
+  color: #003366;
+  border: 1.5px solid #003366;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: #F0F4F8;
+  transform: translateY(-1px);
 }
 
 @media (max-width: 768px) {
