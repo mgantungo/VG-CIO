@@ -142,6 +142,24 @@
 
         <!-- Form Actions -->
         <div class="form-actions">
+          <button
+            type="button"
+            class="btn btn-outline"
+            @click="downloadOrderSummary"
+            :disabled="!hasRequiredClientInfo || printingSummary"
+          >
+            <span v-if="printingSummary">Generating...</span>
+            <span v-else>Download PDF</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline"
+            @click="printOrderSummary"
+            :disabled="!hasRequiredClientInfo || printingSummary"
+          >
+            <span v-if="printingSummary">Generating...</span>
+            <span v-else>Print</span>
+          </button>
           <button 
             type="button" 
             class="btn btn-secondary" 
