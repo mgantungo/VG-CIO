@@ -310,6 +310,12 @@ const rateCardDetails = ref(null)
 const priceCalculation = ref(null)
 const selectedCurrency = ref('UGX')
 
+// Booking reference numbers - populated once the advert is submitted, used in
+// the print/download summary so the printed copy shows the actual booking
+// number from the system as well as the synced Business Central reference.
+const systemReference = ref('')
+const bcReferenceNumber = ref('')
+
 // Check if platform is print media
 const isPrintMedia = computed(() => {
   return form.platformCategory === 'print'
@@ -956,6 +962,15 @@ const buildOrderSummaryPdf = () => {
   doc.setTextColor(100)
   doc.text(`Generated: ${new Date().toLocaleString('en-UG')}`, margin, y)
   doc.setTextColor(0)
+  y += 16
+
+  // Booking / BC reference numbers, if the advert has been submitted
+  doc.setFontSize(10)
+  doc.setFont(undefined, 'bold')
+  doc.text(`Booking Number: ${systemReference.value || 'Not yet assigned (draft)'}`, margin, y)
+  y += 14
+  doc.text(`BC Reference: ${bcReferenceNumber.value || 'Pending Business Central sync'}`, margin, y)
+  doc.setFont(undefined, 'normal')
   y += 20
 
   // Client Information
@@ -1881,6 +1896,10 @@ const submitAdvert = async () => {
     const bcReference = result.bc_reference || result.data?.bc_reference
     const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
     
+    // Persist for the print/download summary
+    if (referenceNumber) systemReference.value = referenceNumber
+    if (bcReference) bcReferenceNumber.value = bcReference
+    
     // If BC sync is already complete and successful
     if (bcSyncSuccess && bcReference) {
       closeMask()
@@ -1974,6 +1993,9 @@ const pollBcStatus = async (reference, maxAttempts = 15, interval = 2000) => {
           if (bcStatus.bc_share_success === true || bcStatus.bc_reference_number !== null) {
             clearInterval(pollingInterval)
             pollingInterval = null
+            
+            // Persist for the print/download summary
+            if (bcStatus.bc_reference_number) bcReferenceNumber.value = bcStatus.bc_reference_number
             
             // Update the mask with BC status
             updateMaskWithBcStatus(bcStatus)
@@ -2077,6 +2099,8 @@ const resetForm = () => {
   rateCardDetails.value = null
   selectedCurrency.value = 'UGX'
   classifiedAdStore.clear()
+  systemReference.value = ''
+  bcReferenceNumber.value = ''
   console.log('[RESET] SUCCESS - Form reset complete')
 }
 </script>
