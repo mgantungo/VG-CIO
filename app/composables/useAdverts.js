@@ -222,13 +222,32 @@ export const useAdverts = () => {
     loading.value = true
     error.value   = null
     try {
-      return await $fetch(`${API_BASE}/adverts/${advertId}`, {
+      return await $fetch(`${API_BASE}/adverts/${advertId}/edit`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       })
     } catch (err) {
       error.value = err.message || 'Failed to get advert'
       console.error('Failed to get advert:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // ── Get advert data shaped for the edit form (deep-populated: client,
+  //     product.category, rate_card, sales agent, attachments) ────────────────
+  const getAdvertForEdit = async (advertId) => {
+    loading.value = true
+    error.value   = null
+    try {
+      return await $fetch(`${API_BASE}/adverts/${advertId}/edit`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      })
+    } catch (err) {
+      error.value = err.message || 'Failed to get advert for editing'
+      console.error('Failed to get advert for editing:', err)
       throw err
     } finally {
       loading.value = false
@@ -456,6 +475,7 @@ export const useAdverts = () => {
     deleteAdvert,
     submitForReview,
     getAdvertById,
+    getAdvertForEdit,
     calculatePrice,
     getDateRangeAdverts,
     getBcSyncStatus, 
