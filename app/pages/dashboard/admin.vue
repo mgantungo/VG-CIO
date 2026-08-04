@@ -84,6 +84,12 @@
           <span v-html="ic.bar"></span>Reports
         </button>
 
+        <p class="rail__grp">Testing</p>
+
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'payment_training' }" @click="go('payment_training')">
+          <span v-html="ic.flask"></span>Payment Training
+        </button>
+
         <button class="rail__item" :class="{ 'rail__item--on': s === 'settings' }" @click="go('settings')">
           <span v-html="ic.settings"></span>Settings
         </button>
@@ -215,6 +221,16 @@
           <Settings />
         </div>
 
+        <!-- ── PAYMENT TRAINING (BC Test Bypass) ─────────────────────────
+             ~/components/admin/BcTestBypass.vue
+             Dev/test tool — simulate BC-confirmed payment + reshape
+             start_date/end_date/publishing_dates without a real BC call.
+             Gated server-side by ALLOW_BC_TEST_BYPASS=true.
+        -->
+        <div v-show="s === 'payment_training'" class="bare padded">
+          <BcTestBypass />
+        </div>
+
       </div><!-- /body -->
     </div><!-- /main -->
   </div><!-- /admin-shell -->
@@ -239,13 +255,14 @@ import payments       from '~/components/finance/payments.vue'   // payments
 import FinanceReports from '~/components/finance/reports.vue'    // reports
 
 // design
-import DesignIndex from '~/components/design/Index.vue'          // design house
+import DesignIndex from '~/components/design/DesignDeskWorkspace.vue'          // design house
 
 import { useAuth }     from '~/composables/useAuth'
 import { useAdverts }  from '~/composables/useAdverts'
 import { usePayments } from '~/composables/usePayments'
 
 import Settings from '~/components/admin/Settings.vue'
+import BcTestBypass from '~/components/admin/BcTestBypass.vue'
 
 // ── layout: 'admin' ──────────────────────────────────────────────────────────
 // Uses layouts/admin.vue — a bare full-screen wrapper with no AppHeader,
@@ -294,6 +311,7 @@ const titles = {
   finance_index:       'Finance Dashboard',
   finance_payments:    'Finance — Payments',
   finance_reports:     'Finance — Reports',
+  payment_training:    'Payment Training — BC Test Bypass',
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -309,6 +327,7 @@ const ic = {
   bar:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
   arr:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
   settings: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H5.78a1.65 1.65 0 0 0-1.51 1 1.65 1.65 0 0 0 .33 1.82l.03.03A10 10 0 0 0 12 17.66a10 10 0 0 0 6.37-2.63z"/></svg>`,
+  flask:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 2v6.5L3.5 18a2 2 0 001.7 3h13.6a2 2 0 001.7-3L15 8.5V2"/><path d="M8.5 2h7"/><path d="M6.5 15h11"/></svg>`,
 }
 
 // ── Overview tiles ─────────────────────────────────────────────────────────
@@ -321,6 +340,7 @@ const workspaces = [
   { id:'finance_index',       label:'Finance Dashboard', desc:'Revenue overview and financial KPIs.',            key:'finance_team',        icon:ic.dollar, cls:'ws-ic--finance' },
   { id:'finance_payments',    label:'Payments',          desc:'Record payments, track collections.',             key:'finance_team',        icon:ic.card,   cls:'ws-ic--finance' },
   { id:'finance_reports',     label:'Reports',           desc:'Generate and export revenue reports.',            key:'finance_team',        icon:ic.bar,    cls:'ws-ic--finance' },
+  { id:'payment_training',    label:'Payment Training',  desc:'Simulate BC-confirmed payment for testing.',      key:'administrator',       icon:ic.flask,  cls:'ws-ic--test'    },
   { id:'settings', label:'Settings', desc:'System configuration and client sync.', key:'administrator', icon:ic.settings, cls:'ws-ic--settings' },
 ]
 
@@ -675,6 +695,11 @@ onUnmounted(() => { if (clkT) clearInterval(clkT) })
 .ws-ic--mgr     { background: #FAF5FF; color: #7E22CE; }
 .ws-ic--design  { background: #FFF7ED; color: #C2410C; }
 .ws-ic--finance { background: #F0FDF4; color: #166534; }
+.ws-ic--test    { background: #FDF2F8; color: #BE185D; }
+.ws-ic--settings{ background: #F5F7F9; color: #445566; }
+
+/* Bare content that still needs breathing room (e.g. a card-style tool, not a full-bleed workspace) */
+.bare.padded { padding: 22px; }
 
 /* ── Nav panel ───────────────────────────────────────────────────────────── */
 .nav-panel {

@@ -8,13 +8,13 @@
 
   Confirmed component imports (from uploaded page wrappers):
     booking_new      → ~/components/clerk/New.vue
-    sub_editor       → ~/components/editor/ScheduleReviewQueue.vue  +3 modals
+    sub_editor       → ~/components/editor/Index.vue
     finance_index    → ~/components/finance/Indexpage.vue
     finance_payments → ~/components/finance/payments.vue
     finance_reports  → ~/components/finance/Reports.vue  (Nuxt auto-import)
 
   Not yet confirmed (overwritten uploads):
-    booking_list / advertising_manager / design_house  → nav panels + router.push
+    advertising_manager  → nav panel (component path not yet provided)
 -->
 <template>
 
@@ -59,12 +59,12 @@
         <button class="rail__item" :class="{ 'rail__item--on': s === 'sub_editor' }" @click="go('sub_editor')">
           <span v-html="ic.grid"></span>Sub-Editor
         </button>
-
+        <!----
         <button class="rail__item" :class="{ 'rail__item--on': s === 'advertising_manager' }" @click="go('advertising_manager')">
           <span v-html="ic.tick"></span>Ad. Manager
           <em v-if="kpi.submitted" class="rail__dot">{{ kpi.submitted }}</em>
         </button>
-
+      -->
         <button class="rail__item" :class="{ 'rail__item--on': s === 'design_house' }" @click="go('design_house')">
           <span v-html="ic.design"></span>Design House
         </button>
@@ -82,6 +82,10 @@
 
         <button class="rail__item" :class="{ 'rail__item--on': s === 'finance_reports' }" @click="go('finance_reports')">
           <span v-html="ic.bar"></span>Reports
+        </button>
+
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'settings' }" @click="go('settings')">
+          <span v-html="ic.settings"></span>Settings
         </button>
 
       </div><!-- /rail__scroll -->
@@ -141,21 +145,10 @@
         </div>
 
         <!-- ── BOOKING LIST ──────────────────────────────────────────
-             ~/components/clerk/BookingList.vue  (path not confirmed)
-             Showing nav panel until the component wrapper is uploaded.
+             ~/components/clerk/Indexpage.vue
         -->
-        <div v-show="s === 'booking_list'" class="nav-panel">
-          <div class="np-ico ws-ic--clerk" v-html="ic.list"></div>
-          <div class="np-body">
-            <div class="np-title">Booking List <code>pages/dashboard/booking/index.vue</code></div>
-            <p class="np-desc">Full adverts report with date filters, status chips, user filter, pagination, and CSV export. Upload the booking index.vue wrapper to confirm the component name and enable inline rendering.</p>
-            <div class="np-perms">
-              <span class="pm">create_advert</span><span class="pm">view_adverts</span><span class="pm">edit_adverts</span>
-            </div>
-          </div>
-          <button class="open-btn" @click="push('/dashboard/booking')">
-            <span v-html="ic.arr"></span> Open Booking List
-          </button>
+        <div v-show="s === 'booking_list'" class="bare">
+          <ClerkIndexpage />
         </div>
 
         <!-- ── NEW BOOKING ────────────────────────────────────────────
@@ -166,93 +159,13 @@
           <New />
         </div>
 
-        <!-- ── SUB-EDITOR ─────────────────────────────────────────────
-             pages/editor/index.vue uses:
-               ScheduleReviewQueue, ScheduleDetailsModal,
-               BulkPageUpdateModal, MediaViewerModal
-             All state + handlers below are copied from that page.
+        <!-- ── SUB-EDITOR ──────────────────────────────────────────────
+             ~/components/editor/Index.vue
         -->
-        <div v-show="s === 'sub_editor'" class="editor-wrap">
+        <div v-show="s === 'sub_editor'" class="bare">
+          <EditorIndex />
+        </div>
 
-          <div class="filter-bar">
-            <div class="filter-bar__left">
-              <div class="fg"><label class="fl">From</label>
-                <input type="date" v-model="ef.dateFrom" class="fd" @change="editorLoad">
-              </div>
-              <div class="fg"><label class="fl">To</label>
-                <input type="date" v-model="ef.dateTo" class="fd" @change="editorLoad">
-              </div>
-              <div class="range-pills">
-                <button v-for="r in qRanges" :key="r.label" class="rp"
-                  :class="{ 'rp--on': eRange === r.label }" @click="applyRange(r)">
-                  {{ r.label }}
-                </button>
-              </div>
-            </div>
-            <div class="filter-bar__right">
-              <div class="fg">
-                <label class="fl">Status</label>
-                <select v-model="ef.status" class="fsel" @change="editorLoad">
-                  <option value="">All</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="paged">Page Assigned</option>
-                  <option value="published">Published</option>
-                </select>
-              </div>
-              <div class="fg">
-                <label class="fl">Search</label>
-                <input type="text" v-model="ef.search" class="fsrch" placeholder="Client or advert…">
-              </div>
-              <button class="fref" @click="editorLoad" title="Refresh">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 3A7 7 0 1 0 14 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 3v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="stats-band">
-            <div class="sc"><div class="sv">{{ eStats.total }}</div><div class="sl">Total</div></div>
-            <div class="sd"></div>
-            <div class="sc sc--am"><div class="sv">{{ eStats.noPage }}</div><div class="sl">No Page</div></div>
-            <div class="sd"></div>
-            <div class="sc sc--bl"><div class="sv">{{ eStats.paged }}</div><div class="sl">Page Assigned</div></div>
-            <div class="sd"></div>
-            <div class="sc sc--gn"><div class="sv">{{ eStats.published }}</div><div class="sl">Published</div></div>
-            <div class="sd"></div>
-            <div class="sc"><div class="sv">{{ eStats.withMedia }}</div><div class="sl">With Media</div></div>
-          </div>
-
-          <div v-if="eErr" class="e-err">
-            {{ eErr }}<button @click="eErr = ''">×</button>
-          </div>
-          <transition name="tf">
-            <div v-if="eToast" class="e-toast">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              {{ eToast }}
-            </div>
-          </transition>
-
-          <div class="e-panel">
-            <ScheduleReviewQueue
-              :schedules="filteredSchedules"
-              :loading="eLoading"
-              @page-update="onPageUpdate"
-              @publish-toggle="onPublishToggle"
-              @edit="onEdit"
-              @unschedule="onUnschedule"
-              @bulk-page="onBulkPage"
-              @view-media="onViewMedia"
-              @refresh="editorLoad"
-            />
-          </div>
-
-          <ScheduleDetailsModal :show="showEdit" :schedule="editTarget"
-            @close="showEdit = false" @saved="onSaveSchedule" />
-          <BulkPageUpdateModal  :show="showBulk" :schedules="bulkTargets"
-            @close="showBulk = false" @save="onBulkSave" />
-          <MediaViewerModal     :show="showMedia" :schedule="mediaTarget"
-            @close="showMedia = false" />
-
-        </div><!-- /sub_editor -->
 
         <!-- ── ADVERTISING MANAGER ──────────────────────────────────── -->
         <div v-show="s === 'advertising_manager'" class="nav-panel">
@@ -269,27 +182,18 @@
           </button>
         </div>
 
-        <!-- ── DESIGN HOUSE ─────────────────────────────────────────── -->
-        <div v-show="s === 'design_house'" class="nav-panel">
-          <div class="np-ico ws-ic--design" v-html="ic.design"></div>
-          <div class="np-body">
-            <div class="np-title">Design House <code>pages/dashboard/design/index.vue</code></div>
-            <p class="np-desc">Creative management — view advert briefs, upload artwork files, and manage version history for attachments. Upload the design index.vue to confirm the component name.</p>
-            <div class="np-perms">
-              <span class="pm">view_attachments</span><span class="pm">upload_creatives</span><span class="pm">version_control</span>
-            </div>
-          </div>
-          <button class="open-btn" @click="push('/dashboard/design')">
-            <span v-html="ic.arr"></span> Open Design Workspace
-          </button>
+        <!-- ── DESIGN HOUSE ──────────────────────────────────────────
+             ~/components/design/Index.vue
+        -->
+        <div v-show="s === 'design_house'" class="bare">
+          <DesignIndex />
         </div>
 
         <!-- ── FINANCE DASHBOARD ────────────────────────────────────────
-             pages/dashboard/finance/index.vue:
-               import Indexpage from '~/components/finance/Indexpage.vue'
+             ~/components/finance/Indexpage.vue
         -->
         <div v-show="s === 'finance_index'" class="bare">
-          <Indexpage />
+          <FinanceIndex />
         </div>
 
         <!-- ── PAYMENTS ─────────────────────────────────────────────────
@@ -301,11 +205,18 @@
         </div>
 
         <!-- ── REPORTS ──────────────────────────────────────────────────
-             pages/dashboard/finance/reports.vue:
-               <Reports />  (Nuxt auto-import ~/components/finance/Reports.vue)
+             ~/components/finance/reports.vue
         -->
         <div v-show="s === 'finance_reports'" class="bare">
-          <Reports />
+          <FinanceReports />
+        </div>
+
+        <div v-show="s === 'settings'" class="bare">
+          <Settings />
+        </div>
+
+        <div v-show="s === 'BcTestBypass'" class="bare">
+          <BcTestBypass />
         </div>
 
       </div><!-- /body -->
@@ -319,20 +230,28 @@ import { useRouter } from '#imports'
 import { navigateTo } from '#app'
 
 // ── Component imports — identical paths to the role page wrappers ──────────
-import New from '~/components/clerk/New.vue'
+// booking
+import ClerkIndexpage from '~/components/clerk/Indexpage.vue'   // booking list
+import New            from '~/components/clerk/New.vue'          // new booking
 
-import ScheduleReviewQueue  from '~/components/editor/ScheduleReviewQueue.vue'
-import ScheduleDetailsModal from '~/components/editor/ScheduleDetailsModal.vue'
-import BulkPageUpdateModal  from '~/components/editor/BulkPageUpdateModal.vue'
-import MediaViewerModal     from '~/components/editor/MediaViewerModal.vue'
+// editor
+import EditorIndex from '~/components/editor/Index.vue'          // sub-editor
 
-import Indexpage from '~/components/finance/Indexpage.vue'
-import payments  from '~/components/finance/payments.vue'
-// Reports is Nuxt auto-imported from ~/components/finance/Reports.vue
+// finance
+import FinanceIndex   from '~/components/finance/Indexpage.vue'  // finance dashboard
+import payments       from '~/components/finance/payments.vue'   // payments
+import FinanceReports from '~/components/finance/reports.vue'    // reports
+
+// design
+import DesignIndex from '~/components/design/Index.vue'          // design house
 
 import { useAuth }     from '~/composables/useAuth'
 import { useAdverts }  from '~/composables/useAdverts'
 import { usePayments } from '~/composables/usePayments'
+
+import Settings from '~/components/admin/Settings.vue'
+
+import BcTestBypass from '~/components/admin/BcTestBypass.vue'
 
 // ── layout: 'admin' ──────────────────────────────────────────────────────────
 // Uses layouts/admin.vue — a bare full-screen wrapper with no AppHeader,
@@ -395,6 +314,7 @@ const ic = {
   card:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="22" height="16" rx="1"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,
   bar:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
   arr:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
+  settings: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H5.78a1.65 1.65 0 0 0-1.51 1 1.65 1.65 0 0 0 .33 1.82l.03.03A10 10 0 0 0 12 17.66a10 10 0 0 0 6.37-2.63z"/></svg>`,
 }
 
 // ── Overview tiles ─────────────────────────────────────────────────────────
@@ -407,6 +327,7 @@ const workspaces = [
   { id:'finance_index',       label:'Finance Dashboard', desc:'Revenue overview and financial KPIs.',            key:'finance_team',        icon:ic.dollar, cls:'ws-ic--finance' },
   { id:'finance_payments',    label:'Payments',          desc:'Record payments, track collections.',             key:'finance_team',        icon:ic.card,   cls:'ws-ic--finance' },
   { id:'finance_reports',     label:'Reports',           desc:'Generate and export revenue reports.',            key:'finance_team',        icon:ic.bar,    cls:'ws-ic--finance' },
+  { id:'settings', label:'Settings', desc:'System configuration and client sync.', key:'administrator', icon:ic.settings, cls:'ws-ic--settings' },
 ]
 
 // ── KPI ────────────────────────────────────────────────────────────────────

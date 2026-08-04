@@ -21,22 +21,33 @@
 
         <div class="pap-body">
           <div v-if="loading" class="pap-msg">Loading adverts…</div>
-          <div v-else-if="adverts.length === 0" class="pap-msg">
+          <div v-else-if="units.length === 0" class="pap-msg">
             No adverts ticked yet. Go to the Print Queue Selection panel in the Schedule Queue and
             tick off the adverts you want on the pager, then come back here.
           </div>
           <div v-else-if="filtered.length === 0" class="pap-msg">No ticked adverts match your search.</div>
+
           <div
-            v-for="a in filtered"
-            :key="a.id"
+            v-for="u in filtered"
+            :key="u.unitKey"
             class="pap-row"
-            @click="$emit('select', a.id)"
+            :class="{ 'pap-row--group': u.kind === 'group' }"
+            @click="$emit('select', u.advertIds)"
           >
-            <div class="pap-row__main">
-              <span class="pap-row__title">{{ a.advert_title }}</span>
-              <span class="pap-row__ref mono">#{{ a.reference_number }}</span>
-            </div>
-            <div class="pap-row__sub">{{ a.client?.company_name || '—' }} · {{ a.ad_size }}</div>
+            <template v-if="u.kind === 'group'">
+              <div class="pap-row__main">
+                <span class="pap-row__title">📁 {{ u.adverts.length }} adverts — one ad slot</span>
+                <span class="pap-row__ref mono">moves together</span>
+              </div>
+              <div class="pap-row__sub">{{ u.adverts.map(a => a.advert_title).join(' · ') }}</div>
+            </template>
+            <template v-else>
+              <div class="pap-row__main">
+                <span class="pap-row__title">{{ u.adverts[0].advert_title }}</span>
+                <span class="pap-row__ref mono">#{{ u.adverts[0].reference_number }}</span>
+              </div>
+              <div class="pap-row__sub">{{ u.adverts[0].client?.company_name || '—' }} · {{ u.adverts[0].ad_size }}</div>
+            </template>
           </div>
         </div>
       </div>
@@ -48,23 +59,40 @@
 import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
-  show:    { type: Boolean, default: false },
-  page:    { type: Object,  default: null },
-  adverts: { type: Array,   default: () => [] },
-  loading: { type: Boolean, default: false },
+  show:      { type: Boolean, default: false },
+  page:      { type: Object,  default: null },
+  groups:    { type: Array,   default: () => [] }, // [{ slotKey, adverts: [...] }] — must move together
+  ungrouped: { type: Array,   default: () => [] },  // plain adverts, free to place individually
+  loading:   { type: Boolean, default: false },
 })
-defineEmits(['close', 'select'])
+defineEmits(['close', 'select']) // select emits an array of advertIds — always, even for a single ungrouped advert
 
 const search = ref('')
 watch(() => props.show, (v) => { if (!v) search.value = '' })
 
+// One printable unit per row: a whole ad slot, or a single ungrouped advert —
+// matches the same model already used in Print Queue Selection and the
+// Schedule Queue, so selecting here can never split a slot across pages.
+const units = computed(() => {
+  const out = []
+  for (const g of props.groups) {
+    out.push({ unitKey: `group:${g.slotKey}`, kind: 'group', adverts: g.adverts, advertIds: g.adverts.map(a => a.id) })
+  }
+  for (const a of props.ungrouped) {
+    out.push({ unitKey: `advert:${a.id}`, kind: 'advert', adverts: [a], advertIds: [a.id] })
+  }
+  return out
+})
+
 const filtered = computed(() => {
-  if (!search.value) return props.adverts
+  if (!search.value) return units.value
   const q = search.value.toLowerCase()
-  return props.adverts.filter(a =>
-    (a.advert_title || '').toLowerCase().includes(q) ||
-    (a.client?.company_name || '').toLowerCase().includes(q) ||
-    String(a.reference_number || '').toLowerCase().includes(q)
+  return units.value.filter(u =>
+    u.adverts.some(a =>
+      (a.advert_title || '').toLowerCase().includes(q) ||
+      (a.client?.company_name || '').toLowerCase().includes(q) ||
+      String(a.reference_number || '').toLowerCase().includes(q)
+    )
   )
 })
 </script>
@@ -99,6 +127,8 @@ const filtered = computed(() => {
 
 .pap-row { padding: 10px 14px; border-bottom: 1px solid #F0F4F8; cursor: pointer; }
 .pap-row:hover { background: #F0F4F8; }
+.pap-row--group { background: #FFF9E6; border-left: 3px solid #FFCC00; }
+.pap-row--group:hover { background: #FFF3D6; }
 .pap-row__main { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .pap-row__title { font-size: 12px; font-weight: 600; color: #003366; }
 .pap-row__ref   { font-size: 10px; color: #999; }

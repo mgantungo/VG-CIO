@@ -372,11 +372,11 @@
 
 <script setup>
 import DataTable       from '~/components/common/DataTable.vue'
-import AdvertScheduler      from '~/components/design/AdvertScheduler.vue'
-import ScheduleDateModal    from '~/components/design/ScheduleDateModal.vue'
-import BriefModal      from '~/components/design/BriefModal.vue'
-import FileList        from '~/components/design/FileList.vue'
-import UploadDesign    from '~/components/design/UploadDesign.vue'
+import AdvertScheduler      from './AdvertScheduler.vue'
+import ScheduleDateModal    from './ScheduleDateModal.vue'
+import BriefModal      from './BriefModal.vue'
+import FileList        from './FileList.vue'
+import UploadDesign    from './UploadDesign.vue'
 import { useDesign }   from '~/composables/useDesign'
 import { ref, computed, onMounted, watch } from 'vue'
 

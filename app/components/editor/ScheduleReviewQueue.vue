@@ -115,30 +115,54 @@
               >
             </td>
 
-            <!-- Ref # -->
-            <td class="tc-ref td-mid"><span class="ref-chip">{{ s.advert_id }}</span></td>
+            <!-- Ref # — group count chip when this row has an ad slot, single ref otherwise -->
+            <td class="tc-ref td-mid">
+              <span v-if="isGrouped(s)" class="ref-chip ref-chip--group" :title="`${allAdverts(s).length} adverts across ${s.fileGroups.length} ad slot${s.fileGroups.length !== 1 ? 's' : ''}`">
+                📁 {{ allAdverts(s).length }}
+              </span>
+              <span v-else class="ref-chip">{{ primaryAdvert(s)?.id }}</span>
+            </td>
 
-            <!-- Client / Title + full contact info -->
+            <!-- Client / Title + full contact info — group-aware -->
             <td class="tc-client">
-              <div class="client-name" v-html="hl(s.company_name)"></div>
-              <div class="advert-title-line" v-html="hl(s.advert_title)"></div>
-              <!-- Contact block — always visible -->
-              <div class="contact-block">
-                <div v-if="s.contact_person" class="contact-row">
-                  <svg class="c-ico" width="9" height="9" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                  <span v-html="hl(s.contact_person)"></span>
+              <template v-if="!isGrouped(s)">
+                <div class="client-name" v-html="hl(primaryAdvert(s)?.company_name)"></div>
+                <div class="advert-title-line" v-html="hl(primaryAdvert(s)?.advert_title)"></div>
+                <!-- Contact block — always visible -->
+                <div class="contact-block">
+                  <div v-if="primaryAdvert(s)?.contact_person" class="contact-row">
+                    <svg class="c-ico" width="9" height="9" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <span v-html="hl(primaryAdvert(s).contact_person)"></span>
+                  </div>
+                  <div v-if="primaryAdvert(s)?.contact_email" class="contact-row">
+                    <svg class="c-ico" width="9" height="9" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M1 5l7 5 7-5" stroke="currentColor" stroke-width="1.5"/></svg>
+                    <a :href="`mailto:${primaryAdvert(s).contact_email}`" class="c-link" @click.stop>
+                      <span v-html="hl(primaryAdvert(s).contact_email)"></span>
+                    </a>
+                  </div>
+                  <div v-if="primaryAdvert(s)?.contact_number" class="contact-row">
+                    <svg class="c-ico" width="9" height="9" viewBox="0 0 16 16" fill="none"><path d="M3 2h3l1 3-1.5 1.5c.8 1.6 2.4 3.2 4 4L11 9l3 1v3c0 .6-.5 1-1 1C5 14 2 8 2 3c0-.5.4-1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <a :href="`tel:${primaryAdvert(s).contact_number}`" class="c-link" @click.stop>{{ primaryAdvert(s).contact_number }}</a>
+                  </div>
                 </div>
-                <div v-if="s.contact_email" class="contact-row">
-                  <svg class="c-ico" width="9" height="9" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M1 5l7 5 7-5" stroke="currentColor" stroke-width="1.5"/></svg>
-                  <a :href="`mailto:${s.contact_email}`" class="c-link" @click.stop>
-                    <span v-html="hl(s.contact_email)"></span>
-                  </a>
+              </template>
+
+              <!-- Grouped: one physical file, several adverts — list them all, don't pretend it's one -->
+              <template v-else>
+                <div v-for="g in s.fileGroups" :key="g.groupId" class="group-block">
+                  <div class="group-block__label">📁 {{ g.label || `Ad Slot ${g.groupId}` }}<span v-if="g.file"> · {{ g.file.name }}</span></div>
+                  <div v-for="a in g.adverts" :key="a.id" class="group-block__advert">
+                    <span class="client-name client-name--sm" v-html="hl(a.company_name)"></span>
+                    <span class="advert-title-line" v-html="hl(a.advert_title)"></span>
+                  </div>
                 </div>
-                <div v-if="s.contact_number" class="contact-row">
-                  <svg class="c-ico" width="9" height="9" viewBox="0 0 16 16" fill="none"><path d="M3 2h3l1 3-1.5 1.5c.8 1.6 2.4 3.2 4 4L11 9l3 1v3c0 .6-.5 1-1 1C5 14 2 8 2 3c0-.5.4-1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <a :href="`tel:${s.contact_number}`" class="c-link" @click.stop>{{ s.contact_number }}</a>
+                <div v-if="s.ungroupedAdverts && s.ungroupedAdverts.length" class="group-block">
+                  <div v-for="a in s.ungroupedAdverts" :key="a.id" class="group-block__advert">
+                    <span class="client-name client-name--sm" v-html="hl(a.company_name)"></span>
+                    <span class="advert-title-line" v-html="hl(a.advert_title)"></span>
+                  </div>
                 </div>
-              </div>
+              </template>
             </td>
 
             <!-- Ad Size -->
@@ -250,17 +274,29 @@ const todayStr  = new Date().toISOString().split('T')[0]
 const selected  = ref([])
 const colSearch = ref('')
 
+// Every advert on a schedule row — flattened across its ad slots and
+// ungroupedAdverts, since that's the full set search/highlight needs to
+// check against now that a row can hold more than one advert.
+const allAdverts = (s) => [
+  ...((s.fileGroups || []).flatMap(g => g.adverts || [])),
+  ...(s.ungroupedAdverts || []),
+]
+const isGrouped    = (s) => (s.fileGroups || []).length > 0
+const primaryAdvert = (s) => allAdverts(s)[0] || null
+
 // ── Column-level search ──────────────────────────────────────────────────────
 const displaySchedules = computed(() => {
   const q = colSearch.value.trim().toLowerCase()
   if (!q) return props.schedules
   return props.schedules.filter(s =>
-    (s.company_name   || '').toLowerCase().includes(q) ||
-    (s.advert_title   || '').toLowerCase().includes(q) ||
-    (s.contact_person || '').toLowerCase().includes(q) ||
-    (s.contact_email  || '').toLowerCase().includes(q) ||
-    (s.contact_number || '').toLowerCase().includes(q) ||
-    String(s.advert_id || '').includes(q)
+    allAdverts(s).some(a =>
+      (a.company_name   || '').toLowerCase().includes(q) ||
+      (a.advert_title   || '').toLowerCase().includes(q) ||
+      (a.contact_person || '').toLowerCase().includes(q) ||
+      (a.contact_email  || '').toLowerCase().includes(q) ||
+      (a.contact_number || '').toLowerCase().includes(q) ||
+      String(a.id || '').includes(q)
+    )
   )
 })
 
@@ -307,8 +343,11 @@ const onPageChange = (s, val) => {
   if (!isNaN(n) && n >= 0 && n !== (s.page || 0)) emit('page-update', s.schedule_id, n)
 }
 const onUnschedule = (s) => {
-  if (confirm(`Remove schedule for "${s.advert_title}" on ${fmtDate(s.run_date)}?\n\nThis cannot be undone.`))
-    emit('unschedule', s.schedule_id)
+  const adverts = allAdverts(s)
+  const msg = adverts.length > 1
+    ? `Remove schedule on ${fmtDate(s.run_date)}?\n\nThis will unschedule ALL ${adverts.length} adverts sharing this file:\n${adverts.map(a => `  • ${a.advert_title} (${a.company_name || '—'})`).join('\n')}\n\nThis cannot be undone.`
+    : `Remove schedule for "${adverts[0]?.advert_title}" on ${fmtDate(s.run_date)}?\n\nThis cannot be undone.`
+  if (confirm(msg)) emit('unschedule', s.schedule_id)
 }
 </script>
 
@@ -417,6 +456,14 @@ const onUnschedule = (s) => {
 
 /* ── REF ── */
 .ref-chip { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 700; color: #1F3864; background: #DEEAF1; border: 1px solid #9DC3E6; padding: 1px 6px; white-space: nowrap; }
+.ref-chip--group { background: #FFF3D6; border-color: #FFCC00; color: #9C5700; cursor: help; }
+
+/* ── GROUPED ADVERT BLOCKS ── */
+.group-block { padding: 4px 0; }
+.group-block + .group-block { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #E8F2FF; }
+.group-block__label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #9C5700; margin-bottom: 3px; }
+.group-block__advert { display: flex; align-items: baseline; gap: 6px; font-size: 11px; padding: 1px 0; }
+.client-name--sm { font-size: 11px; font-weight: 700; color: #1a1a1a; }
 
 /* ── CLIENT / CONTACT BLOCK ── */
 .client-name       { font-size: 12px; font-weight: 700; color: #1a1a1a; line-height: 1.3; }

@@ -1,8 +1,8 @@
 <!--pages/dashboard/design/index.vue-->
 <template>
-<Index />
-
+  <Index />
 </template>
+
 <script setup>
-import Index from '~/components/design/Index.vue';
+import Index from '~/components/design/DesignDeskWorkspace.vue';
 </script>

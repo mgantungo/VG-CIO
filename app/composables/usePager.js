@@ -14,10 +14,6 @@ export const PUBLICATION_SECTIONS = [
 ]
 
 // ── Per-section color map ────────────────────────────────────────────────
-// Every real section (everything except the two cover pages, which keep
-// their own navy treatment) gets a fixed, distinct hue — same section always
-// renders the same color, computed once from its position in the list using
-// the golden-angle so adjacent list entries don't end up visually similar.
 const COLOR_EXCLUDED = new Set(['Cover Page', 'Back Cover Page'])
 const COLORED_SECTIONS = PUBLICATION_SECTIONS.filter(s => !COLOR_EXCLUDED.has(s))
 
@@ -32,15 +28,10 @@ const SECTION_COLOR_MAP = new Map(
   })
 )
 
-/**
- * Returns { bg, border, text } for a section, or null for unassigned /
- * cover / back-cover pages (those keep their own fixed styling).
- */
 export function getSectionColor(section) {
   return SECTION_COLOR_MAP.get(section) || null
 }
 
-/** All section→color pairs currently in use on a given set of pages, for a legend. */
 export function getSectionLegend(pages) {
   const used = new Set((pages || []).map(p => p.section).filter(s => s && !COLOR_EXCLUDED.has(s)))
   return PUBLICATION_SECTIONS
@@ -111,7 +102,7 @@ export function usePager() {
     }
   }
 
-  // ── Increase pages (multiples of 4) ─────────────────────────────────────
+  // ── Increase / decrease pages ────────────────────────────────────────────
   async function increasePages(publicationId, additionalPages) {
     try {
       await $fetch(`${API}/pager-publications/${publicationId}/increase-pages`, {
@@ -138,18 +129,26 @@ export function usePager() {
     }
   }
 
-  // ── Auto-map checked adverts onto a publication's pages ─────────────────
-  async function queueAdvertsToPublication(publicationId, advertIds) {
+  // ── Auto-map checked printable units onto a publication's pages ─────────
+  // units: [{ advertIds: [...] }, ...] — each unit is one printable item:
+  // an ad slot (several adverts sharing one physical file, must land on
+  // the same page) or a single ungrouped advert (a unit of one).
+  async function queueUnitsToPublication(publicationId, units) {
     try {
       const res = await $fetch(`${API}/pager-publications/${publicationId}/queue-adverts`, {
         method: 'POST',
-        body: { advertIds },
+        body: { units },
       })
       return res // { assigned: [...], skipped: [...] }
     } catch (e) {
       error.value = extractMsg(e, 'Failed to queue adverts to the pager')
       throw e
     }
+  }
+
+  // ── Legacy flat-list version — kept for any other caller still using it.
+  async function queueAdvertsToPublication(publicationId, advertIds) {
+    return queueUnitsToPublication(publicationId, advertIds.map((advertId) => ({ advertIds: [advertId] })))
   }
 
   // ── Lock / status ────────────────────────────────────────────────────────
@@ -192,39 +191,59 @@ export function usePager() {
     }
   }
 
-  async function assignAdvert(pageId, advertId) {
+  // ── Assign / unassign — plural (slot-aware) versions the UI should use ──
+  // An ad slot's adverts must move together, never split, so these accept
+  // an array and place/remove them on the page atomically, in one call.
+  async function assignAdverts(pageId, advertIds) {
     try {
-      await $fetch(`${API}/pager-pages/${pageId}/assign-advert`, {
+      await $fetch(`${API}/pager-pages/${pageId}/assign-adverts`, {
         method: 'POST',
-        body: { advertId },
+        body: { advertIds },
       })
       if (activePublication.value?.publication?.id) {
         await loadLayout(activePublication.value.publication.id)
       }
     } catch (e) {
-      error.value = extractMsg(e, 'Failed to assign advert')
+      error.value = extractMsg(e, 'Failed to assign advert(s)')
       throw e
     }
   }
 
-  async function unassignAdvert(pageId, advertId) {
+  async function unassignAdverts(pageId, advertIds) {
     try {
-      await $fetch(`${API}/pager-pages/${pageId}/advert/${advertId}`, {
-        method: 'DELETE',
+      await $fetch(`${API}/pager-pages/${pageId}/unassign-adverts`, {
+        method: 'POST',
+        body: { advertIds },
       })
       if (activePublication.value?.publication?.id) {
         await loadLayout(activePublication.value.publication.id)
       }
     } catch (e) {
-      error.value = extractMsg(e, 'Failed to remove advert')
+      error.value = extractMsg(e, 'Failed to remove advert(s)')
       throw e
     }
   }
 
+  // ── Legacy single-advert wrappers — kept for any other caller ───────────
+  async function assignAdvert(pageId, advertId) {
+    return assignAdverts(pageId, [advertId])
+  }
+  async function unassignAdvert(pageId, advertId) {
+    return unassignAdverts(pageId, [advertId])
+  }
+
+  // ── Available adverts for a page, grouped by ad slot ────────────────────
+  // Returns { data, groups, ungrouped } — groups/ungrouped is what the
+  // picker should actually render (one selectable unit per ad slot or
+  // single advert); data is the old flat list, kept for backward compat.
   async function getAvailableAdverts(pageId) {
     try {
       const res = await $fetch(`${API}/pager-pages/${pageId}/available-adverts`)
-      return res?.data || []
+      return {
+        data: res?.data || [],
+        groups: res?.groups || [],
+        ungrouped: res?.ungrouped || [],
+      }
     } catch (e) {
       error.value = extractMsg(e, 'Failed to load available adverts')
       throw e
@@ -252,10 +271,13 @@ export function usePager() {
     loadLayout,
     increasePages,
     decreasePages,
+    queueUnitsToPublication,
     queueAdvertsToPublication,
     lockPublication,
     setPublicationStatus,
     updatePageSection,
+    assignAdverts,
+    unassignAdverts,
     assignAdvert,
     unassignAdvert,
     getAvailableAdverts,

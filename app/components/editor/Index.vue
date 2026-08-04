@@ -105,7 +105,7 @@
         <div class="pq-toolbar">
           <label class="pq-selectall">
             <input type="checkbox" :checked="allChecked" @change="toggleAll($event.target.checked)">
-            Select all ({{ checkedIds.size }} / {{ filteredSchedules.length }})
+            Select all ({{ checkedUnitKeys.size }} / {{ printableUnits.length }})
           </label>
 
           <select v-model="targetPublicationId" class="pq-pub-select">
@@ -117,9 +117,9 @@
 
           <button
             class="pq-send-btn"
-            :disabled="checkedIds.size === 0 || !targetPublicationId || sendingToPager"
+            :disabled="checkedUnitKeys.size === 0 || !targetPublicationId || sendingToPager"
             @click="sendCheckedToPager"
-          >{{ sendingToPager ? 'Sending…' : `Send ${checkedIds.size} to Pager` }}</button>
+          >{{ sendingToPager ? 'Sending…' : `Send ${checkedUnitKeys.size} to Pager` }}</button>
         </div>
 
         <div class="pq-table-wrap">
@@ -128,26 +128,41 @@
               <tr>
                 <th></th>
                 <th>Client</th>
-                <th>Advert</th>
+                <th>Advert / Group</th>
                 <th>Ad Size</th>
                 <th>Ref</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="s in filteredSchedules" :key="s.schedule_id">
+              <tr v-for="u in printableUnits" :key="u.unitKey">
                 <td>
                   <input
                     type="checkbox"
-                    :checked="checkedIds.has(s.advert_id)"
-                    @change="toggleOne(s.advert_id, $event.target.checked)"
+                    :checked="checkedUnitKeys.has(u.unitKey)"
+                    @change="toggleOne(u.unitKey, $event.target.checked)"
                   >
                 </td>
-                <td>{{ s.company_name || '—' }}</td>
-                <td>{{ s.advert_title || '—' }}</td>
-                <td class="mono">{{ s.ad_size || '—' }}</td>
-                <td class="mono">{{ s.advert_id }}</td>
+                <td>
+                  <template v-if="u.kind === 'group'">{{ u.adverts.length }} client{{ u.adverts.length !== 1 ? 's' : '' }}</template>
+                  <template v-else>{{ u.adverts[0]?.company_name || '—' }}</template>
+                </td>
+                <td>
+                  <template v-if="u.kind === 'group'">
+                    📁 {{ u.label }}<span v-if="u.fileName"> · {{ u.fileName }}</span>
+                    <div class="pq-group-members">{{ u.adverts.map(a => a.advert_title).join(' · ') }}</div>
+                  </template>
+                  <template v-else>{{ u.adverts[0]?.advert_title || '—' }}</template>
+                </td>
+                <td class="mono">
+                  <template v-if="u.kind === 'group'">multiple</template>
+                  <template v-else>{{ u.adverts[0]?.ad_size || '—' }}</template>
+                </td>
+                <td class="mono">
+                  <template v-if="u.kind === 'group'">{{ u.advertIds.length }} adverts</template>
+                  <template v-else>{{ u.advertIds[0] }}</template>
+                </td>
               </tr>
-              <tr v-if="filteredSchedules.length === 0">
+              <tr v-if="printableUnits.length === 0">
                 <td colspan="5" class="pq-empty">No schedules in the current filter.</td>
               </tr>
             </tbody>
@@ -202,7 +217,7 @@
     />
 
     <!-- PAGER POPUP -->
-    <PagerPopup v-model:open="pagerOpen" :checked-advert-ids="Array.from(checkedIds)" />
+    <PagerPopup v-model:open="pagerOpen" :checked-advert-ids="checkedAdvertIdsFlat" />
 
     <!-- CONFLICT ALERT — blocking, no click-outside dismiss on purpose -->
     <div v-if="showConflictModal" class="cf-overlay">
@@ -279,7 +294,7 @@ const pagerOpen     = ref(false)
 
 // ── PRINT QUEUE SELECTION ────────────────────────────────────────────────────
 const pqCollapsed         = ref(false)
-const checkedIds          = ref(new Set())
+const checkedUnitKeys     = ref(new Set())
 const targetPublicationId = ref('')
 const pagerPublications   = ref([])
 const sendingToPager      = ref(false)
@@ -321,6 +336,14 @@ const stats = computed(() => ({
   withMedia: filteredSchedules.value.filter(s => s.media?.length > 0).length,
 }))
 
+// Every advert on a schedule row, flattened across its ad slots and
+// ungroupedAdverts — the full set search needs to check now that a row
+// can hold more than one advert.
+const allAdvertsOf = (s) => [
+  ...((s.fileGroups || []).flatMap(g => g.adverts || [])),
+  ...(s.ungroupedAdverts || []),
+]
+
 // ── FILTERED SCHEDULES ─────────────────────────────────────────────────────
 const filteredSchedules = computed(() => {
   let s = [...schedules.value]
@@ -335,10 +358,12 @@ const filteredSchedules = computed(() => {
   if (filters.value.search) {
     const q = filters.value.search.toLowerCase()
     s = s.filter(x =>
-      (x.company_name    || '').toLowerCase().includes(q) ||
-      (x.advert_title    || '').toLowerCase().includes(q) ||
-      (x.contact_person  || '').toLowerCase().includes(q) ||
-      String(x.advert_id || '').includes(q)
+      allAdvertsOf(x).some(a =>
+        (a.company_name || '').toLowerCase().includes(q) ||
+        (a.advert_title || '').toLowerCase().includes(q) ||
+        (a.contact_person || '').toLowerCase().includes(q) ||
+        String(a.id || '').includes(q)
+      )
     )
   }
 
@@ -458,20 +483,67 @@ const onBulkSave = async (changes) => {
 }
 
 // ── PRINT QUEUE SELECTION ────────────────────────────────────────────────────
-const allChecked = computed(() =>
-  filteredSchedules.value.length > 0 &&
-  filteredSchedules.value.every(s => checkedIds.value.has(s.advert_id))
+// One row per printable UNIT, not per advert: a design-batch ad slot
+// (several adverts sharing one physical file — must stay together on one
+// pager page) collapses into a single row/checkbox, and an ungrouped advert
+// (only one file to itself) stays a normal single row.
+const printableUnits = computed(() => {
+  const units = []
+  for (const s of filteredSchedules.value) {
+    for (const g of (s.fileGroups || [])) {
+      units.push({
+        unitKey:    `group:${s.schedule_id}:${g.groupId}`,
+        kind:       'group',
+        scheduleId: s.schedule_id,
+        label:      g.label || `Ad Slot ${g.groupId}`,
+        fileName:   g.file?.name || null,
+        advertIds:  (g.adverts || []).map(a => a.id),
+        adverts:    g.adverts || [],
+      })
+    }
+    for (const a of (s.ungroupedAdverts || [])) {
+      units.push({
+        unitKey:    `advert:${a.id}`,
+        kind:       'advert',
+        scheduleId: s.schedule_id,
+        label:      a.advert_title,
+        fileName:   null,
+        advertIds:  [a.id],
+        adverts:    [a],
+      })
+    }
+  }
+  return units
+})
+
+const checkedAdvertIdsFlat = computed(() =>
+  printableUnits.value
+    .filter(u => checkedUnitKeys.value.has(u.unitKey))
+    .flatMap(u => u.advertIds)
 )
 
-const toggleOne = (advertId, checked) => {
-  const next = new Set(checkedIds.value)
-  checked ? next.add(advertId) : next.delete(advertId)
-  checkedIds.value = next
+const findAdvertDisplay = (advertId) => {
+  for (const s of filteredSchedules.value) {
+    const match = allAdvertsOf(s).find(a => a.id === advertId)
+    if (match) return match
+  }
+  return null
+}
+
+const allChecked = computed(() =>
+  printableUnits.value.length > 0 &&
+  printableUnits.value.every(u => checkedUnitKeys.value.has(u.unitKey))
+)
+
+const toggleOne = (unitKey, checked) => {
+  const next = new Set(checkedUnitKeys.value)
+  checked ? next.add(unitKey) : next.delete(unitKey)
+  checkedUnitKeys.value = next
 }
 
 const toggleAll = (checked) => {
-  checkedIds.value = checked
-    ? new Set(filteredSchedules.value.map(s => s.advert_id))
+  checkedUnitKeys.value = checked
+    ? new Set(printableUnits.value.map(u => u.unitKey))
     : new Set()
 }
 
@@ -484,22 +556,33 @@ const loadPagerPublications = async () => {
 }
 
 const sendCheckedToPager = async () => {
-  if (!targetPublicationId.value || checkedIds.value.size === 0) return
+  if (!targetPublicationId.value || checkedUnitKeys.value.size === 0) return
   sendingToPager.value = true
   try {
-    const result = await pager.queueAdvertsToPublication(
+    const checkedUnits = printableUnits.value.filter(u => checkedUnitKeys.value.has(u.unitKey))
+    const result = await pager.queueUnitsToPublication(
       targetPublicationId.value,
-      Array.from(checkedIds.value)
+      checkedUnits.map(u => ({ advertIds: u.advertIds }))
     )
+
+    // A unit only clears from the checklist once every one of its member
+    // advert ids was actually assigned — a group is all-or-nothing, so this
+    // naturally stays checked (and visible in the conflict modal) if the
+    // backend bounced any part of it back.
     const assignedIds = new Set((result?.assigned || []).map(a => a.advertId))
-    checkedIds.value = new Set(Array.from(checkedIds.value).filter(id => !assignedIds.has(id)))
+    const fullyAssignedUnitKeys = new Set(
+      checkedUnits.filter(u => u.advertIds.every(id => assignedIds.has(id))).map(u => u.unitKey)
+    )
+    checkedUnitKeys.value = new Set(
+      Array.from(checkedUnitKeys.value).filter(key => !fullyAssignedUnitKeys.has(key))
+    )
 
     if (result?.skipped?.length > 0) {
       // Enrich with readable labels from the schedules we already have, and
       // surface this as a blocking modal — a silent toast let conflicts pass
       // unnoticed, which is exactly what put adverts on two different pages.
       pagerConflicts.value = result.skipped.map(s => {
-        const match = filteredSchedules.value.find(sc => sc.advert_id === s.advertId)
+        const match = findAdvertDisplay(s.advertId)
         return {
           ...s,
           company_name: match?.company_name || '—',
@@ -612,6 +695,7 @@ onMounted(() => {
   letter-spacing: .4px; color: #888; border-bottom: 1.5px solid #DEEAF1;
 }
 .pq-table td { padding: 6px 10px; border-bottom: 1px solid #F0F4F8; color: #333; }
+.pq-group-members { font-size: 10px; color: #999; margin-top: 2px; }
 .pq-table tr:hover td { background: #F7FBFE; }
 .pq-table .mono { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
 .pq-empty { text-align: center; color: #aaa; padding: 20px; }

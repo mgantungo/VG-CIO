@@ -10,14 +10,14 @@ export const useAuth = () => {
   
   const login = async (credentials) => {
     try {
-      console.log('🔄 Attempting login with email:', credentials.email)
+      //console.log('🔄 Attempting login with email:', credentials.email)
       
       // Validate email format before API call
       if (!validateEmail(credentials.email)) {
         throw new Error('Email must end with @newvision.co.ug')
       }
       
-      console.log('📡 Calling API:', `${apiUrl}/vgams-users/login`)
+      //console.log('📡 Calling API:', `${apiUrl}/vgams-users/login`)
       
       // Call the API endpoint
       const response = await $fetch(`${apiUrl}/vgams-users/login`, {
@@ -31,7 +31,7 @@ export const useAuth = () => {
         })
       })
       
-      console.log('✅ API Response:', response)
+      //console.log('✅ API Response:', response)
       
       // Check if response has an error
       if (response.error) {
@@ -71,7 +71,7 @@ export const useAuth = () => {
       }
       
     } catch (error) {
-      console.error('❌ Login error:', error)
+      //console.error('❌ Login error:', error)
       
       // Handle different types of errors
       let errorMessage = error.message || 'Login failed. Please check your credentials and try again.'
@@ -110,7 +110,7 @@ export const useAuth = () => {
             return false
           }
         } catch (e) {
-          console.error('Error parsing stored user:', e)
+          //console.error('Error parsing stored user:', e)
           logout()
           return false
         }
@@ -144,7 +144,7 @@ export const useAuth = () => {
   }
   */
     const initAuth = () => {
-      console.log('🔄 initAuth called')
+      //console.log('🔄 initAuth called')
       
       if (process.client) {
         const storedUser = localStorage.getItem('vgams_user')
@@ -156,7 +156,7 @@ export const useAuth = () => {
             if (sessionAge < 24 * 60 * 60 * 1000) { // 24 hours
               // Update auth store
               authStore.setUser(userData)
-              console.log('✅ Auth initialized from localStorage:', userData.role)
+              //console.log('✅ Auth initialized from localStorage:', userData.role)
               return {
                 success: true,
                 user: userData,
@@ -166,7 +166,7 @@ export const useAuth = () => {
               // Session expired
               localStorage.removeItem('vgams_user')
               authStore.clearUser()
-              console.log('⚠️ Session expired')
+              //console.log('⚠️ Session expired')
               return {
                 success: false,
                 message: 'Session expired',
@@ -174,7 +174,7 @@ export const useAuth = () => {
               }
             }
           } catch (e) {
-            console.error('❌ Error initializing auth:', e)
+            //console.error('❌ Error initializing auth:', e)
             localStorage.removeItem('vgams_user')
             authStore.clearUser()
             return {
@@ -184,7 +184,7 @@ export const useAuth = () => {
             }
           }
         } else {
-          console.log('ℹ️ No user found in localStorage')
+          //console.log('ℹ️ No user found in localStorage')
           return {
             success: false,
             message: 'No user found',

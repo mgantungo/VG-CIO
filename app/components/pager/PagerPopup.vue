@@ -36,9 +36,8 @@
             <button
               v-if="pager.activePublication.value"
               class="pp-head__btn"
-              :disabled="exporting"
-              @click="exportPdf"
-            >{{ exporting ? 'Exporting…' : '⬇ Export PDF' }}</button>
+              @click="openExportPanel"
+            >⬇ Export Pager Map</button>
             <button
               v-if="pager.activePublication.value"
               class="pp-head__btn"
@@ -61,15 +60,31 @@
             @create="onCreate"
           />
 
-          <PagerGrid
-            v-else
-            :left="pager.activePublication.value.left"
-            :right="pager.activePublication.value.right"
-            :sections="pager.PUBLICATION_SECTIONS"
-            @section-change="onSectionChange"
-            @remove-advert="onRemoveAdvert"
-            @open-picker="openPicker"
-          />
+          <template v-else>
+            <div class="pp-viewmode-row">
+              <span class="pp-viewmode-label">View:</span>
+              <button class="pp-scope-btn" :class="{ active: viewMode === 'pairs' }" @click="viewMode = 'pairs'">Page Pairs</button>
+              <button class="pp-scope-btn" :class="{ active: viewMode === 'sequential' }" @click="viewMode = 'sequential'">Sequential</button>
+              <button class="pp-scope-btn" :class="{ active: viewMode === 'detail' }" @click="viewMode = 'detail'">Detail</button>
+            </div>
+
+            <PagerDetailTable
+              v-if="viewMode === 'detail'"
+              :flat-pages="flatPagesForDisplay"
+              :total-pages="pager.activePublication.value.publication.total_pages"
+              :sections="pager.PUBLICATION_SECTIONS"
+              @section-change="onSectionChange"
+              @remove-slot="onRemoveAdvert"
+            />
+            <PagerBoxGrid
+              v-else
+              :pages="orderedPagesForDisplay"
+              :sections="pager.PUBLICATION_SECTIONS"
+              @section-change="onSectionChange"
+              @remove-slot="onRemoveAdvert"
+              @open-picker="openPicker"
+            />
+          </template>
         </div>
       </div>
     </div>
@@ -96,19 +111,71 @@
     <PagerAdvertPicker
       :show="pickerOpen"
       :page="pickerPage"
-      :adverts="pickerAdverts"
+      :groups="pickerGroups"
+      :ungrouped="pickerUngrouped"
       :loading="pickerLoading"
       @close="pickerOpen = false"
       @select="onAdvertSelect"
     />
+
+    <!-- Export Pager Map panel — pick which publication(s), export all as
+         one combined PDF or just the ones ticked. -->
+    <div v-if="exportPanelOpen" class="pp-export-overlay" @click.self="exportPanelOpen = false">
+      <div class="pp-export-panel">
+        <div class="pp-export-head">
+          <h3>Export Pager Map</h3>
+          <button class="pp-export-close" @click="exportPanelOpen = false">×</button>
+        </div>
+
+        <div class="pp-export-body">
+          <div class="pp-export-list">
+            <label v-for="p in pager.publications.value" :key="p.id" class="pp-export-row">
+              <input
+                type="checkbox"
+                :checked="exportSelectedIds.has(p.id)"
+                :disabled="exportScope === 'all'"
+                @change="toggleExportSelected(p.id)"
+              >
+              <div>
+                <div class="pp-export-code">{{ p.publication_code }}</div>
+                <div class="pp-export-meta">{{ p.masthead }} · {{ p.total_pages }} pages · {{ p.publication_date }}</div>
+              </div>
+            </label>
+            <div v-if="pager.publications.value.length === 0" class="pp-export-empty">No publications yet.</div>
+          </div>
+
+          <div class="pp-export-scope">
+            <button class="pp-scope-btn" :class="{ active: exportScope === 'all' }" @click="exportScope = 'all'">Export All</button>
+            <button class="pp-scope-btn" :class="{ active: exportScope === 'selected' }" @click="exportScope = 'selected'">Export Selected</button>
+          </div>
+
+          <div class="pp-export-hint">
+            <span v-if="exportScope === 'all'">Will export all {{ pager.publications.value.length }} publication(s) into one combined PDF.</span>
+            <span v-else-if="exportSelectedIds.size === 0">Tick at least one publication to export.</span>
+            <span v-else>Will export {{ exportSelectedIds.size }} publication(s) into one combined PDF.</span>
+          </div>
+        </div>
+
+        <div class="pp-export-foot">
+          <button class="pp-export-cancel" @click="exportPanelOpen = false">Cancel</button>
+          <button
+            class="pp-export-confirm"
+            :disabled="exporting || (exportScope === 'selected' && exportSelectedIds.size === 0)"
+            @click="runExport"
+          >{{ exporting ? 'Exporting…' : '⬇ Export PDF' }}</button>
+        </div>
+      </div>
+    </div>
   </Teleport>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { usePager } from '~/composables/usePager'
+import { usePagerExport, buildOrderedPages, flattenPages } from '~/composables/usePagerExport'
 import PagerInitModal from './PagerInitModal.vue'
-import PagerGrid from './PagerGrid.vue'
+import PagerBoxGrid from './ui/PagerBoxGrid.vue'
+import PagerDetailTable from './ui/PagerDetailTable.vue'
 import PagerAdvertPicker from './PagerAdvertPicker.vue'
 
 const props = defineProps({
@@ -118,14 +185,36 @@ const props = defineProps({
 const emit = defineEmits(['update:open'])
 
 const pager = usePager()
+const pagerExport = usePagerExport()
 const minimized = ref(false)
+
+// ── Live view mode — Page Pairs, Sequential, or Detail table ────────────
+// Uses the exact same buildOrderedPages/flattenPages helpers as the PDF
+// export, so what's shown here while working can never disagree with what
+// gets exported. The box-grid views (pairs/sequential) render one
+// continuous grid — see PagerBoxGrid — not the old two-column left/right
+// split, since that's not how the reference layout actually looks.
+const viewMode = ref('pairs') // 'pairs' | 'sequential' | 'detail'
+
+const orderedPagesForDisplay = computed(() => {
+  const pub = pager.activePublication.value
+  if (!pub) return []
+  return buildOrderedPages(pub, viewMode.value === 'sequential' ? 'sequential' : 'pairs')
+})
+
+const flatPagesForDisplay = computed(() => {
+  const pub = pager.activePublication.value
+  if (!pub) return []
+  return flattenPages(pub)
+})
 
 const pagesModalMode = ref(null) // null | 'add' | 'reduce'
 const pagesModalValue = ref(4)
 
 const pickerOpen = ref(false)
 const pickerPage = ref(null)
-const pickerAdverts = ref([])
+const pickerGroups = ref([])    // ad slots — every member already ticked, or the whole slot is left out
+const pickerUngrouped = ref([]) // standalone adverts, individually selectable
 const pickerLoading = ref(false)
 
 const exporting = ref(false)
@@ -179,7 +268,11 @@ const onConfirmPagesModal = async () => {
 }
 
 const onSectionChange = (pageId, section) => pager.updatePageSection(pageId, section)
-const onRemoveAdvert   = (pageId, advertId) => pager.unassignAdvert(pageId, advertId)
+
+// PagerPageCard always emits the full cluster's advert ids now — a single
+// standalone advert is just an array of one, an ad slot is the whole set.
+// Either way, unassignAdverts removes them from the page together.
+const onRemoveAdvert = (pageId, advertIds) => pager.unassignAdverts(pageId, advertIds)
 
 const openPicker = async (page) => {
   pickerPage.value = page
@@ -187,90 +280,63 @@ const openPicker = async (page) => {
   pickerLoading.value = true
   try {
     // getAvailableAdverts already excludes anything not print-eligible or
-    // already placed elsewhere in this publication — narrow that further to
-    // only what's been ticked off in the Index table, so the Pager can't
-    // pull in an advert nobody actually queued for print.
-    const eligible = await pager.getAvailableAdverts(page.id)
+    // already placed elsewhere in this publication, and groups whatever's
+    // left by ad slot. Narrow both groups and ungrouped down to what's been
+    // ticked in the Index table — a group only survives if EVERY one of its
+    // members is checked, since a partially-ticked slot can't be placed as
+    // a whole unit (and must never be split to place just the ticked part).
+    const { groups, ungrouped } = await pager.getAvailableAdverts(page.id)
     const checkedSet = new Set(props.checkedAdvertIds)
-    pickerAdverts.value = eligible.filter(a => checkedSet.has(a.id))
+
+    pickerGroups.value = groups.filter(g => g.adverts.every(a => checkedSet.has(a.id)))
+    pickerUngrouped.value = ungrouped.filter(a => checkedSet.has(a.id))
   } finally {
     pickerLoading.value = false
   }
 }
 
-const onAdvertSelect = async (advertId) => {
+const onAdvertSelect = async (advertIds) => {
   if (!pickerPage.value) return
-  await pager.assignAdvert(pickerPage.value.id, advertId)
+  await pager.assignAdverts(pickerPage.value.id, advertIds)
   pickerOpen.value = false
 }
 
-// ── PDF export ────────────────────────────────────────────────────────────
-const exportPdf = async () => {
-  const pub = pager.activePublication.value
-  if (!pub) return
+// ── Pager Map export ──────────────────────────────────────────────────────
+const exportPanelOpen = ref(false)
+const exportScope = ref('selected') // 'all' | 'selected'
+const exportSelectedIds = ref(new Set())
+
+const openExportPanel = async () => {
+  if (pager.publications.value.length === 0) {
+    await pager.fetchPublications()
+  }
+  // Default the selection to whatever's currently open in the popup — the
+  // most common case is "export the one I'm looking at."
+  const openId = pager.activePublication.value?.publication?.id
+  exportSelectedIds.value = new Set(openId ? [openId] : [])
+  exportScope.value = 'selected'
+  exportPanelOpen.value = true
+}
+
+const toggleExportSelected = (id) => {
+  const next = new Set(exportSelectedIds.value)
+  next.has(id) ? next.delete(id) : next.add(id)
+  exportSelectedIds.value = next
+}
+
+const runExport = async () => {
+  const ids = exportScope.value === 'all'
+    ? pager.publications.value.map(p => p.id)
+    : [...exportSelectedIds.value]
+
+  if (ids.length === 0) return
+
   exporting.value = true
   try {
-    const { default: jsPDF } = await import('jspdf')
-    const autoTable = (await import('jspdf-autotable')).default
-
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(16)
-    doc.setTextColor(0, 51, 102)
-    doc.text(pub.publication.publication_code, 14, 16)
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.setTextColor(80, 80, 80)
-    const dateStr = pub.publication.publication_date
-      ? new Date(pub.publication.publication_date).toLocaleDateString('en-UG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-      : ''
-    doc.text(`${pub.publication.masthead} · ${pub.publication.total_pages} pages · ${dateStr}`, 14, 22)
-
-    const advertsText = (page) =>
-      (page.adverts || []).length === 0
-        ? '—'
-        : page.adverts.map(a => `${a.client?.company_name || 'Unknown'} (${a.ad_size || '—'})`).join(', ')
-
-    const maxRows = Math.max(pub.left.length, pub.right.length)
-    const rows = []
-    for (let i = 0; i < maxRows; i++) {
-      const l = pub.left[i]
-      const r = pub.right[i]
-      rows.push([
-        l ? String(l.page_number) : '',
-        l ? (l.section || '—') : '',
-        l ? advertsText(l) : '',
-        r ? String(r.page_number) : '',
-        r ? (r.section || '—') : '',
-        r ? advertsText(r) : '',
-      ])
-    }
-
-    autoTable(doc, {
-      startY: 28,
-      head: [['#', 'Section', 'Adverts', '#', 'Section', 'Adverts']],
-      body: rows,
-      styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, valign: 'top' },
-      headStyles: { fillColor: [0, 51, 102], textColor: 255, fontStyle: 'bold' },
-      columnStyles: {
-        0: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 'auto' },
-        3: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
-        4: { cellWidth: 28 },
-        5: { cellWidth: 'auto' },
-      },
-      alternateRowStyles: { fillColor: [240, 244, 248] },
-      margin: { left: 14, right: 14 },
-      tableWidth: pageWidth - 28,
-    })
-
-    doc.save(`${pub.publication.publication_code}-pager.pdf`)
+    await pagerExport.exportPagerMap(ids)
+    exportPanelOpen.value = false
   } catch (e) {
-    pager.error.value = e?.message || 'Failed to export PDF'
+    pager.error.value = e?.message || 'Failed to export Pager Map'
   } finally {
     exporting.value = false
   }
@@ -310,6 +376,12 @@ const exportPdf = async () => {
 .pp-head__btn:disabled { opacity: .5; cursor: not-allowed; }
 .pp-head__btn:disabled:hover { background: transparent; color: #9DC3E6; border-color: #9DC3E6; }
 .pp-head__btn--icon { padding: 6px 11px; font-size: 15px; line-height: 1; }
+
+.pp-viewmode-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px; border-bottom: 1px solid #D1D9E0; background: #fff;
+}
+.pp-viewmode-label { font-size: 11px; font-weight: 700; color: #003366; }
 
 .pp-err {
   background: #FCE4D6; border-bottom: 1px solid #E31E24; color: #9C0006;
@@ -359,4 +431,52 @@ const exportPdf = async () => {
 @media (max-width: 900px) {
   .pp-panel { width: 100vw; }
 }
+
+/* Export Pager Map panel */
+.pp-export-overlay {
+  position: fixed; inset: 0; background: rgba(0,51,102,.5); z-index: 6000;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.pp-export-panel {
+  background: #fff; width: 100%; max-width: 420px; border-radius: 3px;
+  display: flex; flex-direction: column; max-height: 80vh;
+  box-shadow: 0 24px 64px rgba(0,0,0,.4);
+}
+.pp-export-head {
+  background: #003366; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
+}
+.pp-export-head h3 { color: #fff; font-size: 14px; margin: 0; }
+.pp-export-close { background: none; border: none; color: #9DC3E6; font-size: 22px; cursor: pointer; line-height: 1; }
+.pp-export-close:hover { color: #fff; }
+
+.pp-export-body { padding: 14px 16px; overflow-y: auto; }
+.pp-export-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.pp-export-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid #D1D9E0; border-radius: 2px; cursor: pointer;
+}
+.pp-export-row:hover { background: #F0F4F8; }
+.pp-export-row input { width: 15px; height: 15px; flex-shrink: 0; }
+.pp-export-row input:disabled { opacity: .4; }
+.pp-export-code { font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 12px; color: #003366; }
+.pp-export-meta { font-size: 10.5px; color: #888; }
+.pp-export-empty { font-size: 11px; color: #999; text-align: center; padding: 12px; }
+
+.pp-export-scope { display: flex; gap: 4px; background: #F0F4F8; padding: 3px; border-radius: 3px; margin-bottom: 10px; }
+.pp-scope-btn {
+  flex: 1; font-size: 11px; font-weight: 700; padding: 6px 10px; border: none; border-radius: 2px;
+  background: transparent; color: #666; cursor: pointer;
+}
+.pp-scope-btn.active { background: #003366; color: #fff; }
+
+.pp-export-hint { font-size: 10.5px; color: #888; text-align: center; }
+
+.pp-export-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #F0F4F8; }
+.pp-export-cancel, .pp-export-confirm {
+  font-size: 12px; font-weight: 700; padding: 7px 16px; border-radius: 2px; cursor: pointer; font-family: inherit;
+}
+.pp-export-cancel { background: #F0F4F8; border: 1.5px solid #D1D9E0; color: #555; }
+.pp-export-confirm { background: #003366; border: 1.5px solid #003366; color: #fff; }
+.pp-export-confirm:hover:not(:disabled) { background: #0066CC; }
+.pp-export-confirm:disabled { background: #999; border-color: #999; cursor: not-allowed; }
 </style>
