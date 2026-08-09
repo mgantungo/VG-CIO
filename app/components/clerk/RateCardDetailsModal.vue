@@ -125,7 +125,7 @@
         <div class="ratecard-info" v-if="selectedRateCard">
           <div class="info-row">
             <span>Base Rate:</span>
-            <strong>{{ formatCurrency(selectedRateCard.basePrice || selectedRateCard.price_fc) }}</strong>
+            <strong>{{ formatCurrency(resolvedBasePrice) }}</strong>
           </div>
           <div class="info-row" v-if="detailMode">
             <span>Unit:</span>
@@ -270,6 +270,16 @@ const wordSiblingRateCard = computed(() => {
   }) || null
 })
 
+// Single source of truth for the selected rate card's base rate, resolved
+// against the current Color/Type toggle. Both the "Base Rate" info-row
+// display and calculatedPrice read from this, so switching Full Colour /
+// Black & White can't leave the two out of sync with each other again.
+const resolvedBasePrice = computed(() => {
+  if (!props.selectedRateCard) return 0
+  return props.selectedRateCard.basePrice ||
+    (props.adType === 'full_color' ? props.selectedRateCard.price_fc : props.selectedRateCard.price_bw) || 0
+})
+
 const modalTitle = computed(() => {
   if (!props.selectedRateCard) return 'Additional Information Required'
   
@@ -323,8 +333,7 @@ const calculatedPrice = computed(() => {
     return null
   }
   
-  const basePrice = props.selectedRateCard.basePrice || 
-                   (props.adType === 'full_color' ? props.selectedRateCard.price_fc : props.selectedRateCard.price_bw) || 0
+  const basePrice = resolvedBasePrice.value
   
   console.log('[MODAL-CALC] adType prop:', props.adType)
   console.log('[MODAL-CALC] selectedRateCard.basePrice:', props.selectedRateCard.basePrice)
