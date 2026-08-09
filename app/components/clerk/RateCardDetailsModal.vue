@@ -356,9 +356,11 @@ const calculatedPrice = computed(() => {
     const photoSubtotal = basePrice * details.value.photos
     let wordSubtotal = 0
     if (details.value.includeText && wordSiblingRateCard.value && details.value.words) {
-      const wordRate = props.adType === 'full_color'
-        ? wordSiblingRateCard.value.price_fc
-        : wordSiblingRateCard.value.price_bw
+      // Classified text is always billed at the black & white per-word
+      // rate, regardless of the ad's own Color/Type toggle - there is no
+      // full-colour rate for per-word classified text, so following
+      // props.adType here priced it at an empty/0 price_fc.
+      const wordRate = wordSiblingRateCard.value.price_bw
       wordSubtotal = (wordRate || 0) * details.value.words
     }
     unitPrice = photoSubtotal + wordSubtotal
