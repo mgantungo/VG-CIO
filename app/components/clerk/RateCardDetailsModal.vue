@@ -24,7 +24,28 @@
       -->
         
         <!-- Per cm col -->
-        <div v-if="sizeDimension === 'per cm col'" class="input-group">
+        <div v-if="detailMode === 'per_cm_col'" class="input-group">
+          <label>Number of Centimeters:</label>
+          <input 
+            type="number" 
+            v-model.number="details.cm"
+            min="1"
+            placeholder="Enter centimeters"
+            @input="validateInput"
+          >
+          <label>Number of Columns:</label>
+          <input 
+            type="number" 
+            v-model.number="details.columns"
+            min="1"
+            placeholder="Enter columns"
+            @input="validateInput"
+          >
+          <small class="help-text">Total size: {{ totalSize }} cm col ({{ details.cm }}cm Ã— {{ details.columns }}col)</small>
+        </div>
+
+        <!-- Classified: Semi-Display (same cm x columns model as per cm col, keyed off ad_type) -->
+        <div v-else-if="detailMode === 'semi_display'" class="input-group">
           <label>Number of Centimeters:</label>
           <input 
             type="number" 
@@ -45,7 +66,7 @@
         </div>
         
         <!-- Per column -->
-        <div v-else-if="sizeDimension === 'per column'" class="input-group">
+        <div v-else-if="detailMode === 'per_column'" class="input-group">
           <label>Number of Columns:</label>
           <input 
             type="number" 
@@ -58,12 +79,12 @@
         </div>
         
         <!-- Per word -->
-        <div v-else-if="sizeDimension === 'per word'" class="input-group">
+        <div v-else-if="detailMode === 'per_word'" class="input-group">
           <ClassifiedTextBuilder :disabled="false" />
         </div>
         
-        <!-- Classified photo/Logo -->
-        <div v-else-if="selectedRateCard?.ad_type === 'classified photo/Logo'" class="input-group">
+        <!-- Classified Photo/Logo, optionally with accompanying billable text -->
+        <div v-else-if="detailMode === 'photo_logo'" class="input-group">
           <label>Number of Photos/Logos:</label>
           <input 
             type="number" 
@@ -73,6 +94,22 @@
             @input="validateInput"
           >
           <small class="help-text">Each photo/logo will be charged separately</small>
+
+          <label class="text-toggle-label">
+            <input
+              type="checkbox"
+              v-model="details.includeText"
+              :disabled="!wordSiblingRateCard"
+            >
+            Include accompanying text (billed per word)
+          </label>
+          <small v-if="!wordSiblingRateCard" class="help-text warning-text">
+            No "Classified" (per word) rate card found for this product — text pricing unavailable, photos/logos only.
+          </small>
+
+          <div v-if="details.includeText && wordSiblingRateCard" class="nested-builder">
+            <ClassifiedTextBuilder :disabled="false" />
+          </div>
         </div>
         
         <!-- FALLBACK - No condition matched -->
@@ -90,7 +127,7 @@
             <span>Base Rate:</span>
             <strong>{{ formatCurrency(selectedRateCard.basePrice || selectedRateCard.price_fc) }}</strong>
           </div>
-          <div class="info-row" v-if="sizeDimension || selectedRateCard.ad_type === 'classified photo/Logo'">
+          <div class="info-row" v-if="detailMode">
             <span>Unit:</span>
             <strong>{{ getUnitDisplay() }}</strong>
           </div>
@@ -137,6 +174,14 @@ const props = defineProps({
   adType: {
     type: String,
     default: 'full_color'
+  },
+  // Full rate card list for the currently selected product, used to find the
+  // sibling "Classified" (per word) rate card when a "Photo/Logo" ad also
+  // includes billable accompanying text. Optional — if omitted, the text
+  // toggle for Photo/Logo simply stays unavailable.
+  allRateCards: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -147,7 +192,8 @@ const details = ref({
   cm: null,
   columns: null,
   words: null,
-  photos: null
+  photos: null,
+  includeText: true
 })
 
 // Classified ("per word") state now lives in a Pinia store so it survives
@@ -177,7 +223,8 @@ watch(() => props.showModal, (newVal) => {
       cm: null,
       columns: null,
       words: classifiedStore.wordCount,
-      photos: null
+      photos: null,
+      includeText: true
     }
   }
 })
@@ -190,19 +237,51 @@ const sizeDimension = computed(() => {
   return dimension.replace(/_/g, ' ')
 })
 
+// Normalizes a string for case/spacing-insensitive comparison. Mirrors the
+// backend's normalize() in price-calculator.js so both sides agree on which
+// mode a rate card falls into.
+const normalize = (str) => (str || '').toString().toLowerCase().trim().replace(/_/g, ' ')
+
+// Resolves which detail-collection UI to show. ad_type-based checks run
+// first for Semi-Display and Photo/Logo because those two don't reliably
+// carry a size_dimension value that maps to a generic unit (Semi-Display's
+// size_dimension is literally "per col", not "per cm col") — everything
+// else falls back to the original size_dimension checks, unchanged.
+const detailMode = computed(() => {
+  if (!props.selectedRateCard) return null
+  const adType = normalize(props.selectedRateCard.ad_type)
+  const dimension = normalize(props.selectedRateCard.size_dimension)
+
+  if (adType.includes('semi-display') || adType.includes('semi display')) return 'semi_display'
+  if (adType.includes('photo') && adType.includes('logo')) return 'photo_logo'
+  if (dimension === 'per cm col') return 'per_cm_col'
+  if (dimension === 'per column' || dimension === 'per col') return 'per_column'
+  if (dimension === 'per word') return 'per_word'
+  return null
+})
+
+// Sibling "Classified" (per word) rate card in the same product's rate card
+// list, used to price accompanying text on a Photo/Logo ad. Falls back to
+// null (text toggle disables itself) if the product has no such rate card.
+const wordSiblingRateCard = computed(() => {
+  return props.allRateCards.find(rc => {
+    const dimension = normalize(rc.size_dimension)
+    return dimension === 'per word'
+  }) || null
+})
+
 const modalTitle = computed(() => {
   if (!props.selectedRateCard) return 'Additional Information Required'
   
   const titles = {
-    'per cm col': 'Specify Advertisement Size',
-    'per column': 'Specify Number of Columns',
-    'per word': 'Specify Word Count',
-    'classified photo/Logo': 'Specify Number of Photos/Logos'
+    per_cm_col: 'Specify Advertisement Size',
+    semi_display: 'Specify Advertisement Size',
+    per_column: 'Specify Number of Columns',
+    per_word: 'Specify Word Count',
+    photo_logo: 'Specify Number of Photos/Logos'
   }
   
-  return titles[sizeDimension.value] || 
-         (props.selectedRateCard.ad_type === 'classified photo/Logo' ? 'Specify Number of Photos/Logos' : 
-          'Additional Information Required')
+  return titles[detailMode.value] || 'Additional Information Required'
 })
 
 const totalSize = computed(() => {
@@ -219,14 +298,17 @@ const estimatedReadingTime = computed(() => {
 })
 
 const isValidInput = computed(() => {
-  if (sizeDimension.value === 'per cm col') {
+  if (detailMode.value === 'per_cm_col' || detailMode.value === 'semi_display') {
     return details.value.cm > 0 && details.value.columns > 0
-  } else if (sizeDimension.value === 'per column') {
+  } else if (detailMode.value === 'per_column') {
     return details.value.columns > 0
-  } else if (sizeDimension.value === 'per word') {
+  } else if (detailMode.value === 'per_word') {
     return classifiedStore.isComplete && classifiedStore.wordCount > 0
-  } else if (props.selectedRateCard?.ad_type === 'classified photo/Logo') {
-    return details.value.photos > 0
+  } else if (detailMode.value === 'photo_logo') {
+    const photosValid = details.value.photos > 0
+    const wantsText = details.value.includeText && !!wordSiblingRateCard.value
+    if (!wantsText) return photosValid
+    return photosValid && classifiedStore.isComplete && classifiedStore.wordCount > 0
   }
   return false
 })
@@ -252,18 +334,26 @@ const calculatedPrice = computed(() => {
   
   let unitPrice = basePrice
   
-  if (sizeDimension.value === 'per cm col' && details.value.cm && details.value.columns) {
+  if ((detailMode.value === 'per_cm_col' || detailMode.value === 'semi_display') && details.value.cm && details.value.columns) {
     unitPrice = basePrice * details.value.cm * details.value.columns
-    console.log('[MODAL-CALC] per cm col: basePrice', basePrice, '× cm', details.value.cm, '× columns', details.value.columns, '=', unitPrice)
-  } else if (sizeDimension.value === 'per column' && details.value.columns) {
+    console.log('[MODAL-CALC]', detailMode.value, ': basePrice', basePrice, '× cm', details.value.cm, '× columns', details.value.columns, '=', unitPrice)
+  } else if (detailMode.value === 'per_column' && details.value.columns) {
     unitPrice = basePrice * details.value.columns
     console.log('[MODAL-CALC] per column: basePrice', basePrice, '× columns', details.value.columns, '=', unitPrice)
-  } else if (sizeDimension.value === 'per word' && details.value.words) {
+  } else if (detailMode.value === 'per_word' && details.value.words) {
     unitPrice = basePrice * details.value.words
     console.log('[MODAL-CALC] per word: basePrice', basePrice, '× words', details.value.words, '=', unitPrice)
-  } else if (props.selectedRateCard.ad_type === 'classified photo/Logo' && details.value.photos) {
-    unitPrice = basePrice * details.value.photos
-    console.log('[MODAL-CALC] classified photo: basePrice', basePrice, '× photos', details.value.photos, '=', unitPrice)
+  } else if (detailMode.value === 'photo_logo' && details.value.photos) {
+    const photoSubtotal = basePrice * details.value.photos
+    let wordSubtotal = 0
+    if (details.value.includeText && wordSiblingRateCard.value && details.value.words) {
+      const wordRate = props.adType === 'full_color'
+        ? wordSiblingRateCard.value.price_fc
+        : wordSiblingRateCard.value.price_bw
+      wordSubtotal = (wordRate || 0) * details.value.words
+    }
+    unitPrice = photoSubtotal + wordSubtotal
+    console.log('[MODAL-CALC] photo_logo: photoSubtotal', photoSubtotal, '+ wordSubtotal', wordSubtotal, '=', unitPrice)
   }
   
   // Apply frequency
@@ -276,14 +366,16 @@ const calculatedPrice = computed(() => {
 
 // Methods
 const getUnitDisplay = () => {
-  if (sizeDimension.value === 'per cm col') {
+  if (detailMode.value === 'per_cm_col' || detailMode.value === 'semi_display') {
     return 'per cm column'
-  } else if (sizeDimension.value === 'per column') {
+  } else if (detailMode.value === 'per_column') {
     return 'per column'
-  } else if (sizeDimension.value === 'per word') {
+  } else if (detailMode.value === 'per_word') {
     return 'per word'
-  } else if (props.selectedRateCard?.ad_type === 'classified photo/Logo') {
-    return 'per photo/logo'
+  } else if (detailMode.value === 'photo_logo') {
+    return details.value.includeText && wordSiblingRateCard.value
+      ? 'per photo/logo + per word'
+      : 'per photo/logo'
   }
   return 'unit'
 }
@@ -299,8 +391,11 @@ const formatCurrency = (amount) => {
 }
 
 const validateInput = () => {
-  // Ensure positive numbers
-  Object.keys(details.value).forEach(key => {
+  // Ensure positive numbers. Only applies to the numeric fields — includeText
+  // is a boolean and must not be swept up by this (false < 1 is true, which
+  // would otherwise null it out and break the checkbox).
+  const numericKeys = ['cm', 'columns', 'words', 'photos']
+  numericKeys.forEach(key => {
     if (details.value[key] < 1) {
       details.value[key] = null
     }
@@ -321,21 +416,31 @@ const saveDetails = () => {
   
   // Prepare the details object with only relevant data
   const detailsToSave = {}
-  
-  if (sizeDimension.value === 'per cm col') {
+  const includesText = detailMode.value === 'photo_logo' && details.value.includeText && !!wordSiblingRateCard.value
+
+  if (detailMode.value === 'per_cm_col' || detailMode.value === 'semi_display') {
     detailsToSave.cm = details.value.cm
     detailsToSave.columns = details.value.columns
     detailsToSave.totalSize = totalSize.value
-  } else if (sizeDimension.value === 'per column') {
+  } else if (detailMode.value === 'per_column') {
     detailsToSave.columns = details.value.columns
-  } else if (sizeDimension.value === 'per word') {
+  } else if (detailMode.value === 'per_word') {
     // Only 'words' goes into details.details, since that object gets spread
     // directly into the backend price-calculation request body.
     detailsToSave.words = details.value.words
-  } else if (props.selectedRateCard?.ad_type === 'classified photo/Logo') {
+  } else if (detailMode.value === 'photo_logo') {
     detailsToSave.photos = details.value.photos
+    if (includesText) {
+      // wordRateCardId tells the backend which sibling rate card to price
+      // the accompanying text against, since it's separate from the
+      // Photo/Logo rate card's own basePrice.
+      detailsToSave.words = details.value.words
+      detailsToSave.wordRateCardId = wordSiblingRateCard.value.id
+    }
   }
   
+  const usesClassifiedText = detailMode.value === 'per_word' || includesText
+
   const emitData = {
     rateCardId: props.selectedRateCard.id,
     sizeDimension: sizeDimension.value,
@@ -345,8 +450,8 @@ const saveDetails = () => {
     // Top-level convenience fields (not spread into the price API): the assembled
     // classified ad copy + which template produced it. New.vue uses `composedText`
     // to populate Special Instructions.
-    templateId: sizeDimension.value === 'per word' ? classifiedStore.templateId : null,
-    composedText: sizeDimension.value === 'per word' ? classifiedStore.text : null
+    templateId: usesClassifiedText ? classifiedStore.templateId : null,
+    composedText: usesClassifiedText ? classifiedStore.text : null
   }
   
   console.log('[MODAL-SAVE] Emitting save event with:', JSON.stringify(emitData, null, 2))
@@ -412,6 +517,21 @@ const saveDetails = () => {
 .input-group input:focus { border-color: var(--blue); box-shadow: var(--ring); }
 
 .help-text { display: block; color: var(--text-4); font-size: 11px; margin-top: 5px; font-style: italic; }
+.help-text.warning-text { color: var(--amber-text); }
+
+.text-toggle-label {
+  display: flex !important; align-items: center; gap: 8px; margin-top: 14px;
+  text-transform: none !important; letter-spacing: normal !important;
+  font-size: 12px !important; font-weight: 500 !important; color: var(--text-2) !important;
+  cursor: pointer;
+}
+.text-toggle-label input[type="checkbox"] {
+  width: 16px; height: 16px; margin: 0; accent-color: var(--blue); cursor: pointer;
+}
+.nested-builder {
+  margin-top: 12px; padding: 12px; background: var(--page-bg);
+  border: 1px solid var(--border-lt); border-radius: var(--radius);
+}
 
 .ratecard-info {
   background: var(--page-bg); border: 1px solid var(--border-lt);

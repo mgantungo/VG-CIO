@@ -101,6 +101,22 @@ const TEMPLATES = [
     fields: [
       { key: 'advert_text', label: 'Advert Text:', required: true, excludeLabelFromCount: true, freeText: true }
     ]
+  },
+  {
+    id: 'others',
+    name: 'Others',
+    // The type-name line ("Others") is still printed but shouldn't count as
+    // a billable word - unlike every other template here where the name is
+    // part of the ad content.
+    excludeNameFromCount: true,
+    fields: [
+      // Label excluded from count - only the title's own words count, not
+      // the word "Title:" itself.
+      { key: 'title', label: 'Title:', required: true, excludeLabelFromCount: true },
+      // Free text field, same pattern as Advert Text: only the value's
+      // words count, not the "Text:" label itself.
+      { key: 'text', label: 'Text:', required: true, excludeLabelFromCount: true, freeText: true }
+    ]
   }
 ]
 
@@ -151,9 +167,13 @@ export const useClassifiedTemplates = () => {
     let wordCount = 0
     const lines = []
 
-    // Text type name is the first line and counts toward the word total
+    // Text type name is always the first printed line. It counts toward the
+    // word total unless the template explicitly opts out via
+    // excludeNameFromCount (currently only "Others").
     lines.push(template.name)
-    wordCount += countWords(template.name)
+    if (!template.excludeNameFromCount) {
+      wordCount += countWords(template.name)
+    }
 
     template.fields.forEach((field) => {
       const rawValue = (values?.[field.key] ?? '').toString().trim()

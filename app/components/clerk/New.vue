@@ -189,6 +189,7 @@
       :selected-rate-card="selectedRateCard"
       :frequency="form.frequency"
       :ad-type="form.adType"
+      :all-rate-cards="rateCards"
       @close="handleModalClose"
       @save="handleModalSave"
     />
@@ -715,15 +716,19 @@ const calculatePrice = async () => {
     size_dimension: rateCard.size_dimension
   })
   
-  // Check if this rate card requires additional details
+  // Check if this rate card requires additional details.
+  // Normalized/case-insensitive so real rate card records (e.g. ad_type
+  // "Classified Photo/Logo" or "Classified: Semi-Display") are detected
+  // reliably instead of relying on exact-string matches.
+  const normalizedSizeDim = (rateCard.size_dimension || '').toLowerCase().trim().replace(/_/g, ' ')
+  const normalizedAdType = (rateCard.ad_type || '').toLowerCase().trim()
   const requiresDetails = rateCard && 
-      (rateCard.size_dimension === 'per cm col' || 
-       rateCard.size_dimension === 'per_cm_col' ||
-       rateCard.size_dimension === 'per column' || 
-       rateCard.size_dimension === 'per_column' ||
-       rateCard.size_dimension === 'per word' ||
-       rateCard.size_dimension === 'per_word' ||
-       rateCard.ad_type === 'classified photo/Logo')
+      (normalizedSizeDim === 'per cm col' ||
+       normalizedSizeDim === 'per column' ||
+       normalizedSizeDim === 'per col' ||
+       normalizedSizeDim === 'per word' ||
+       (normalizedAdType.includes('semi-display') || normalizedAdType.includes('semi display')) ||
+       (normalizedAdType.includes('photo') && normalizedAdType.includes('logo')))
   
   console.log('[CALCULATE-PRICE] Checking requirements:', {
     hasRateCard: !!rateCard,
