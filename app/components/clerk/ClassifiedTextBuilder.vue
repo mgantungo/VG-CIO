@@ -51,6 +51,14 @@
             :placeholder="`Enter ${field.label.replace(':', '').toLowerCase()}...`"
             :disabled="disabled"
           ></textarea>
+          <select
+            v-else-if="field.options"
+            v-model="store.values[field.key]"
+            :disabled="disabled"
+          >
+            <option value="" disabled>Select {{ field.label.replace(':', '').toLowerCase() }}...</option>
+            <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+          </select>
           <input
             v-else
             type="text"
