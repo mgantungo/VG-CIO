@@ -189,6 +189,7 @@
       :selected-rate-card="selectedRateCard"
       :frequency="form.frequency"
       :ad-type="form.adType"
+      :all-rate-cards="rateCards"
       @close="handleModalClose"
       @save="handleModalSave"
     />
@@ -631,9 +632,15 @@ const handleFrequencyChange = () => {
 
 const handleDiscountChange = () => {
   console.log('[DISCOUNT-CHANGE] Discount changed to:', form.discount, '%')
-  if (form.rateCardId) {
-    calculatePrice()
-  }
+  // Discount is applied entirely client-side in SchedulePricing.vue
+  // (calculateDiscountAmount/calculateFinalTotal work off props.priceCalculation
+  // + props.discount) - it's never part of the request body in either
+  // performPriceCalculation() or performPriceCalculationWithDetails(). Re-running
+  // calculatePrice() here was therefore a pointless network round trip on every
+  // keystroke, and since it flips priceLoading (which disables SchedulePricing's
+  // inputs) mid-typing, it was the actual cause of fields - especially the
+  // multi-digit Agreed Amount field - appearing to stop accepting input after
+  // the first character.
 }
 
 const handleFrequencyAdjust = (newFrequency) => {
@@ -715,15 +722,19 @@ const calculatePrice = async () => {
     size_dimension: rateCard.size_dimension
   })
   
-  // Check if this rate card requires additional details
+  // Check if this rate card requires additional details.
+  // Normalized/case-insensitive so real rate card records (e.g. ad_type
+  // "Classified Photo/Logo" or "Classified: Semi-Display") are detected
+  // reliably instead of relying on exact-string matches.
+  const normalizedSizeDim = (rateCard.size_dimension || '').toLowerCase().trim().replace(/_/g, ' ')
+  const normalizedAdType = (rateCard.ad_type || '').toLowerCase().trim()
   const requiresDetails = rateCard && 
-      (rateCard.size_dimension === 'per cm col' || 
-       rateCard.size_dimension === 'per_cm_col' ||
-       rateCard.size_dimension === 'per column' || 
-       rateCard.size_dimension === 'per_column' ||
-       rateCard.size_dimension === 'per word' ||
-       rateCard.size_dimension === 'per_word' ||
-       rateCard.ad_type === 'classified photo/Logo')
+      (normalizedSizeDim === 'per cm col' ||
+       normalizedSizeDim === 'per column' ||
+       normalizedSizeDim === 'per col' ||
+       normalizedSizeDim === 'per word' ||
+       (normalizedAdType.includes('semi-display') || normalizedAdType.includes('semi display')) ||
+       (normalizedAdType.includes('photo') && normalizedAdType.includes('logo')))
   
   console.log('[CALCULATE-PRICE] Checking requirements:', {
     hasRateCard: !!rateCard,
@@ -928,6 +939,18 @@ const formatNumber = (number) => {
   return new Intl.NumberFormat('en-UG').format(number)
 }
 
+// Truncates the discount % to 4 decimal places specifically for the CMS
+// payload. The live "Agreed Amount" calculation in SchedulePricing.vue
+// intentionally keeps full precision (rounding it there caused the
+// displayed Total Amount to drift a few hundred UGX from what the clerk
+// typed) - this truncation only applies at the point of sending to the
+// backend, so it doesn't affect anything shown on screen. Truncates rather
+// than rounds, per requirement.
+const truncateDiscount = (value) => {
+  const num = parseFloat(value) || 0
+  return Math.trunc(num * 10000) / 10000
+}
+
 const formatDate = (dateString) => {
   if (!dateString) return ''
   
@@ -1123,437 +1146,7 @@ const printOrderSummary = async () => {
   }
 }
 
-/*
-const saveDraft = async () => {
-  console.log('[DRAFT-SAVE] Save draft requested')
-  
-  if (!hasRequiredClientInfo.value) {
-    console.log('[DRAFT-SAVE] ERROR - Missing required client info')
-    alert('Please fill in required client information before saving draft.')
-    return
-  }
-  
-  console.log('[DRAFT-SAVE] Form discount value:', form.discount)
 
-  try {
-    savingDraft.value = true
-    
-    // Get pricing data from SchedulePricing component
-    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
-    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
-    
-    const advertData = {
-      advertTitle: form.advertTitle,
-      clientId: form.clientId || null,
-      clientName: form.clientName,
-      marketSector: form.marketSector || '', 
-      contactPerson: form.contactPerson || '',
-      email: form.email,
-      phone: form.phone,
-      referenceDocument: form.referenceDocument || '',
-      officeLocation: form.officeLocation,
-      publishOnWeb: form.publishOnWeb,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adSize: form.adSize || '',
-      adType: form.adType,
-      frequency: parseInt(form.frequency) || 1,
-      startDate: form.startDate,
-      endDate: form.endDate || null,
-      datesList: form.datesList,
-      publishingDates: buildPublishingDates(),
-      dateCount: dateCount,
-      basePrice: priceCalculation.value?.basePrice || 0,
-      surcharge: priceCalculation.value?.surcharge || 0,
-      discount: parseFloat(form.discount) || 0,
-      totalAmount: finalTotal,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions?.trim() || '',
-      contactEmail: form.email,
-      contactNumber: form.phone,
-      status: 'draft',
-      files: form.files,
-      rateCardDetails: rateCardDetails.value,
-      salesAgentId: form.salesAgentId || null
-    }
-    
-    console.log('[DRAFT-SAVE] Sending advert data:', advertData)
-    
-    const result = await createAdvert(advertData)
-    
-    console.log('[DRAFT-SAVE] SUCCESS - Draft saved:', result)
-    alert(`Draft saved successfully! Reference: ${result.reference}`)
-    
-    router.push('/dashboard/booking/')
-    
-  } catch (error) {
-    console.error('[DRAFT-SAVE] ERROR - Failed to save draft:', error)
-    alert(`Failed to save draft: ${error.message}`)
-  } finally {
-    savingDraft.value = false
-  }
-}
-*/
-/*
-const saveDraft = async () => {
-  console.log('[DRAFT-SAVE] Save draft requested')
-  
-  if (!hasRequiredClientInfo.value) {
-    console.log('[DRAFT-SAVE] ERROR - Missing required client info')
-    showMask({
-      type: 'error',
-      title: 'Missing Information',
-      message: 'Please fill in all required client information before saving draft.',
-      autoClose: 5000
-    })
-    return
-  }
-  
-  console.log('[DRAFT-SAVE] Form discount value:', form.discount)
-
-  try {
-    savingDraft.value = true
-    
-    // Show loading mask
-    showMask({
-      type: 'loading',
-      title: 'Saving Draft',
-      message: 'Please wait while we save your advert...',
-      autoClose: 0 // Don't auto close loading state
-    })
-    
-    // Get pricing data from SchedulePricing component
-    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
-    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
-    
-    const advertData = {
-      advertTitle: form.advertTitle,
-      clientId: form.clientId || null,
-      clientName: form.clientName,
-      marketSector: form.marketSector || '', 
-      contactPerson: form.contactPerson || '',
-      email: form.email,
-      phone: form.phone,
-      referenceDocument: form.referenceDocument || '',
-      officeLocation: form.officeLocation,
-      publishOnWeb: form.publishOnWeb,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adSize: form.adSize || '',
-      adType: form.adType,
-      frequency: parseInt(form.frequency) || 1,
-      startDate: form.startDate,
-      endDate: form.endDate || null,
-      datesList: form.datesList,
-      publishingDates: buildPublishingDates(),
-      dateCount: dateCount,
-      basePrice: priceCalculation.value?.basePrice || 0,
-      surcharge: priceCalculation.value?.surcharge || 0,
-      discount: parseFloat(form.discount) || 0,
-      totalAmount: finalTotal,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions?.trim() || '',
-      contactEmail: form.email,
-      contactNumber: form.phone,
-      status: 'draft',
-      files: form.files,
-      rateCardDetails: rateCardDetails.value,
-      salesAgentId: form.salesAgentId || null,
-      vgamsUserId: 1 // You need to get this from your auth store
-    }
-    
-    console.log('[DRAFT-SAVE] Sending advert data:', advertData)
-    
-    const result = await createAdvert(advertData)
-    
-    console.log('[DRAFT-SAVE] SUCCESS - Draft saved:', result)
-    
-    // Close loading mask and show success
-    closeMask()
-    showMask({
-      type: 'success',
-      title: 'Draft Saved Successfully!',
-      message: `Your advert draft has been saved.`,
-      details: `Reference Number: ${result.bcReference || result.data?.bcReference || 'N/A'}`,
-      autoClose: 3000
-    })
-    
-    // Navigate after mask closes
-    setTimeout(() => {
-      router.push('/dashboard/booking/')
-    }, 3000)
-    
-  } catch (error) {
-    console.error('[DRAFT-SAVE] ERROR - Failed to save draft:', error)
-    
-    // Close loading mask if it's still showing
-    closeMask()
-    
-    // Show error mask
-    showMask({
-      type: 'error',
-      title: 'Failed to Save Draft',
-      message: error.message || 'An unexpected error occurred while saving your draft.',
-      details: error.response?.data?.message || error.toString(),
-      autoClose: 5000
-    })
-  } finally {
-    savingDraft.value = false
-  }
-}
-*/
-
-/*
-const submitAdvert = async () => {
-  console.log('[SUBMIT] Submit advert requested')
-  
-  if (!isFormValid.value) {
-    console.log('[SUBMIT] ERROR - Form validation failed')
-    alert('Please fill in all required fields and ensure price is calculated.')
-    return
-  }
-  
-  if (!confirm('Submit this advert for review? Once submitted, you cannot make changes until it\'s reviewed.')) {
-    console.log('[SUBMIT] CANCELLED - User cancelled submission')
-    return
-  }
-  
-  try {
-    submitting.value = true
-    
-    // Get pricing data from SchedulePricing component
-    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
-    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
-    
-    const advertData = {
-      advertTitle: form.advertTitle,
-      clientId: form.clientId || null,
-      clientName: form.clientName,
-      marketSector: form.marketSector || '', 
-      contactPerson: form.contactPerson || '',
-      email: form.email,
-      phone: form.phone,
-      referenceDocument: form.referenceDocument || '',
-      officeLocation: form.officeLocation,
-      publishOnWeb: form.publishOnWeb,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adSize: form.adSize || '',
-      adType: form.adType,
-      frequency: parseInt(form.frequency) || 1,
-      startDate: form.startDate,
-      endDate: form.endDate || null,
-      datesList: form.datesList,
-      publishingDates: buildPublishingDates(),
-      dateCount: dateCount,
-      basePrice: priceCalculation.value?.basePrice || 0,
-      surcharge: priceCalculation.value?.surcharge || 0,
-      discount: parseFloat(form.discount) || 0,
-      totalAmount: finalTotal,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions?.trim() || '',
-      contactEmail: form.email,
-      contactNumber: form.phone,
-      status: 'pending_review',
-      files: form.files,
-      rateCardDetails: rateCardDetails.value,
-      salesAgentId: form.salesAgentId || null
-    }
-    
-    console.log('[SUBMIT] Sending advert data:', advertData)
-    
-    const result = await createAdvert(advertData)
-    
-    console.log('[SUBMIT] SUCCESS - Advert submitted:', result)
-    alert(`Advert submitted successfully! Reference: ${result.reference}`)
-    
-    router.push('/dashboard/booking')
-    
-  } catch (error) {
-    console.error('[SUBMIT] ERROR - Submission failed:', error)
-    alert(`Failed to submit advert: ${error.message}`)
-  } finally {
-    submitting.value = false
-  }
-}
-*/
-/*
-const saveDraft = async () => {
-  console.log('[DRAFT-SAVE] Save draft requested')
-  
-  if (!hasRequiredClientInfo.value) {
-    console.log('[DRAFT-SAVE] ERROR - Missing required client info')
-    showMask({
-      type: 'error',
-      title: 'Missing Information',
-      message: 'Please fill in all required client information before saving draft.',
-      autoClose: 5000
-    })
-    return
-  }
-  
-  console.log('[DRAFT-SAVE] Form discount value:', form.discount)
-
-  try {
-    savingDraft.value = true
-    
-    // Show loading mask
-    showMask({
-      type: 'loading',
-      title: 'Saving Draft',
-      message: 'Please wait while we save your advert...',
-      autoClose: 0
-    })
-    
-    // Get pricing data from SchedulePricing component
-    const finalTotal = schedulePricingRef.value?.calculateFinalTotal() || 0
-    const dateCount = form.datesList.length > 0 ? form.datesList.length : 1
-    
-    const advertData = {
-      advertTitle: form.advertTitle,
-      clientId: form.clientId || null,
-      clientName: form.clientName,
-      marketSector: form.marketSector || '', 
-      contactPerson: form.contactPerson || '',
-      email: form.email,
-      phone: form.phone,
-      referenceDocument: form.referenceDocument || '',
-      officeLocation: form.officeLocation,
-      publishOnWeb: form.publishOnWeb,
-      platformCategory: form.platformCategory,
-      product: form.product,
-      rateCard: form.rateCardId,
-      adSize: form.adSize || '',
-      adType: form.adType,
-      frequency: parseInt(form.frequency) || 1,
-      startDate: form.startDate,
-      endDate: form.endDate || null,
-      datesList: form.datesList,
-      publishingDates: buildPublishingDates(),
-      dateCount: dateCount,
-      basePrice: priceCalculation.value?.basePrice || 0,
-      surcharge: priceCalculation.value?.surcharge || 0,
-      discount: parseFloat(form.discount) || 0,
-      totalAmount: finalTotal,
-      paymentMethod: form.paymentMethod,
-      specialInstructions: form.specialInstructions?.trim() || '',
-      contactEmail: form.email,
-      contactNumber: form.phone,
-      status: 'draft',
-      files: form.files,
-      rateCardDetails: rateCardDetails.value,
-      salesAgentId: form.salesAgentId || null,
-      vgamsUserId: 1 // You need to get this from your auth store
-    }
-    
-    console.log('[DRAFT-SAVE] Sending advert data:', advertData)
-    
-    const result = await createAdvert(advertData)
-    
-    console.log('[DRAFT-SAVE] SUCCESS - Draft saved:', result)
-    
-    // Get the reference number from the response
-    const referenceNumber = result.reference || result.data?.reference
-    const bcReference = result.bc_reference || result.data?.bc_reference
-    const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
-    
-    console.log('[DRAFT-SAVE] Reference:', referenceNumber)
-    console.log('[DRAFT-SAVE] BC Reference:', bcReference)
-    console.log('[DRAFT-SAVE] BC Sync Success:', bcSyncSuccess)
-    
-    // If BC sync is already complete and successful, show success immediately
-    if (bcSyncSuccess && bcReference) {
-      closeMask()
-      showMask({
-        type: 'success',
-        title: 'Draft Saved Successfully!',
-        message: 'Your advert draft has been saved and synced with Business Central.',
-        details: `Strapi Reference: ${referenceNumber}\nBC Reference: ${bcReference}\nBC Sync: ✓ Successful`,
-        autoClose: 5000
-      })
-      
-      setTimeout(() => {
-        router.push('/dashboard/booking/')
-      }, 5000)
-    } 
-    // If BC sync is not complete yet, show initial success and poll for status
-    else if (referenceNumber) {
-      // Show initial success with pending BC status
-      closeMask()
-      showMask({
-        type: 'info',
-        title: 'Draft Saved Successfully!',
-        message: 'Your advert has been saved. Syncing with Business Central...',
-        details: `Strapi Reference: ${referenceNumber}\nBC Sync: ⏳ In Progress\n\nPlease wait while we sync with Business Central...`,
-        autoClose: 0 // Don't auto close while polling
-      })
-      
-      // Start polling for BC status
-      try {
-        const bcStatus = await pollBcStatus(referenceNumber, 15, 2000) // 15 attempts, 2 second intervals = 30 seconds max
-        
-        // After polling completes, update the mask
-        if (bcStatus && bcStatus.bc_reference_number) {
-          updateMaskWithBcStatus(bcStatus)
-        }
-      } catch (error) {
-        console.error('[DRAFT-SAVE] Polling error:', error)
-        // Show error for BC sync failure
-        closeMask()
-        showMask({
-          type: 'warning',
-          title: 'Draft Saved - BC Sync Pending',
-          message: 'Your draft was saved but BC sync is taking longer than expected.',
-          details: `Strapi Reference: ${referenceNumber}\nYou can check the status later from the adverts list.`,
-          autoClose: 5000
-        })
-      }
-      
-      setTimeout(() => {
-        router.push('/dashboard/booking/')
-      }, 8000)
-    } else {
-      // Fallback if no reference
-      closeMask()
-      showMask({
-        type: 'success',
-        title: 'Draft Saved Successfully!',
-        message: 'Your advert draft has been saved.',
-        autoClose: 3000
-      })
-      
-      setTimeout(() => {
-        router.push('/dashboard/booking/')
-      }, 3000)
-    }
-    
-  } catch (error) {
-    console.error('[DRAFT-SAVE] ERROR - Failed to save draft:', error)
-    
-    // Close loading mask if it's still showing
-    closeMask()
-    
-    // Show error mask
-    showMask({
-      type: 'error',
-      title: 'Failed to Save Draft',
-      message: error.message || 'An unexpected error occurred while saving your draft.',
-      details: error.response?.data?.message || error.toString(),
-      autoClose: 5000
-    })
-  } finally {
-    savingDraft.value = false
-    // Clear any existing polling interval
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
-    }
-  }
-}
-  */
 
 const saveDraft = async () => {
   console.log('[DRAFT-SAVE] Save draft requested')
@@ -1610,7 +1203,7 @@ const saveDraft = async () => {
       dateCount: dateCount,
       basePrice: priceCalculation.value?.basePrice || 0,
       surcharge: priceCalculation.value?.surcharge || 0,
-      discount: parseFloat(form.discount) || 0,
+      discount: truncateDiscount(form.discount),
       totalAmount: finalTotal,
       paymentMethod: form.paymentMethod,
       specialInstructions: form.specialInstructions?.trim() || '',
@@ -1872,7 +1465,7 @@ const submitAdvert = async () => {
       dateCount: dateCount,
       basePrice: priceCalculation.value?.basePrice || 0,
       surcharge: priceCalculation.value?.surcharge || 0,
-      discount: parseFloat(form.discount) || 0,
+      discount: truncateDiscount(form.discount),
       totalAmount: finalTotal,
       paymentMethod: form.paymentMethod,
       specialInstructions: form.specialInstructions?.trim() || '',
