@@ -21,24 +21,53 @@
     </div>
 
     <div v-if="template" class="fields-block">
-      <div v-for="field in template.fields" :key="field.key" class="input-group">
-        <label>
-          {{ field.label }}
-          <span v-if="field.optional" class="optional-tag">optional</span>
+      <div class="bulk-toggle-row">
+        <label class="bulk-toggle-label">
+          <input
+            type="checkbox"
+            v-model="store.isBulk"
+            :disabled="disabled"
+            @change="handleBulkToggle"
+          >
+          Bulk entry (multiple identical classifieds — specify word count only)
         </label>
+        <small class="help-text">
+          Use this when booking several of the same text type together for one client
+          (e.g. 20 "Lost Number Plate" notices). Individual fields are marked N/A.
+        </small>
+      </div>
 
-        <textarea
-          v-if="field.freeText"
-          v-model="store.values[field.key]"
-          rows="4"
-          :placeholder="`Enter ${field.label.replace(':', '').toLowerCase()}...`"
-          :disabled="disabled"
-        ></textarea>
+      <template v-if="!store.isBulk">
+        <div v-for="field in template.fields" :key="field.key" class="input-group">
+          <label>
+            {{ field.label }}
+            <span v-if="field.optional" class="optional-tag">optional</span>
+          </label>
+
+          <textarea
+            v-if="field.freeText"
+            v-model="store.values[field.key]"
+            rows="4"
+            :placeholder="`Enter ${field.label.replace(':', '').toLowerCase()}...`"
+            :disabled="disabled"
+          ></textarea>
+          <input
+            v-else
+            type="text"
+            v-model="store.values[field.key]"
+            :placeholder="`Enter ${field.label.replace(':', '').toLowerCase()}...`"
+            :disabled="disabled"
+          >
+        </div>
+      </template>
+
+      <div v-else class="input-group">
+        <label>Word Count:</label>
         <input
-          v-else
-          type="text"
-          v-model="store.values[field.key]"
-          :placeholder="`Enter ${field.label.replace(':', '').toLowerCase()}...`"
+          type="number"
+          min="1"
+          v-model.number="store.manualWordCount"
+          placeholder="Enter total word count for this booking"
           :disabled="disabled"
         >
       </div>
@@ -115,18 +144,30 @@ const confirmStartOver = () => {
   }
 }
 
+const handleBulkToggle = () => {
+  store.setBulkMode(store.isBulk)
+  emitChange()
+}
+
 const missingFields = computed(() => {
-  if (!templateId.value) return []
+  if (!templateId.value || store.isBulk) return []
   return getMissingRequiredFields(templateId.value, store.values)
 })
 
 const assembled = computed(() => {
   if (!templateId.value) return { text: '', wordCount: 0 }
-  return buildClassifiedText(templateId.value, store.values)
+  const options = store.isBulk ? { manualWordCount: store.manualWordCount } : {}
+  return buildClassifiedText(templateId.value, store.values, options)
 })
 
 const assembledText = computed(() => assembled.value.text)
 const wordCount = computed(() => assembled.value.wordCount)
+
+const isComplete = computed(() => {
+  if (!templateId.value) return false
+  if (store.isBulk) return !!store.manualWordCount && store.manualWordCount > 0
+  return missingFields.value.length === 0
+})
 
 const estimatedReadingTime = computed(() => {
   if (!wordCount.value) return '0 minutes'
@@ -138,21 +179,22 @@ const emitChange = () => {
   store.setDerived({
     text: assembledText.value,
     wordCount: wordCount.value,
-    isComplete: missingFields.value.length === 0 && !!templateId.value
+    isComplete: isComplete.value
   })
   emit('change', {
     templateId: templateId.value,
     values: { ...store.values },
     text: assembledText.value,
     wordCount: wordCount.value,
-    isComplete: missingFields.value.length === 0 && !!templateId.value
+    isComplete: isComplete.value
   })
 }
 
-// Re-derive + persist whenever field values or the assembled output changes.
-// Deep watch on store.values covers every keystroke in any field.
+// Re-derive + persist whenever field values, the bulk toggle, the manual
+// word count, or the assembled output changes. Deep watch on store.values
+// covers every keystroke in any field.
 watch(() => ({ ...store.values }), emitChange, { deep: true })
-watch([assembledText, wordCount, templateId], emitChange, { immediate: true })
+watch([assembledText, wordCount, templateId, () => store.isBulk, () => store.manualWordCount], emitChange, { immediate: true })
 </script>
 
 <style scoped>
@@ -210,6 +252,21 @@ watch([assembledText, wordCount, templateId], emitChange, { immediate: true })
 .input-group textarea:disabled { background: var(--page-bg); color: var(--text-4); cursor: not-allowed; }
 
 .fields-block { margin-top: 4px; }
+
+.bulk-toggle-row {
+  padding: 10px 12px; margin-bottom: 16px;
+  background: var(--blue-lt); border: 1px solid var(--border-lt); border-radius: var(--radius);
+}
+.bulk-toggle-label {
+  display: flex !important; align-items: center; gap: 8px;
+  text-transform: none !important; letter-spacing: normal !important;
+  font-size: 12px !important; font-weight: 500 !important; color: var(--text-2) !important;
+  cursor: pointer; margin-bottom: 4px !important;
+}
+.bulk-toggle-label input[type="checkbox"] {
+  width: 16px; height: 16px; margin: 0; accent-color: var(--blue); cursor: pointer;
+}
+.bulk-toggle-row .help-text { display: block; margin-left: 24px; }
 
 .count-summary {
   display: flex; flex-direction: column; gap: 4px;

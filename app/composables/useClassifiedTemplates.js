@@ -160,31 +160,54 @@ export const useClassifiedTemplates = () => {
   // Builds the assembled text (text type name, then one field per line: "Label: value")
   // and the word count. The text type name itself counts toward the word total since
   // it is printed as part of the ad content / Special Instructions.
-  const buildClassifiedText = (templateId, values) => {
+  //
+  // options.manualWordCount: for bulk bookings of several identical classifieds
+  // under one order line (e.g. 20 Lost Number Plate notices for one client),
+  // the clerk enters a single total word count directly instead of filling in
+  // per-unit field values. When set (a positive number), every field is shown
+  // as "N/A" in the assembled text regardless of `values` or `optional`, and
+  // the returned wordCount is exactly the entered figure rather than a count
+  // derived from the (placeholder) field text.
+  const buildClassifiedText = (templateId, values, options = {}) => {
     const template = getTemplate(templateId)
     if (!template) return { text: '', wordCount: 0 }
+
+    const { manualWordCount } = options
+    const isManualCount = manualWordCount != null && manualWordCount > 0
 
     let wordCount = 0
     const lines = []
 
     // Text type name is always the first printed line. It counts toward the
     // word total unless the template explicitly opts out via
-    // excludeNameFromCount (currently only "Others").
+    // excludeNameFromCount (currently only "Others"), or a manual count is
+    // in effect (the manual figure is the total, full stop).
     lines.push(template.name)
-    if (!template.excludeNameFromCount) {
+    if (!template.excludeNameFromCount && !isManualCount) {
       wordCount += countWords(template.name)
     }
 
     template.fields.forEach((field) => {
-      const rawValue = (values?.[field.key] ?? '').toString().trim()
+      let rawValue = (values?.[field.key] ?? '').toString().trim()
 
-      // Rule 1: optional + blank -> drop entirely (label + value not shown, not counted)
-      if (field.optional && !rawValue) {
+      if (isManualCount) {
+        // Bulk entry: individual field values aren't captured per unit, so
+        // every field - including ones normally marked optional - shows as
+        // N/A rather than being left blank or dropped.
+        rawValue = 'N/A'
+      } else if (field.optional && !rawValue) {
+        // Rule 1: optional + blank -> drop entirely (label + value not shown, not counted)
         return
       }
 
       const line = `${field.label} ${rawValue}`.trim()
       lines.push(line)
+
+      if (isManualCount) {
+        // Placeholder N/A text is never counted - the manual figure is
+        // the whole word count.
+        return
+      }
 
       // Rule 2: label excluded from count -> only count the value's words
       if (field.excludeLabelFromCount) {
@@ -196,7 +219,7 @@ export const useClassifiedTemplates = () => {
 
     return {
       text: lines.join('\n'),
-      wordCount
+      wordCount: isManualCount ? manualWordCount : wordCount
     }
   }
 

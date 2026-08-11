@@ -253,10 +253,41 @@
         </div>
       </div>
 
-      <!-- Discount -->
+      <!-- Discount (agreed amount is the default entry method; percentage remains available) -->
       <div class="form-group">
-        <label>Discount (%)</label>
-        <div class="discount-wrapper">
+        <label>
+          Discount
+          <div class="discount-mode-toggle">
+            <button
+              type="button"
+              class="mode-btn"
+              :class="{ active: discountMode === 'amount' }"
+              :disabled="!rateCardId || disabled || priceLoading"
+              @click="setDiscountMode('amount')"
+            >Agreed Amount</button>
+            <button
+              type="button"
+              class="mode-btn"
+              :class="{ active: discountMode === 'percentage' }"
+              :disabled="!rateCardId || disabled || priceLoading"
+              @click="setDiscountMode('percentage')"
+            >Percentage</button>
+          </div>
+        </label>
+
+        <div v-if="discountMode === 'amount'" class="agreed-amount-wrapper">
+          <div class="agreed-amount-currency">{{ currency }}</div>
+          <input
+            :value="agreedAmountDisplay"
+            type="text"
+            inputmode="numeric"
+            placeholder="Amount customer pays"
+            @input="updateAgreedAmount($event.target.value)"
+            :disabled="!rateCardId || disabled || priceLoading"
+            class="agreed-amount-input"
+          >
+        </div>
+        <div v-else class="discount-wrapper">
           <input 
             :value="discount"
             type="number" 
@@ -270,9 +301,17 @@
           >
           <div class="discount-icon">%</div>
         </div>
-        <small class="help-text">
+
+        <small v-if="discountMode === 'amount'" class="help-text">
+          Enter what the customer pays — discount is computed automatically
+          <span v-if="discount > 0">({{ Number(discount).toFixed(1) }}%)</span>
+        </small>
+        <small v-else class="help-text">
           Apply percentage discount (optional)
         </small>
+        <div v-if="agreedAmountExceedsBase" class="field-error">
+          ⚠️ Agreed amount can't exceed the calculated price of {{ formatCurrency(priceBeforeDiscount) }} — discount set to 0%
+        </div>
       </div>
     </div>
 
@@ -337,7 +376,7 @@
           <strong class="surcharge-price">{{ formatCurrency(priceCalculation.surcharge) }}</strong>
         </div>
         <div v-if="discount > 0" class="price-summary-item discount-item">
-          <span>Discount ({{ discount }}%):</span>
+          <span>Discount ({{ Number(discount).toFixed(1) }}%):</span>
           <strong class="discount-price">-{{ formatCurrency(calculateDiscountAmount()) }}</strong>
         </div>
         <div class="price-summary-item total">
@@ -440,6 +479,14 @@ const showDatePicker = ref(false)
 const currentDate = ref(new Date())
 const selectedDates = ref([])
 
+// Discount entry mode. 'amount' (agreed amount the customer pays, system
+// derives the discount %) is the default per team preference; 'percentage'
+// (type the % directly, as before) remains available. Only `discount` (a
+// percentage) is ever emitted to the parent — the parent, backend, and PDF
+// summary are unaffected by which entry method produced that percentage.
+const discountMode = ref('amount')
+const agreedAmount = ref(null)
+
 // Validation state
 const showDateError = ref(false)
 const showPaymentError = ref(false)
@@ -476,10 +523,33 @@ watch(isPrintMedia, (newValue) => {
   }
 })
 
+// Serializes a Date as YYYY-MM-DD using its LOCAL year/month/day, never
+// converting through UTC. toISOString() converts to UTC first, which
+// silently shifts the date backward by a day in any timezone ahead of UTC
+// (e.g. Uganda, UTC+3) - selecting Aug 12 at local midnight serializes to
+// "2026-08-11". This is the actual date string sent to the backend via
+// update:startDate/endDate/datesList, so the bug was real, not cosmetic.
+const toLocalDateString = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// Inverse of toLocalDateString: parses a YYYY-MM-DD string as LOCAL midnight
+// by constructing the Date from its components directly, rather than
+// `new Date(dateStr)`, which the JS spec parses as UTC midnight for
+// date-only ISO strings - correct only by coincidence in timezones ahead of
+// UTC, and wrong (shifts a day earlier) in any timezone behind UTC.
+const fromLocalDateString = (dateStr) => {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
 // Initialize selected dates from props
 watch(() => props.datesList, (newDates) => {
   if (newDates && newDates.length > 0) {
-    selectedDates.value = newDates.map(dateStr => new Date(dateStr)).sort((a, b) => a - b)
+    selectedDates.value = newDates.map(fromLocalDateString).sort((a, b) => a - b)
   } else {
     selectedDates.value = []
   }
@@ -523,12 +593,16 @@ const calendarDays = computed(() => {
   
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(year, month, day)
-    const dateString = date.toISOString().split('T')[0]
+    const dateString = toLocalDateString(date)
     const isToday = date.toDateString() === today.toDateString()
     const isSelected = selectedDates.value.some(
       selectedDate => selectedDate.toDateString() === date.toDateString()
     )
-    const isDisabled = props.minDate && date < new Date(props.minDate)
+    // Print media needs at least one day of lead time - today's date can't
+    // be selected as a run date, only tomorrow onward. Other platforms
+    // (TV, radio, web, billboard) can still book same-day.
+    const isBlockedForPrint = isPrintMedia.value && isToday
+    const isDisabled = (props.minDate && date < fromLocalDateString(props.minDate)) || isBlockedForPrint
     
     days.push({
       id: dateString,
@@ -606,18 +680,18 @@ const clearAllDates = () => {
 }
 
 const applyDateSelection = () => {
-  const dateStrings = sortedSelectedDates.value.map(date => date.toISOString().split('T')[0])
+  const dateStrings = sortedSelectedDates.value.map(toLocalDateString)
   
   emit('update:datesList', dateStrings)
   
   if (earliestDate.value) {
-    emit('update:startDate', earliestDate.value.toISOString().split('T')[0])
+    emit('update:startDate', toLocalDateString(earliestDate.value))
   } else {
     emit('update:startDate', '')
   }
   
   if (latestDate.value) {
-    emit('update:endDate', latestDate.value.toISOString().split('T')[0])
+    emit('update:endDate', toLocalDateString(latestDate.value))
   } else {
     emit('update:endDate', '')
   }
@@ -673,9 +747,7 @@ const formatDate = (date) => {
 }
 
 const formatMiddleDatesForInstructions = () => {
-  return middleDates.value.map(date => {
-    return date.toISOString().split('T')[0]
-  }).join(', ')
+  return middleDates.value.map(toLocalDateString).join(', ')
 }
 
 // Update functions
@@ -691,6 +763,127 @@ const updateDiscount = (value) => {
   emit('update:discount', Math.min(Math.max(discountValue, 0), 100))
   emit('discount-change')
 }
+
+// Calculate subtotal with dates
+const calculateSubtotalWithDates = () => {
+  if (!props.priceCalculation) return 0
+  
+  const dateCount = selectedDates.value.length > 0 ? selectedDates.value.length : 1
+  const baseSubtotal = props.priceCalculation.subtotal || props.priceCalculation.basePrice
+  
+  return baseSubtotal * dateCount
+}
+
+// Price before any discount is applied (subtotal across all
+// selected dates, plus surcharge). Single source of truth used by the
+// discount-amount calc, the final total, and the agreed-amount back
+// calculation below - previously duplicated inline in three places.
+const priceBeforeDiscount = computed(() => {
+  if (!props.priceCalculation) return 0
+  return calculateSubtotalWithDates() + (props.priceCalculation.surcharge || 0)
+})
+
+// Calculate discount amount
+const calculateDiscountAmount = () => {
+  if (!props.priceCalculation || !props.discount) return 0
+  
+  const discountPercentage = parseFloat(props.discount) / 100
+  
+  return priceBeforeDiscount.value * discountPercentage
+}
+
+// Calculate final total
+const calculateFinalTotal = () => {
+  if (!props.priceCalculation) return 0
+  
+  const discountAmount = calculateDiscountAmount()
+  
+  return priceBeforeDiscount.value - discountAmount
+}
+
+// True when the clerk has typed an agreed amount greater than what the
+// system calculated before discount - can't produce a negative
+// discount (a markup), so it's clamped to 0% and flagged here.
+const agreedAmountExceedsBase = computed(() => {
+  return discountMode.value === 'amount' &&
+    agreedAmount.value !== null &&
+    priceBeforeDiscount.value > 0 &&
+    agreedAmount.value > priceBeforeDiscount.value
+})
+
+// Derives the discount % from the agreed amount and emits it via the same
+// 'update:discount' contract updateDiscount() uses, so the parent/backend/PDF
+// summary keep consuming a plain percentage exactly as before regardless of
+// which entry method produced it.
+const applyAgreedAmount = () => {
+  const base = priceBeforeDiscount.value
+  
+  if (!base || agreedAmount.value === null) {
+    emit('update:discount', 0)
+    emit('discount-change')
+    return
+  }
+  
+  const discountAmount = base - agreedAmount.value
+  const discountPercentage = (discountAmount / base) * 100
+  const clamped = Math.min(Math.max(discountPercentage, 0), 100)
+  
+  // Full precision, unrounded: this percentage gets multiplied back against
+  // `base` (often in the millions) to compute the discount amount and final
+  // total, so rounding it here (previously to 2dp) reintroduces a real,
+  // visible currency error - e.g. a 0.004% rounding error against an
+  // 11.3M base becomes a 450 UGX mismatch between what the clerk typed and
+  // what the Total Amount displays. Rounding for readability still happens
+  // at render time via .toFixed(1) in the template.
+  emit('update:discount', clamped)
+  emit('discount-change')
+}
+
+// Comma-formatted display for the agreed-amount input, so clerks see
+// 1,000,000 as they type rather than a raw digit string. The underlying
+// agreedAmount stays a plain number - this is display-only.
+const agreedAmountDisplay = computed(() => {
+  if (agreedAmount.value === null || agreedAmount.value === undefined || isNaN(agreedAmount.value)) {
+    return ''
+  }
+  return Math.trunc(agreedAmount.value).toLocaleString('en-UG')
+})
+
+const updateAgreedAmount = (value) => {
+  // Strip everything but digits - commas from the display formatting,
+  // currency symbols, stray characters from paste, etc. Amounts here are
+  // always whole units (matching formatCurrency's 0-decimal formatting
+  // elsewhere in this file), so no decimal point is preserved.
+  const digitsOnly = String(value).replace(/[^0-9]/g, '')
+  const amountValue = digitsOnly ? parseInt(digitsOnly, 10) : NaN
+  agreedAmount.value = isNaN(amountValue) ? null : Math.max(amountValue, 0)
+  applyAgreedAmount()
+}
+
+const setDiscountMode = (mode) => {
+  if (mode === discountMode.value) return
+  
+  if (mode === 'amount') {
+    // Seed the agreed-amount field with today's computed final total so
+    // switching modes doesn't lose ground - clerk can fine-tune from there.
+    agreedAmount.value = priceBeforeDiscount.value > 0 ? calculateFinalTotal() : null
+  }
+  
+  discountMode.value = mode
+  
+  if (mode === 'amount') {
+    applyAgreedAmount()
+  }
+}
+
+// If the base price shifts (frequency, dates, or surcharge change) while in
+// amount mode, re-derive the discount % so the agreed amount keeps
+// reflecting what the customer actually pays.
+watch(priceBeforeDiscount, () => {
+  if (discountMode.value === 'amount' && agreedAmount.value !== null) {
+    applyAgreedAmount()
+  }
+})
 
 const handleFrequencyChange = (event) => {
   if (isPrintMedia.value) {
@@ -719,38 +912,6 @@ const adjustFrequency = (change) => {
       showFrequencyError.value = false
     }
   }
-}
-
-// Calculate subtotal with dates
-const calculateSubtotalWithDates = () => {
-  if (!props.priceCalculation) return 0
-  
-  const dateCount = selectedDates.value.length > 0 ? selectedDates.value.length : 1
-  const baseSubtotal = props.priceCalculation.subtotal || props.priceCalculation.basePrice
-  
-  return baseSubtotal * dateCount
-}
-
-// Calculate discount amount
-const calculateDiscountAmount = () => {
-  if (!props.priceCalculation || !props.discount) return 0
-  
-  const subtotalWithDates = calculateSubtotalWithDates()
-  const withSurcharge = subtotalWithDates + (props.priceCalculation.surcharge || 0)
-  const discountPercentage = parseFloat(props.discount) / 100
-  
-  return withSurcharge * discountPercentage
-}
-
-// Calculate final total
-const calculateFinalTotal = () => {
-  if (!props.priceCalculation) return 0
-  
-  const subtotalWithDates = calculateSubtotalWithDates()
-  const withSurcharge = subtotalWithDates + (props.priceCalculation.surcharge || 0)
-  const discountAmount = calculateDiscountAmount()
-  
-  return withSurcharge - discountAmount
 }
 
 const formatCurrency = (amount) => {
@@ -1009,6 +1170,31 @@ defineExpose({
 .discount-input:focus { border-color: var(--blue); box-shadow: var(--ring); }
 .discount-input:disabled { background: var(--page-bg); color: var(--text-4); cursor: not-allowed; }
 .discount-icon { position: absolute; right: 10px; color: var(--text-3); font-weight: 700; font-size: 12px; pointer-events: none; }
+
+.discount-mode-toggle { display: flex; gap: 4px; margin-left: auto; text-transform: none; letter-spacing: normal; }
+.mode-btn {
+  height: 22px; padding: 0 8px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-3);
+  font-family: var(--font); font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; cursor: pointer; transition: all var(--t);
+}
+.mode-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.mode-btn.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+.mode-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.agreed-amount-wrapper { position: relative; display: flex; align-items: center; }
+.agreed-amount-currency {
+  position: absolute; left: 10px; color: var(--text-3); font-weight: 700; font-size: 11px; pointer-events: none;
+}
+.agreed-amount-input {
+  width: 100%; height: 38px; padding: 0 12px 0 52px;
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+  font-family: var(--font); font-size: 13px; color: var(--text-1);
+  background: var(--surface); outline: none; box-sizing: border-box;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.agreed-amount-input:focus { border-color: var(--blue); box-shadow: var(--ring); }
+.agreed-amount-input:disabled { background: var(--page-bg); color: var(--text-4); cursor: not-allowed; }
 
 /* Date summary compact */
 .date-summary-compact {

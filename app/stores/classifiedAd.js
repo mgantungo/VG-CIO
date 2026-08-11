@@ -13,7 +13,14 @@ export const useClassifiedAdStore = defineStore('classifiedAd', {
     values: {},
     text: '',
     wordCount: 0,
-    isComplete: false
+    isComplete: false,
+    // Bulk entry: several identical classifieds booked as one order line
+    // (e.g. 20 Lost Number Plate notices for one client). When true, the
+    // clerk enters a single total word count directly instead of filling in
+    // per-unit field values, and every field is shown as N/A in the
+    // assembled text.
+    isBulk: false,
+    manualWordCount: null
   }),
 
   actions: {
@@ -24,6 +31,17 @@ export const useClassifiedAdStore = defineStore('classifiedAd', {
 
     setFieldValue(key, value) {
       this.values = { ...this.values, [key]: value }
+    },
+
+    setBulkMode(isBulk) {
+      this.isBulk = !!isBulk
+      if (!this.isBulk) {
+        this.manualWordCount = null
+      }
+    },
+
+    setManualWordCount(count) {
+      this.manualWordCount = count
     },
 
     setDerived({ text, wordCount, isComplete }) {
@@ -39,6 +57,8 @@ export const useClassifiedAdStore = defineStore('classifiedAd', {
       this.text = ''
       this.wordCount = 0
       this.isComplete = false
+      this.isBulk = false
+      this.manualWordCount = null
     }
   }
 })
