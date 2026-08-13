@@ -17,7 +17,7 @@
                 <th class="dd-att-tc-icon"></th>
                 <th>File Name</th>
                 <th class="dd-att-tc-size">Size</th>
-                <th class="dd-att-tc-prev"></th>
+                <th class="dd-att-tc-actions"></th>
               </tr>
             </thead>
             <tbody>
@@ -27,15 +27,24 @@
                   <div class="dd-att-fname">{{ f.name }}</div>
                 </td>
                 <td class="dd-att-tc-size mono">{{ f.size ? formatFileSize(f.size) : '—' }}</td>
-                <td class="dd-att-tc-prev">
+                <td class="dd-att-tc-actions">
                   <a
                     v-if="f.url"
-                    :href="resolveUrl(f.url)"
+                    :href="viewUrl(f)"
                     target="_blank"
                     rel="noopener"
                     class="dd-btn small ghost"
+                    :title="isOfficeDoc(f.name) ? 'Preview via Office Online' : 'Open in new tab'"
                   >
                     View
+                  </a>
+                  <a
+                    v-if="f.url"
+                    :href="resolveUrl(f.url)"
+                    :download="f.name"
+                    class="dd-btn small ghost"
+                  >
+                    Download
                   </a>
                 </td>
               </tr>
@@ -69,6 +78,28 @@ const files = computed(() => props.advert?.attachments || [])
 function resolveUrl(url) {
   if (!url) return ''
   return /^https?:\/\//i.test(url) ? url : `${UPLOAD_BASE || ''}${url}`
+}
+
+// Word/Excel/PowerPoint files can't render inline in a browser tab — clicking
+// a raw link just downloads them or shows "can't open this file type."
+// Route those through Microsoft's Office Online viewer instead, which fetches
+// the file itself and renders a real preview. Requires the file URL to be
+// reachable from the public internet over HTTPS (works on cio.newvision.co.ug,
+// will NOT work against a localhost/dev URL — Microsoft's servers can't reach it).
+const OFFICE_EXTENSIONS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']
+
+function isOfficeDoc(filename) {
+  if (!filename) return false
+  const ext = filename.split('.').pop().toLowerCase()
+  return OFFICE_EXTENSIONS.includes(ext)
+}
+
+function viewUrl(f) {
+  const url = resolveUrl(f.url)
+  if (isOfficeDoc(f.name)) {
+    return `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`
+  }
+  return url
 }
 
 function formatFileSize(bytes) {
@@ -129,7 +160,8 @@ function getFileIcon(filename) {
 .dd-att-tbl tr:last-child td { border-bottom: none; }
 .dd-att-tc-icon { width: 24px; font-size: 1.1em; text-align: center; }
 .dd-att-tc-size { width: 80px; }
-.dd-att-tc-prev { width: 60px; text-align: right; }
+.dd-att-tc-actions { width: 140px; text-align: right; white-space: nowrap; }
+.dd-att-tc-actions .dd-btn { margin-left: 6px; }
 .dd-att-fname { word-break: break-word; }
 .mono { font-family: 'IBM Plex Mono', monospace; }
 </style>
