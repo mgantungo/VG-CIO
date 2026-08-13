@@ -84,23 +84,14 @@
         <button v-if="searchQuery" class="dd-search-clear" @click="searchQuery = ''">&times;</button>
       </div>
 
-      <div class="dd-scope-group" role="radiogroup" aria-label="Filter by category">
-        <label
-          v-for="opt in scopeOptions"
-          :key="opt.value"
-          class="dd-scope-pill"
-          :class="{ active: selectedScope === opt.value }"
-        >
-          <input
-            type="radio"
-            name="dd-scope"
-            :value="opt.value"
-            v-model="selectedScope"
-            @change="onScopeChange"
-          />
-          {{ opt.label }}
-        </label>
-      </div>
+      <select
+        v-model="selectedScope"
+        class="dd-product-select"
+        title="Filter by category"
+        @change="onScopeChange"
+      >
+        <option v-for="opt in scopeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+      </select>
 
       <select
         v-model="selectedProductId"
@@ -838,40 +829,6 @@ onMounted(() => {
   font-family: 'IBM Plex Mono', monospace;
   opacity: .65;
   margin-left: 5px;
-}
-
-/* ── Scope radio pills ────────────────────────────────────────────────── */
-.dd-scope-group {
-  display: flex;
-  gap: 2px;
-  background: #f6f3ec;
-  border: 1px solid #d9d3c3;
-  border-radius: 2px;
-  padding: 2px;
-  flex-shrink: 0;
-}
-.dd-scope-pill {
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 6px 11px;
-  border-radius: 2px;
-  cursor: pointer;
-  color: #6b6658;
-  display: inline-flex;
-  align-items: center;
-  user-select: none;
-}
-.dd-scope-pill input[type="radio"] {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.dd-scope-pill.active {
-  background: #1c3fa8;
-  color: #fff;
-}
-.dd-scope-pill:hover:not(.active) {
-  background: #efe9d8;
 }
 
 /* ── Search Box ────────────────────────────────────────────────────────── */
