@@ -221,8 +221,7 @@ import AdditionalInformation from './AdditionalInformation.vue'
 import SalesAgentSelection from './SalesAgentSelection.vue'
 import FullPageMask from './FullPageMask.vue'
 // PDF generation for the order print summary
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { useAdvertPdf } from '~/composables/useAdvertPdf'
 
 // Import composables and stores
 import { useProducts } from '~/composables/useProducts'
@@ -258,6 +257,10 @@ const { locations: officeLocations, loading: officeLocationsLoading } = storeToR
 // Classified ad ('per word' rate card) builder state - persists across ad type
 // toggles within a booking, cleared explicitly on full form reset
 const classifiedAdStore = useClassifiedAdStore()
+
+// Shared PDF builder - same composable Indexpage.vue uses for its reprint,
+// so both stay visually identical by construction
+const { downloadAdvertPdf, printAdvertPdf } = useAdvertPdf()
 
 // Today's date for date validation
 const today = ref(new Date().toISOString().split('T')[0])
@@ -317,9 +320,6 @@ const selectedCurrency = ref('UGX')
 // Central reference.
 const systemReference = ref('')
 const bcReferenceNumber = ref('')
-// The created advert's Strapi record id, used to build the QR code's deep
-// link back to the record. Only meaningful once a save/submit has returned one.
-const createdAdvertId = ref(null)
 
 // Check if platform is print media
 const isPrintMedia = computed(() => {
@@ -404,7 +404,11 @@ const filteredProducts = computed(() => {
 
 const selectedProduct = computed(() => {
   if (!form.product) return null
-  return products.value.find(p => p.id === form.product)
+  // String() comparison, not strict ===: form.product often comes through
+  // as a string from a <select> element while product ids are numeric,
+  // which made this never match anything - Product silently showed as "—"
+  // in the print/download summary regardless of what was actually selected.
+  return products.value.find(p => String(p.id) === String(form.product))
 })
 
 const availableRateCards = computed(() => {
@@ -1004,171 +1008,42 @@ const formatDate = (dateString) => {
   }
 }
 
-// Builds the order summary jsPDF document, matching the exact layout used
-// by the dashboard's saved-advert reprint (Indexpage.vue's printAdvertPdf):
-// navy header band, barcode + QR code, two-column Client & Contact / Advert
-// & Booking tables, Pricing & Payment, Publishing Date table, then Special
-// Instructions. Sourced from the live form/priceCalculation state rather
-// than a saved record, since this runs before (or right after) submission.
-//
-// The barcode and QR code are only generated when a BC reference exists -
-// their absence is the signal that this advert hasn't actually been
-// submitted/synced yet, so showing them earlier would imply a completeness
-// that isn't there.
-const buildOrderSummaryPdf = async () => {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  const pageWidth = doc.internal.pageSize.getWidth()
-
+// Maps live form/priceCalculation state into the normalized shape the
+// shared useAdvertPdf composable expects. Kept as its own function so
+// downloadOrderSummary/printOrderSummary don't duplicate this mapping.
+const buildAdvertPdfData = () => {
   const hasBcReference = !!bcReferenceNumber.value
   const bookingStatusLabel = hasBcReference
     ? 'Pending Review'
     : (systemReference.value ? 'Draft' : 'Not Saved')
-
-  doc.setFillColor(0, 51, 102)
-  doc.rect(0, 0, pageWidth, 22, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
-  doc.text('Vision Group Advertising Management System', 10, 10)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.text('Advert Booking Confirmation', 10, 16)
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text(systemReference.value || 'DRAFT', pageWidth - 10, 10, { align: 'right' })
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.text(bookingStatusLabel.toUpperCase(), pageWidth - 10, 16, { align: 'right' })
-
-  let y = 28
-  doc.setTextColor(20, 20, 20)
-
-  // Barcode (left, encodes the reference number) + QR code (right, links back
-  // to the digital record) - only once a BC reference confirms this advert
-  // has actually been submitted and synced.
-  if (hasBcReference) {
-    try {
-      const { default: JsBarcode } = await import('jsbarcode')
-      const barcodeCanvas = document.createElement('canvas')
-      JsBarcode(barcodeCanvas, systemReference.value || String(createdAdvertId.value || ''), {
-        format: 'CODE128', width: 1.6, height: 34, displayValue: true, fontSize: 11, margin: 4
-      })
-      doc.addImage(barcodeCanvas.toDataURL('image/png'), 'PNG', 10, y, 62, 16)
-    } catch (e) {
-      console.warn('Barcode generation skipped:', e)
-    }
-
-    try {
-      const QRCodeModule = await import('qrcode')
-      const QRCode = QRCodeModule.default || QRCodeModule
-      const qrContent = (typeof window !== 'undefined' && createdAdvertId.value)
-        ? `${window.location.origin}/dashboard/booking/edit/${createdAdvertId.value}?mode=view`
-        : (systemReference.value || 'VGAMS')
-      const qrDataUrl = await QRCode.toDataURL(qrContent, { width: 200, margin: 1 })
-      doc.addImage(qrDataUrl, 'PNG', pageWidth - 32, y - 2, 22, 22)
-    } catch (e) {
-      console.warn('QR code generation skipped:', e)
-    }
-
-    y += 22
-  }
-
-  const pageMargin = 10
-  const gap = 6
-  const colWidth = (pageWidth - pageMargin * 2 - gap) / 2
-
-  autoTable(doc, {
-    startY: y,
-    theme: 'grid',
-    head: [['Client & Contact', '']],
-    body: [
-      ['Client', form.clientName || '—'],
-      ['Contact Person', form.contactPerson || '—'],
-      ['Contact Email', form.email || '—'],
-      ['Contact Phone', form.phone || '—'],
-      ['Client Ref No', form.referenceDocument || '—'],
-      ['Market Sector', form.marketSector || '—'],
-    ],
-    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
-    headStyles: { fillColor: [0, 51, 102], textColor: 255 },
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
-    tableWidth: colWidth,
-    margin: { left: pageMargin, right: pageMargin + colWidth + gap },
-  })
-  const leftFinalY = doc.lastAutoTable.finalY
-
-  autoTable(doc, {
-    startY: y,
-    theme: 'grid',
-    head: [['Advert & Booking', '']],
-    body: [
-      ['Reference No.', systemReference.value || '—'],
-      ['BC Reference No.', bcReferenceNumber.value || '—'],
-      ['Advert Title', form.advertTitle || '—'],
-      ['Product', selectedProduct.value?.product_name || selectedProduct.value?.name || '—'],
-      ['Ad Size', form.adSize || '—'],
-      ['Office Location', form.officeLocation || '—'],
-      ['Status', bookingStatusLabel],
-    ],
-    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
-    headStyles: { fillColor: [0, 102, 204], textColor: 255 },
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
-    tableWidth: colWidth,
-    margin: { left: pageMargin + colWidth + gap, right: pageMargin },
-  })
-  const rightFinalY = doc.lastAutoTable.finalY
-
-  y = Math.max(leftFinalY, rightFinalY) + 6
-
   const finalTotal = schedulePricingRef.value?.calculateFinalTotal?.() || priceCalculation.value?.total || 0
 
-  autoTable(doc, {
-    startY: y,
-    theme: 'grid',
-    head: [['Pricing & Payment', '']],
-    body: [
-      ['Base Price', formatCurrency(priceCalculation.value?.basePrice || 0)],
-      ['Surcharge', formatCurrency(priceCalculation.value?.surcharge || 0)],
-      ['Discount', `${Number(form.discount || 0).toFixed(1)}%`],
-      ['Total Amount', formatCurrency(finalTotal)],
-      ['Payment Method', (form.paymentMethod || '—').toString().replace(/_/g, ' ')],
-      ['Payment Status', 'Pending'],
-    ],
-    styles: { fontSize: 9, cellPadding: 2 },
-    headStyles: { fillColor: [0, 102, 204], textColor: 255 },
-    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
-  })
-  y = doc.lastAutoTable.finalY + 6
-
-  const pubDates = form.datesList || []
-  if (pubDates.length) {
-    autoTable(doc, {
-      startY: y,
-      theme: 'grid',
-      head: [['#', 'Publishing Date']],
-      body: pubDates.map((d, i) => [i + 1, formatDate(d)]),
-      styles: { fontSize: 9, cellPadding: 2 },
-      headStyles: { fillColor: [0, 51, 102], textColor: 255 },
-      tableWidth: 80,
-    })
-    y = doc.lastAutoTable.finalY + 6
+  return {
+    systemReference: systemReference.value,
+    bcReference: bcReferenceNumber.value,
+    statusLabel: bookingStatusLabel,
+    clientName: form.clientName,
+    contactPerson: form.contactPerson,
+    contactEmail: form.email,
+    contactPhone: form.phone,
+    clientRefNo: form.referenceDocument,
+    marketSector: form.marketSector,
+    advertTitle: form.advertTitle,
+    product: selectedProduct.value?.product_name || selectedProduct.value?.name || selectedProduct.value?.productName || '',
+    adSize: form.adSize,
+    officeLocation: form.officeLocation,
+    basePrice: priceCalculation.value?.basePrice || 0,
+    surcharge: priceCalculation.value?.surcharge || 0,
+    discountPercent: Number(form.discount || 0),
+    totalAmount: finalTotal,
+    paymentMethod: form.paymentMethod,
+    // Nothing here is ever paid pre-submission - payment happens through a
+    // separate downstream workflow after review/approval.
+    paymentStatus: 'Pending',
+    publishingDates: form.datesList || [],
+    specialInstructions: form.specialInstructions,
+    filename: `advert-${systemReference.value || 'draft'}.pdf`
   }
-
-  if (form.specialInstructions) {
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Special Instructions:', 10, y)
-    doc.setFont('helvetica', 'normal')
-    const lines = doc.splitTextToSize(form.specialInstructions, pageWidth - 20)
-    doc.text(lines, 10, y + 5)
-    y += 5 + lines.length * 4.5
-  }
-
-  doc.setFontSize(7)
-  doc.setTextColor(120, 120, 120)
-  doc.text(`Generated ${new Date().toLocaleString('en-UG')} · VGAMS`, 10, 287)
-
-  return doc
 }
 
 // Downloads the order summary as a PDF file
@@ -1177,8 +1052,7 @@ const downloadOrderSummary = async () => {
   printingSummary.value = true
 
   try {
-    const doc = await buildOrderSummaryPdf()
-    doc.save(`advert-${systemReference.value || 'draft'}.pdf`)
+    await downloadAdvertPdf(buildAdvertPdfData())
     console.log('[PRINT-SUMMARY] SUCCESS - PDF downloaded')
   } catch (error) {
     console.error('[PRINT-SUMMARY] ERROR - Failed to generate PDF:', error)
@@ -1194,23 +1068,19 @@ const printOrderSummary = async () => {
   printingSummary.value = true
 
   try {
-    const doc = await buildOrderSummaryPdf()
-    doc.autoPrint()
-    const blobUrl = doc.output('bloburl')
-    const printWindow = window.open(blobUrl, '_blank')
-    if (!printWindow) {
-      alert('Please allow pop-ups for this site to print the summary.')
-    }
+    await printAdvertPdf(buildAdvertPdfData())
     console.log('[PRINT-SUMMARY] SUCCESS - PDF opened for printing')
   } catch (error) {
-    console.error('[PRINT-SUMMARY] ERROR - Failed to generate PDF for printing:', error)
-    alert('Failed to generate the print summary. Please try again.')
+    if (error?.message === 'POPUP_BLOCKED') {
+      alert('Please allow pop-ups for this site to print the summary.')
+    } else {
+      console.error('[PRINT-SUMMARY] ERROR - Failed to generate PDF for printing:', error)
+      alert('Failed to generate the print summary. Please try again.')
+    }
   } finally {
     printingSummary.value = false
   }
 }
-
-
 
 const saveDraft = async () => {
   console.log('[DRAFT-SAVE] Save draft requested')
@@ -1291,14 +1161,12 @@ const saveDraft = async () => {
     const referenceNumber = result.reference || result.data?.reference
     const bcReference = result.bc_reference || result.data?.bc_reference
     const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
-    const advertRecordId = result.id || result.data?.id
     
     // Persist for the print/download summary - previously only submitAdvert()
     // did this, so the summary PDF kept showing "Not yet assigned (draft)"
     // even right after a successful draft save.
     if (referenceNumber) systemReference.value = referenceNumber
     if (bcReference) bcReferenceNumber.value = bcReference
-    if (advertRecordId) createdAdvertId.value = advertRecordId
     
     console.log('[DRAFT-SAVE] Reference:', referenceNumber)
     console.log('[DRAFT-SAVE] BC Reference:', bcReference)
@@ -1561,12 +1429,10 @@ const submitAdvert = async () => {
     const referenceNumber = result.reference || result.data?.reference
     const bcReference = result.bc_reference || result.data?.bc_reference
     const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
-    const advertRecordId = result.id || result.data?.id
     
     // Persist for the print/download summary
     if (referenceNumber) systemReference.value = referenceNumber
     if (bcReference) bcReferenceNumber.value = bcReference
-    if (advertRecordId) createdAdvertId.value = advertRecordId
     
     // If BC sync is already complete and successful
     if (bcSyncSuccess && bcReference) {
@@ -1769,7 +1635,6 @@ const resetForm = () => {
   classifiedAdStore.clear()
   systemReference.value = ''
   bcReferenceNumber.value = ''
-  createdAdvertId.value = null
   console.log('[RESET] SUCCESS - Form reset complete')
 }
 </script>

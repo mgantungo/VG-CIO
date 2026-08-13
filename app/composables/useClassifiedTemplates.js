@@ -201,18 +201,20 @@ const TEMPLATES = [
   {
     id: 'others',
     name: 'Others',
-    // The type-name line ("Others") is still printed but shouldn't count as
-    // a billable word - unlike every other template here where the name is
-    // part of the ad content.
-    excludeNameFromCount: true,
     fields: [
-      // Label excluded from count - only the title's own words count, not
-      // the word "Title:" itself.
-      { key: 'title', label: 'Title:', required: true, excludeLabelFromCount: true },
-      // Free text field, same pattern as Advert Text: only the value's
-      // words count, not the "Text:" label itself.
-      { key: 'text', label: 'Text:', required: true, excludeLabelFromCount: true, freeText: true }
-    ]
+      { key: 'title', label: 'Title:', required: true },
+      { key: 'text', label: 'Text:', required: true, freeText: true }
+    ],
+    // The printed ad is just the title then the body text - no "Others"
+    // type-name line and no "Title:"/"Text:" labels, unlike every other
+    // template here. Word count still only reflects the title's and text's
+    // own words, since there are no label words in the composed string to
+    // begin with.
+    compose: (values) => {
+      const title = (values?.title ?? '').toString().trim()
+      const text = (values?.text ?? '').toString().trim()
+      return `${title}\n${text}`
+    }
   }
 ]
 
