@@ -28,7 +28,7 @@
 
     <label v-else class="dd-dropzone" :class="{ dragging: isDragging }">
       <span>📎</span>
-      <span>{{ isDragging ? 'Drop it here' : 'Drop or choose the designed PDF for this group' }}</span>
+      <span>{{ isDragging ? 'Drop it here' : 'Drop the designed PDF here (or drag an advert from the queue)' }}</span>
       <input type="file" accept=".pdf,image/*" @change="onFileChange" />
     </label>
 
@@ -39,7 +39,7 @@
         <span class="x" @click="$emit('remove-advert', a.id)">&times;</span>
       </div>
       <div v-if="!group.adverts || group.adverts.length === 0" style="font-size:11.5px;color:var(--dd-ink-soft);">
-        No adverts pinned yet — use "+ Add to Board" on a queue card.
+        No adverts pinned yet — drag one here, or use "+ Add to Board" on a queue card.
       </div>
     </div>
   </div>
@@ -52,7 +52,7 @@ import { useDesignHouse } from '~/composables/useDesignHouse'
 const props = defineProps({
   group: { type: Object, required: true }, // shape from getBatchDetail: { id, label, file, adverts }
 })
-const emit = defineEmits(['upload-file', 'remove-advert', 'remove-group'])
+const emit = defineEmits(['upload-file', 'remove-advert', 'remove-group', 'assign-advert'])
 
 const { resolveUrl } = useDesignHouse()
 
@@ -101,8 +101,23 @@ function onDragLeave() {
 function onDrop(e) {
   dragDepth = 0
   isDragging.value = false
+
+  // A real OS file drop (existing behavior — the design proof upload) always
+  // takes priority when both are somehow present.
   const file = e.dataTransfer?.files?.[0]
-  if (file) emit('upload-file', file)
+  if (file) {
+    emit('upload-file', file)
+    return
+  }
+
+  // Otherwise, this may be an advert row dragged from the queue table —
+  // QueueSheetModal sets this via `e.dataTransfer.setData('text/plain', advertId)`
+  // on its row's dragstart.
+  const advertIdRaw = e.dataTransfer?.getData('text/plain')
+  const advertId = advertIdRaw ? Number(advertIdRaw) : null
+  if (advertId && !Number.isNaN(advertId)) {
+    emit('assign-advert', advertId)
+  }
 }
 </script>
 

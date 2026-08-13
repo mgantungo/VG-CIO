@@ -84,21 +84,18 @@
         <button v-if="searchQuery" class="dd-search-clear" @click="searchQuery = ''">&times;</button>
       </div>
 
+      <button class="dd-btn ghost" @click="showSheetModal = true">📊 Spreadsheet View</button>
       <button class="dd-btn primary" @click="newBatch">+ New Batch</button>
     </div>
 
-    <!-- Assign bar — appears while placing a queue advert into an ad slot -->
-    <div v-if="pendingAssignAdvert" class="dd-note-box" style="margin:0 28px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <span>Assign <b>{{ pendingAssignAdvert.advertTitle }}</b> to:</span>
-      <button
-        v-for="g in (activeBatch?.fileGroups || [])"
-        :key="g.id"
-        class="dd-btn small ghost"
-        @click="assignToGroup(g.id)"
-      >{{ g.label || `Group ${g.id}` }}</button>
-      <button class="dd-btn small primary" @click="assignToNewGroup">+ New Group</button>
-      <button class="dd-btn small ghost" @click="pendingAssignAdvert = null">Cancel</button>
-    </div>
+    <!-- Assign bar — reused inside QueueSheetModal too -->
+    <AssignBar
+      :advert="pendingAssignAdvert"
+      :groups="activeBatch?.fileGroups || []"
+      @assign="assignToGroup"
+      @assign-new="assignToNewGroup"
+      @cancel="pendingAssignAdvert = null"
+    />
 
     <!-- Main split -->
     <div class="dd-board">
@@ -192,6 +189,7 @@
             @upload-file="file => onGroupFile(group.id, file)"
             @remove-advert="advertId => onGroupRemoveAdvert(group.id, advertId)"
             @remove-group="onRemoveGroup(group.id)"
+            @assign-advert="advertId => assignAdvertDirectly(group.id, advertId)"
           />
 
           <button class="dd-btn ghost" style="width:100%;justify-content:center;margin-bottom:16px;" @click="addEmptyGroup">
@@ -225,6 +223,28 @@
       @edit="onEditFromDetail"
       @delete="onDeleteFromDetail"
     />
+
+    <QueueSheetModal
+      :open="showSheetModal"
+      :bookings="filteredBookings"
+      :active-batch="activeBatch"
+      :pending-assign-advert="pendingAssignAdvert"
+      :active-date="activeBatch?.targetRunDate || selectedDate"
+      :date-label="currentDayMonth"
+      @close="showSheetModal = false"
+      @view-brief="briefAdvert = $event"
+      @view-attachments="attachmentsAdvert = $event"
+      @add-to-board="onAddToBoard"
+      @assign="assignToGroup"
+      @assign-new="assignToNewGroup"
+      @cancel-assign="pendingAssignAdvert = null"
+      @assign-advert-to-group="({ groupId, advertId }) => assignAdvertDirectly(groupId, advertId)"
+      @upload-file="({ groupId, file }) => onGroupFile(groupId, file)"
+      @remove-advert="({ groupId, advertId }) => onGroupRemoveAdvert(groupId, advertId)"
+      @remove-group="onRemoveGroup"
+      @add-group="addEmptyGroup"
+      @toggle-handled="toggleHandled"
+    />
   </div>
 </template>
 
@@ -237,6 +257,8 @@ import BriefModal from './BriefModal.vue'
 import AttachmentsModal from './AttachmentsModal.vue'
 import AttachScheduleModal from './AttachScheduleModal.vue'
 import BatchDetailModal from './BatchDetailModal.vue'
+import AssignBar from './ext/AssignBar.vue'
+import QueueSheetModal from './ext/QueueSheetModal.vue'
 
 
 const {
@@ -255,6 +277,7 @@ const {
   attachBatch,
   markReady,
   archiveBatch,
+  markDesignComplete,
 } = useDesignHouse()
 
 // ── Date state ───────────────────────────────────────────────────────────
@@ -459,11 +482,41 @@ async function assignToNewGroup() {
   }
 }
 
+// Drag-and-drop path — an advert row was dropped directly onto a FileGroupCard
+// inside QueueSheetModal, bypassing the AssignBar picker. Only reachable when
+// activeBatch already exists, since that's the only way a FileGroupCard is
+// rendered to drop onto in the first place — so no "create batch first" step
+// is needed here, unlike onAddToBoard.
+async function assignAdvertDirectly(groupId, advertId) {
+  try {
+    await addAdvertToFileGroup(activeBatch.value.id, groupId, advertId)
+    await refreshActiveBatch()
+    await refreshBatchesList()
+  } catch (e) {
+    alert(e?.data?.message || 'Could not add this advert to the group.')
+  }
+}
+
+// "Handled" checkbox in QueueSheetModal. markDesignComplete is one-way — it
+// sets isApproved = true server-side and there's no unmark endpoint, so this
+// only ever fires unhandled -> handled. Updates the local row optimistically
+// rather than reloading the whole day for a snappier check.
+async function toggleHandled(advertId) {
+  try {
+    await markDesignComplete(advertId)
+    const row = bookings.value.find(a => String(a.id) === String(advertId))
+    if (row) row.isApproved = true
+  } catch (e) {
+    alert(e?.data?.message || 'Could not mark this advert as handled.')
+  }
+}
+
 // ── Modals ───────────────────────────────────────────────────────────────
 const briefAdvert = ref(null)
 const attachmentsAdvert = ref(null)
 const attachTarget = ref(null)
 const detailBatch = ref(null)
+const showSheetModal = ref(false)
 
 function openAttach() {
   attachTarget.value = activeBatch.value

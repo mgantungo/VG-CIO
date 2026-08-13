@@ -34,6 +34,8 @@
 
         <div class="dd-modal-foot">
 
+          <button class="dd-btn ghost" @click="copyBrief">📋 Copy</button>
+
           <button class="dd-btn primary" @click="$emit('close')">Close</button>
 
         </div>
@@ -50,13 +52,41 @@
 
 <script setup>
 
-defineProps({
+const props = defineProps({
 
   advert: { type: Object, default: null },
 
 })
 
 defineEmits(['close'])
+
+function copyBrief() {
+  // advert.specialInstructions is the raw text — the template only adds
+  // quotation marks for display, so reading it directly here keeps the
+  // copied text free of the wrapping quotes.
+  const text = props.advert?.specialInstructions || ''
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+  } else {
+    fallbackCopy(text)
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
+  try {
+    document.execCommand('copy')
+  } catch (e) {
+    console.error('[BriefModal] Copy failed:', e)
+  }
+  document.body.removeChild(ta)
+}
 
 </script>
 
@@ -68,7 +98,7 @@ defineEmits(['close'])
 
   position:fixed;inset:0;background:rgba(28,27,24,.45);display:none;
 
-  align-items:center;justify-content:center;z-index:1000;padding:20px;
+  align-items:center;justify-content:center;z-index:1100;padding:20px;
 
 }
 
@@ -115,5 +145,3 @@ defineEmits(['close'])
 .dd-brief-grid .k{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#6b6658;margin-bottom:2px;}
 
 </style>
-
- 

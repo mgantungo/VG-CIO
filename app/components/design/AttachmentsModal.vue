@@ -1,4 +1,3 @@
-<!-- components/design/AttachmentsModal.vue -->
 <template>
   <Teleport to="body">
     <div class="dd-modal-backdrop" :class="{ open: !!advert }" @click.self="$emit('close')">
@@ -126,7 +125,7 @@ function getFileIcon(filename) {
 <style scoped>
 .dd-modal-backdrop {
   position: fixed; inset: 0; background: rgba(28, 27, 24, .45); display: none;
-  align-items: center; justify-content: center; z-index: 1000; padding: 20px;
+  align-items: center; justify-content: center; z-index: 1100; padding: 20px;
 }
 .dd-modal-backdrop.open { display: flex; }
 .dd-modal {
