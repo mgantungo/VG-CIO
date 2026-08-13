@@ -899,11 +899,45 @@ const handleModalSave = (details) => {
   showRateCardModal.value = false
   rateCardDetails.value = details
 
-  // For 'per word' (classified) rate cards, the modal assembles the actual
-  // ad copy from the chosen text-type template. Push it into Special Instructions.
-  if (details.composedText) {
-    form.specialInstructions = details.composedText
-    console.log('[MODAL-SAVE] Special Instructions populated from classified text builder')
+  // Build Special Instructions from whatever the modal captured: the
+  // assembled classified ad copy (composedText, for per-word / Photo-Logo
+  // with text) plus the structured layout details - size, column count,
+  // photo/logo count, word count - the Design House needs to physically
+  // lay out the ad. Previously only composedText was pushed through, so
+  // Semi-Display, per-cm-col, and Photo-Logo-only bookings never surfaced
+  // their size/count details here at all.
+  const d = details.details || {}
+  const layoutLines = []
+
+  if (d.cm != null && d.columns != null) {
+    layoutLines.push(`Size: ${d.cm}cm x ${d.columns} column(s)${d.totalSize ? ` (${d.totalSize} cm/col total)` : ''}`)
+  } else if (d.columns != null) {
+    layoutLines.push(`Columns: ${d.columns}`)
+  }
+
+  if (d.photos != null) {
+    layoutLines.push(`Photos/Logos: ${d.photos}`)
+  }
+
+  if (d.words != null) {
+    // composedText already shows the word count implicitly via the
+    // assembled ad text - only add a standalone line when there's no
+    // composed text for it to appear in, or to flag a bulk/manual entry
+    // (which composedText's N/A placeholders don't make explicit).
+    if (!details.composedText) {
+      layoutLines.push(`Word Count: ${d.words}`)
+    } else if (d.isBulk) {
+      layoutLines.push(`Word Count: ${d.words} (BULK ENTRY - multiple similar classifieds combined into one booking)`)
+    }
+  }
+
+  const parts = []
+  if (details.composedText) parts.push(details.composedText)
+  if (layoutLines.length) parts.push(layoutLines.join('\n'))
+
+  if (parts.length) {
+    form.specialInstructions = parts.join('\n\n')
+    console.log('[MODAL-SAVE] Special Instructions populated with ad copy / layout details')
   }
 
   console.log('[MODAL-SAVE] SUCCESS - Details stored, triggering price calculation...')

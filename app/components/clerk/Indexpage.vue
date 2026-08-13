@@ -507,7 +507,10 @@
                       <button v-if="advert.attachments?.length > 0" class="act-btn purple" @click="downloadAttachments(advert)" :title="`${advert.attachments.length} file(s)`">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                       </button>
-                      <button class="act-btn green" @click="printAdvertPdf(advert)" title="Print / Save PDF">
+                      <button class="act-btn blue" @click="downloadAdvertPdf(advert)" title="Download PDF">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+                      </button>
+                      <button class="act-btn green" @click="printAdvertPdf(advert)" title="Print">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
                       </button>
                     </div>
@@ -519,9 +522,13 @@
                   <td :colspan="detailColspan" class="detail-cell">
                     <div class="detail-wrap">
                       <div class="detail-toolbar">
+                        <button class="btn-mini" @click="downloadAdvertPdf(advert)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+                          Download PDF
+                        </button>
                         <button class="btn-mini" @click="printAdvertPdf(advert)">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
-                          Print / Save PDF
+                          Print
                         </button>
                       </div>
                       <div class="detail-info-strip">
@@ -597,11 +604,13 @@
 import { useAdverts } from '~/composables/useAdverts'
 import { ref, computed, watch, onMounted, h } from 'vue'
 import { useRouter, useRuntimeConfig } from '#imports';
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { useAdvertPdf } from '~/composables/useAdvertPdf'
 
 const router = useRouter()
 const config = useRuntimeConfig()
+// Shared PDF builder - same composable New.vue uses for its order summary,
+// so both stay visually identical by construction
+const { downloadAdvertPdf: downloadPdf, printAdvertPdf: printPdf } = useAdvertPdf()
 const {
   loading,
   error,
@@ -1170,155 +1179,54 @@ const exportData = async () => {
   }
 }
 
-// ── Print / save a single advert as a PDF (booking confirmation, for reprints) ──
-const printAdvertPdf = async (advert) => {
+// Maps a saved advert record into the normalized shape the shared
+// useAdvertPdf composable expects.
+const buildAdvertPdfData = (advert) => ({
+  systemReference: advert.reference,
+  bcReference: advert.bcReference,
+  statusLabel: getStatusLabel(advert.status),
+  clientName: advert.clientName,
+  contactPerson: advert.contactPerson || advert.client?.contactPerson,
+  contactEmail: advert.contactEmail,
+  contactPhone: advert.contactNumber,
+  clientRefNo: advert.clientRefNo,
+  marketSector: advert.marketSector,
+  advertTitle: advert.advertTitle,
+  product: advert.product?.name,
+  adSize: advert.adSize,
+  officeLocation: advert.officeLocation,
+  basePrice: advert.basePrice || 0,
+  surcharge: advert.surcharge || 0,
+  discountPercent: Number(advert.discount || 0),
+  totalAmount: advert.totalAmount || 0,
+  paymentMethod: advert.paymentMethod,
+  paymentStatus: advert.isPaid ? 'Paid' : 'Unpaid',
+  publishingDates: getPublishingDates(advert),
+  specialInstructions: advert.specialInstructions,
+  filename: `advert-${advert.reference || advert.id}.pdf`
+})
+
+// ── Download a single advert as a PDF (booking confirmation, for reprints) ──
+const downloadAdvertPdf = async (advert) => {
   try {
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-
-    doc.setFillColor(0, 51, 102)
-    doc.rect(0, 0, pageWidth, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(13)
-    doc.text('Vision Group Advertising Management System', 10, 10)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.text('Advert Booking Confirmation', 10, 16)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text(advert.reference || '', pageWidth - 10, 10, { align: 'right' })
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(advert.isPaid ? 'PAID' : 'UNPAID', pageWidth - 10, 16, { align: 'right' })
-
-    let y = 28
-    doc.setTextColor(20, 20, 20)
-
-    // Barcode (left, encodes the reference number) + QR code (right, links back to the digital record)
-    try {
-      const { default: JsBarcode } = await import('jsbarcode')
-      const barcodeCanvas = document.createElement('canvas')
-      JsBarcode(barcodeCanvas, advert.reference || String(advert.id || ''), {
-        format: 'CODE128', width: 1.6, height: 34, displayValue: true, fontSize: 11, margin: 4
-      })
-      doc.addImage(barcodeCanvas.toDataURL('image/png'), 'PNG', 10, y, 62, 16)
-    } catch (e) {
-      console.warn('Barcode generation skipped:', e)
-    }
-
-    try {
-      const QRCodeModule = await import('qrcode')
-      const QRCode = QRCodeModule.default || QRCodeModule
-      const qrContent = typeof window !== 'undefined'
-        ? `${window.location.origin}/dashboard/booking/edit/${advert.id}?mode=view`
-        : (advert.reference || String(advert.id || ''))
-      const qrDataUrl = await QRCode.toDataURL(qrContent, { width: 200, margin: 1 })
-      doc.addImage(qrDataUrl, 'PNG', pageWidth - 32, y - 2, 22, 22)
-    } catch (e) {
-      console.warn('QR code generation skipped:', e)
-    }
-
-    y += 22
-
-    const pageMargin = 10
-    const gap = 6
-    const colWidth = (pageWidth - pageMargin * 2 - gap) / 2
-
-    autoTable(doc, {
-      startY: y,
-      theme: 'grid',
-      head: [['Client & Contact', '']],
-      body: [
-        ['Client', advert.clientName || '—'],
-        ['Contact Person', advert.contactPerson || advert.client?.contactPerson || '—'],
-        ['Contact Email', advert.contactEmail || '—'],
-        ['Contact Phone', advert.contactNumber || '—'],
-        ['Client Ref No', advert.clientRefNo || '—'],
-        ['Market Sector', advert.marketSector || '—'],
-        ['Captured By', `${advert.createdBy?.name || 'Unknown'} (${advert.createdBy?.role || ''})`],
-      ],
-      styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
-      headStyles: { fillColor: [0, 51, 102], textColor: 255 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
-      tableWidth: colWidth,
-      margin: { left: pageMargin, right: pageMargin + colWidth + gap },
-    })
-    const leftFinalY = doc.lastAutoTable.finalY
-
-    autoTable(doc, {
-      startY: y,
-      theme: 'grid',
-      head: [['Advert & Booking', '']],
-      body: [
-        ['Reference No.', advert.reference || '—'],
-        ['BC Reference No.', advert.bcReference || '—'],
-        ['Advert Title', advert.advertTitle || '—'],
-        ['Product', advert.product?.name || '—'],
-        ['Ad Size', advert.adSize || '—'],
-        ['Office Location', advert.officeLocation || '—'],
-        ['Status', getStatusLabel(advert.status)],
-      ],
-      styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
-      headStyles: { fillColor: [0, 102, 204], textColor: 255 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
-      tableWidth: colWidth,
-      margin: { left: pageMargin + colWidth + gap, right: pageMargin },
-    })
-    const rightFinalY = doc.lastAutoTable.finalY
-
-    y = Math.max(leftFinalY, rightFinalY) + 6
-
-    autoTable(doc, {
-      startY: y,
-      theme: 'grid',
-      head: [['Pricing & Payment', '']],
-      body: [
-        ['Base Price', formatCurrency(advert.basePrice)],
-        ['Surcharge', formatCurrency(advert.surcharge)],
-        ['Discount', `${advert.discount || 0}%`],
-        ['Total Amount', formatCurrency(advert.totalAmount)],
-        ['Payment Method', (advert.paymentMethod || '—').toString().replace(/_/g, ' ')],
-        ['Payment Status', advert.isPaid ? 'Paid' : 'Unpaid'],
-      ],
-      styles: { fontSize: 9, cellPadding: 2 },
-      headStyles: { fillColor: [0, 102, 204], textColor: 255 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
-    })
-    y = doc.lastAutoTable.finalY + 6
-
-    const pubDates = getPublishingDates(advert)
-    if (pubDates.length) {
-      autoTable(doc, {
-        startY: y,
-        theme: 'grid',
-        head: [['#', 'Publishing Date']],
-        body: pubDates.map((d, i) => [i + 1, formatDate(d)]),
-        styles: { fontSize: 9, cellPadding: 2 },
-        headStyles: { fillColor: [0, 51, 102], textColor: 255 },
-        tableWidth: 80,
-      })
-      y = doc.lastAutoTable.finalY + 6
-    }
-
-    if (advert.specialInstructions) {
-      doc.setFontSize(9)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Special Instructions:', 10, y)
-      doc.setFont('helvetica', 'normal')
-      const lines = doc.splitTextToSize(advert.specialInstructions, pageWidth - 20)
-      doc.text(lines, 10, y + 5)
-      y += 5 + lines.length * 4.5
-    }
-
-    doc.setFontSize(7)
-    doc.setTextColor(120, 120, 120)
-    doc.text(`Generated ${new Date().toLocaleString('en-UG')} · VGAMS`, 10, 287)
-
-    doc.save(`advert-${advert.reference || advert.id}.pdf`)
+    await downloadPdf(buildAdvertPdfData(advert))
   } catch (err) {
     console.error('PDF generation failed:', err)
     alert('Failed to generate PDF for this advert. Make sure "jsbarcode" and "qrcode" are installed (npm install jsbarcode qrcode).')
+  }
+}
+
+// ── Print a single advert's PDF (opens print dialog) ──
+const printAdvertPdf = async (advert) => {
+  try {
+    await printPdf(buildAdvertPdfData(advert))
+  } catch (err) {
+    if (err?.message === 'POPUP_BLOCKED') {
+      alert('Please allow pop-ups for this site to print.')
+    } else {
+      console.error('PDF generation failed:', err)
+      alert('Failed to generate PDF for this advert. Make sure "jsbarcode" and "qrcode" are installed (npm install jsbarcode qrcode).')
+    }
   }
 }
 
@@ -1823,6 +1731,7 @@ onMounted(() => {
 .act-btn.amber:hover { background: #fffbeb; border-color: #fde68a; color: #b45309; }
 .act-btn.purple:hover { background: #f3e8ff; border-color: #e9d5ff; color: #7c3aed; }
 .act-btn.green:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+.act-btn.blue:hover { background: var(--blue-lt); border-color: #bfdbfe; color: var(--blue); }
 
 /* Expanded detail row */
 .fx-detail-row { cursor: default; }

@@ -123,17 +123,24 @@
         
         <!-- Display selected rate card info -->
         <div class="ratecard-info" v-if="selectedRateCard">
-          <div class="info-row">
-            <span>Base Rate:</span>
-            <strong>{{ formatCurrency(resolvedBasePrice) }}</strong>
-          </div>
           <div class="info-row" v-if="detailMode">
             <span>Unit:</span>
             <strong>{{ getUnitDisplay() }}</strong>
           </div>
-          <div class="info-row" v-if="calculatedPrice">
-            <span>Estimated Price:</span>
-            <strong class="estimated-price">{{ formatCurrency(calculatedPrice) }}</strong>
+          <template v-if="priceCalculation.breakdown.length">
+            <div
+              v-for="row in priceCalculation.breakdown"
+              :key="row.label"
+              class="info-row"
+              :class="{ 'info-row-total': row.isTotal }"
+            >
+              <span>{{ row.label }}:</span>
+              <strong :class="{ 'estimated-price': row.isTotal }">{{ row.value }}</strong>
+            </div>
+          </template>
+          <div class="info-row" v-else>
+            <span>Base Rate:</span>
+            <strong>{{ formatCurrency(resolvedBasePrice) }}</strong>
           </div>
         </div>
       </div>
@@ -323,57 +330,89 @@ const isValidInput = computed(() => {
   return false
 })
 
-const calculatedPrice = computed(() => {
+// Full step-by-step price breakdown for the currently selected detail mode -
+// base rate, the size/count entered, the resulting unit price, frequency,
+// and the final total. `calculatedPrice` below stays a thin alias reading
+// `.total`, so the save payload and existing logging don't need to change.
+const priceCalculation = computed(() => {
   console.log('[MODAL-CALC] === CALCULATING PRICE IN MODAL ===')
   console.log('[MODAL-CALC] selectedRateCard:', props.selectedRateCard)
   console.log('[MODAL-CALC] isValidInput:', isValidInput.value)
-  
+
+  const breakdown = []
+
   if (!props.selectedRateCard || !isValidInput.value) {
     console.log('[MODAL-CALC] SKIPPED - Missing rate card or invalid input')
-    return null
+    return { breakdown, total: null }
   }
-  
+
   const basePrice = resolvedBasePrice.value
-  
+
   console.log('[MODAL-CALC] adType prop:', props.adType)
   console.log('[MODAL-CALC] selectedRateCard.basePrice:', props.selectedRateCard.basePrice)
   console.log('[MODAL-CALC] selectedRateCard.price_fc:', props.selectedRateCard.price_fc)
   console.log('[MODAL-CALC] selectedRateCard.price_bw:', props.selectedRateCard.price_bw)
   console.log('[MODAL-CALC] Resolved basePrice:', basePrice)
-  
+
   let unitPrice = basePrice
-  
+
   if ((detailMode.value === 'per_cm_col' || detailMode.value === 'semi_display') && details.value.cm && details.value.columns) {
     unitPrice = basePrice * details.value.cm * details.value.columns
+    breakdown.push({ label: 'Base Rate', value: `${formatCurrency(basePrice)} per cm/col` })
+    breakdown.push({ label: 'Size', value: `${details.value.cm}cm × ${details.value.columns} column(s) = ${totalSize.value} cm/col` })
+    breakdown.push({ label: 'Unit Price', value: `${formatCurrency(basePrice)} × ${totalSize.value} = ${formatCurrency(unitPrice)}` })
     console.log('[MODAL-CALC]', detailMode.value, ': basePrice', basePrice, '× cm', details.value.cm, '× columns', details.value.columns, '=', unitPrice)
   } else if (detailMode.value === 'per_column' && details.value.columns) {
     unitPrice = basePrice * details.value.columns
+    breakdown.push({ label: 'Base Rate', value: `${formatCurrency(basePrice)} per column` })
+    breakdown.push({ label: 'Columns', value: `${details.value.columns}` })
+    breakdown.push({ label: 'Unit Price', value: `${formatCurrency(basePrice)} × ${details.value.columns} = ${formatCurrency(unitPrice)}` })
     console.log('[MODAL-CALC] per column: basePrice', basePrice, '× columns', details.value.columns, '=', unitPrice)
   } else if (detailMode.value === 'per_word' && details.value.words) {
     unitPrice = basePrice * details.value.words
+    breakdown.push({ label: 'Base Rate', value: `${formatCurrency(basePrice)} per word` })
+    breakdown.push({ label: 'Word Count', value: `${details.value.words} word(s)` })
+    breakdown.push({ label: 'Unit Price', value: `${formatCurrency(basePrice)} × ${details.value.words} = ${formatCurrency(unitPrice)}` })
     console.log('[MODAL-CALC] per word: basePrice', basePrice, '× words', details.value.words, '=', unitPrice)
   } else if (detailMode.value === 'photo_logo' && details.value.photos) {
     const photoSubtotal = basePrice * details.value.photos
+    breakdown.push({ label: 'Photo/Logo Rate', value: `${formatCurrency(basePrice)} each` })
+    breakdown.push({ label: 'Photos/Logos', value: `${details.value.photos}` })
+    breakdown.push({ label: 'Photo Subtotal', value: `${formatCurrency(basePrice)} × ${details.value.photos} = ${formatCurrency(photoSubtotal)}` })
+
     let wordSubtotal = 0
     if (details.value.includeText && wordSiblingRateCard.value && details.value.words) {
       // Classified text is always billed at the black & white per-word
       // rate, regardless of the ad's own Color/Type toggle - there is no
       // full-colour rate for per-word classified text, so following
       // props.adType here priced it at an empty/0 price_fc.
-      const wordRate = wordSiblingRateCard.value.price_bw
-      wordSubtotal = (wordRate || 0) * details.value.words
+      const wordRate = wordSiblingRateCard.value.price_bw || 0
+      wordSubtotal = wordRate * details.value.words
+      breakdown.push({ label: 'Text Rate', value: `${formatCurrency(wordRate)} per word (always B&W)` })
+      breakdown.push({ label: 'Word Count', value: `${details.value.words} word(s)` })
+      breakdown.push({ label: 'Text Subtotal', value: `${formatCurrency(wordRate)} × ${details.value.words} = ${formatCurrency(wordSubtotal)}` })
     }
     unitPrice = photoSubtotal + wordSubtotal
+    if (wordSubtotal > 0) {
+      breakdown.push({ label: 'Combined Unit Price', value: `${formatCurrency(photoSubtotal)} + ${formatCurrency(wordSubtotal)} = ${formatCurrency(unitPrice)}` })
+    }
     console.log('[MODAL-CALC] photo_logo: photoSubtotal', photoSubtotal, '+ wordSubtotal', wordSubtotal, '=', unitPrice)
+  } else {
+    return { breakdown: [], total: null }
   }
-  
+
   // Apply frequency
   const finalPrice = unitPrice * props.frequency
+  breakdown.push({ label: 'Frequency', value: `${formatCurrency(unitPrice)} × ${props.frequency} = ${formatCurrency(finalPrice)}` })
+  breakdown.push({ label: 'Total', value: formatCurrency(finalPrice), isTotal: true })
+
   console.log('[MODAL-CALC] Applying frequency: unitPrice', unitPrice, '× frequency', props.frequency, '=', finalPrice)
   console.log('[MODAL-CALC] FINAL CALCULATED PRICE:', finalPrice)
-  
-  return finalPrice
+
+  return { breakdown, total: finalPrice }
 })
+
+const calculatedPrice = computed(() => priceCalculation.value.total)
 
 // Methods
 const getUnitDisplay = () => {
@@ -439,6 +478,7 @@ const saveDetails = () => {
     // Only 'words' goes into details.details, since that object gets spread
     // directly into the backend price-calculation request body.
     detailsToSave.words = details.value.words
+    if (classifiedStore.isBulk) detailsToSave.isBulk = true
   } else if (detailMode.value === 'photo_logo') {
     detailsToSave.photos = details.value.photos
     if (includesText) {
@@ -447,6 +487,7 @@ const saveDetails = () => {
       // Photo/Logo rate card's own basePrice.
       detailsToSave.words = details.value.words
       detailsToSave.wordRateCardId = wordSiblingRateCard.value.id
+      if (classifiedStore.isBulk) detailsToSave.isBulk = true
     }
   }
   
@@ -557,6 +598,7 @@ const saveDetails = () => {
 .info-row:last-child { border-bottom: none; }
 .info-row:nth-child(even) { background: var(--surface); }
 .info-row span:first-child { color: var(--text-3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.info-row-total { border-top: 2px solid var(--navy); background: var(--blue-lt) !important; }
 .estimated-price { color: var(--navy); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .modal-footer {

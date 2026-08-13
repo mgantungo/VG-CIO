@@ -311,11 +311,15 @@ const rateCardDetails = ref(null)
 const priceCalculation = ref(null)
 const selectedCurrency = ref('UGX')
 
-// Booking reference numbers - populated once the advert is submitted, used in
-// the print/download summary so the printed copy shows the actual booking
-// number from the system as well as the synced Business Central reference.
+// Booking reference numbers - populated once the advert is saved (draft) or
+// submitted, used in the print/download summary so the printed copy shows
+// the actual booking number from the system as well as the synced Business
+// Central reference.
 const systemReference = ref('')
 const bcReferenceNumber = ref('')
+// The created advert's Strapi record id, used to build the QR code's deep
+// link back to the record. Only meaningful once a save/submit has returned one.
+const createdAdvertId = ref(null)
 
 // Check if platform is print media
 const isPrintMedia = computed(() => {
@@ -966,141 +970,169 @@ const formatDate = (dateString) => {
   }
 }
 
-// Builds the order summary jsPDF document (client/advert info, pricing
-// breakdown, and special-instructions/ad-copy content). Returns the doc
-// without saving or printing it, so callers can either download or print it.
-const buildOrderSummaryPdf = () => {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+// Builds the order summary jsPDF document, matching the exact layout used
+// by the dashboard's saved-advert reprint (Indexpage.vue's printAdvertPdf):
+// navy header band, barcode + QR code, two-column Client & Contact / Advert
+// & Booking tables, Pricing & Payment, Publishing Date table, then Special
+// Instructions. Sourced from the live form/priceCalculation state rather
+// than a saved record, since this runs before (or right after) submission.
+//
+// The barcode and QR code are only generated when a BC reference exists -
+// their absence is the signal that this advert hasn't actually been
+// submitted/synced yet, so showing them earlier would imply a completeness
+// that isn't there.
+const buildOrderSummaryPdf = async () => {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
-  const margin = 40
-  let y = 50
 
-  // Header
-  doc.setFontSize(16)
-  doc.setFont(undefined, 'bold')
-  doc.text('VGAMS - Advert Order Summary', margin, y)
-  y += 18
+  const hasBcReference = !!bcReferenceNumber.value
+  const bookingStatusLabel = hasBcReference
+    ? 'Pending Review'
+    : (systemReference.value ? 'Draft' : 'Not Saved')
+
+  doc.setFillColor(0, 51, 102)
+  doc.rect(0, 0, pageWidth, 22, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.text('Vision Group Advertising Management System', 10, 10)
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.setFont(undefined, 'normal')
-  doc.setTextColor(100)
-  doc.text(`Generated: ${new Date().toLocaleString('en-UG')}`, margin, y)
-  doc.setTextColor(0)
-  y += 16
+  doc.text('Advert Booking Confirmation', 10, 16)
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text(systemReference.value || 'DRAFT', pageWidth - 10, 10, { align: 'right' })
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text(bookingStatusLabel.toUpperCase(), pageWidth - 10, 16, { align: 'right' })
 
-  // Booking / BC reference numbers, if the advert has been submitted
-  doc.setFontSize(10)
-  doc.setFont(undefined, 'bold')
-  doc.text(`Booking Number: ${systemReference.value || 'Not yet assigned (draft)'}`, margin, y)
-  y += 14
-  doc.text(`BC Reference: ${bcReferenceNumber.value || 'Pending Business Central sync'}`, margin, y)
-  doc.setFont(undefined, 'normal')
-  y += 20
+  let y = 28
+  doc.setTextColor(20, 20, 20)
 
-  // Client Information
-  doc.setFontSize(12)
-  doc.setFont(undefined, 'bold')
-  doc.text('Client Information', margin, y)
-  y += 6
+  // Barcode (left, encodes the reference number) + QR code (right, links back
+  // to the digital record) - only once a BC reference confirms this advert
+  // has actually been submitted and synced.
+  if (hasBcReference) {
+    try {
+      const { default: JsBarcode } = await import('jsbarcode')
+      const barcodeCanvas = document.createElement('canvas')
+      JsBarcode(barcodeCanvas, systemReference.value || String(createdAdvertId.value || ''), {
+        format: 'CODE128', width: 1.6, height: 34, displayValue: true, fontSize: 11, margin: 4
+      })
+      doc.addImage(barcodeCanvas.toDataURL('image/png'), 'PNG', 10, y, 62, 16)
+    } catch (e) {
+      console.warn('Barcode generation skipped:', e)
+    }
+
+    try {
+      const QRCodeModule = await import('qrcode')
+      const QRCode = QRCodeModule.default || QRCodeModule
+      const qrContent = (typeof window !== 'undefined' && createdAdvertId.value)
+        ? `${window.location.origin}/dashboard/booking/edit/${createdAdvertId.value}?mode=view`
+        : (systemReference.value || 'VGAMS')
+      const qrDataUrl = await QRCode.toDataURL(qrContent, { width: 200, margin: 1 })
+      doc.addImage(qrDataUrl, 'PNG', pageWidth - 32, y - 2, 22, 22)
+    } catch (e) {
+      console.warn('QR code generation skipped:', e)
+    }
+
+    y += 22
+  }
+
+  const pageMargin = 10
+  const gap = 6
+  const colWidth = (pageWidth - pageMargin * 2 - gap) / 2
+
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin },
     theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 5 },
-    headStyles: { fillColor: [0, 51, 102] },
-    head: [['Field', 'Value']],
+    head: [['Client & Contact', '']],
     body: [
-      ['Client Name', form.clientName || '-'],
-      ['Contact Person', form.contactPerson || '-'],
-      ['Email', form.email || '-'],
-      ['Phone', form.phone || '-'],
-      ['Market Sector', form.marketSector || '-']
-    ]
+      ['Client', form.clientName || '—'],
+      ['Contact Person', form.contactPerson || '—'],
+      ['Contact Email', form.email || '—'],
+      ['Contact Phone', form.phone || '—'],
+      ['Client Ref No', form.referenceDocument || '—'],
+      ['Market Sector', form.marketSector || '—'],
+    ],
+    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
+    headStyles: { fillColor: [0, 51, 102], textColor: 255 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
+    tableWidth: colWidth,
+    margin: { left: pageMargin, right: pageMargin + colWidth + gap },
   })
-  y = doc.lastAutoTable.finalY + 20
+  const leftFinalY = doc.lastAutoTable.finalY
 
-  // Advert Information
-  doc.setFontSize(12)
-  doc.setFont(undefined, 'bold')
-  doc.text('Advert Information', margin, y)
-  y += 6
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin },
     theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 5 },
-    headStyles: { fillColor: [0, 51, 102] },
-    head: [['Field', 'Value']],
+    head: [['Advert & Booking', '']],
     body: [
-      ['Advert Title', form.advertTitle || '-'],
-      ['Platform', form.platformCategory || '-'],
-      ['Ad Type', form.adType || '-'],
-      ['Office Location', form.officeLocation || '-'],
-      ['Publish on Web', form.publishOnWeb ? 'Yes' : 'No'],
-      ['Start Date', formatDate(form.startDate) || '-'],
-      ['End Date', formatDate(form.endDate) || '-'],
-      ['Frequency', `${form.frequency || 1} insertion(s)`]
-    ]
+      ['Reference No.', systemReference.value || '—'],
+      ['BC Reference No.', bcReferenceNumber.value || '—'],
+      ['Advert Title', form.advertTitle || '—'],
+      ['Product', selectedProduct.value?.product_name || selectedProduct.value?.name || '—'],
+      ['Ad Size', form.adSize || '—'],
+      ['Office Location', form.officeLocation || '—'],
+      ['Status', bookingStatusLabel],
+    ],
+    styles: { fontSize: 8.5, cellPadding: 2, overflow: 'linebreak' },
+    headStyles: { fillColor: [0, 102, 204], textColor: 255 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
+    tableWidth: colWidth,
+    margin: { left: pageMargin + colWidth + gap, right: pageMargin },
   })
-  y = doc.lastAutoTable.finalY + 20
+  const rightFinalY = doc.lastAutoTable.finalY
 
-  // Pricing Breakdown
-  doc.setFontSize(12)
-  doc.setFont(undefined, 'bold')
-  doc.text('Pricing Breakdown', margin, y)
-  y += 6
+  y = Math.max(leftFinalY, rightFinalY) + 6
 
   const finalTotal = schedulePricingRef.value?.calculateFinalTotal?.() || priceCalculation.value?.total || 0
-  const pricingRows = [
-    ['Base Price', formatCurrency(priceCalculation.value?.basePrice || 0)],
-    ['Surcharge', `${formatCurrency(priceCalculation.value?.surcharge || 0)} (${priceCalculation.value?.surchargePercentage || 0}%)`],
-    ['Subtotal', formatCurrency(priceCalculation.value?.subtotal || 0)],
-    ['Discount', formatNumber(form.discount || 0) + '%'],
-    ['Frequency', `${priceCalculation.value?.frequency || form.frequency || 1}`],
-    ['Final Total', formatCurrency(finalTotal)]
-  ]
-
-  if (rateCardDetails.value?.sizeDimension === 'per word' && rateCardDetails.value?.details?.words) {
-    pricingRows.splice(1, 0, ['Word Count', `${rateCardDetails.value.details.words} word(s)`])
-  }
 
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin },
     theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 5 },
-    headStyles: { fillColor: [0, 51, 102] },
-    head: [['Item', 'Value']],
-    body: pricingRows,
-    didParseCell: (data) => {
-      if (data.row.index === pricingRows.length - 1) {
-        data.cell.styles.fontStyle = 'bold'
-      }
-    }
+    head: [['Pricing & Payment', '']],
+    body: [
+      ['Base Price', formatCurrency(priceCalculation.value?.basePrice || 0)],
+      ['Surcharge', formatCurrency(priceCalculation.value?.surcharge || 0)],
+      ['Discount', `${Number(form.discount || 0).toFixed(1)}%`],
+      ['Total Amount', formatCurrency(finalTotal)],
+      ['Payment Method', (form.paymentMethod || '—').toString().replace(/_/g, ' ')],
+      ['Payment Status', 'Pending'],
+    ],
+    styles: { fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [0, 102, 204], textColor: 255 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
   })
-  y = doc.lastAutoTable.finalY + 20
+  y = doc.lastAutoTable.finalY + 6
 
-  // Special Instructions / Classified Ad Content
-  if (form.specialInstructions) {
-    if (y > 700) {
-      doc.addPage()
-      y = 50
-    }
-    doc.setFontSize(12)
-    doc.setFont(undefined, 'bold')
-    doc.text('Special Instructions / Ad Content', margin, y)
-    y += 16
-    doc.setFontSize(10)
-    doc.setFont(undefined, 'normal')
-    const wrapped = doc.splitTextToSize(form.specialInstructions, pageWidth - margin * 2)
-    wrapped.forEach((line) => {
-      if (y > 780) {
-        doc.addPage()
-        y = 50
-      }
-      doc.text(line, margin, y)
-      y += 13
+  const pubDates = form.datesList || []
+  if (pubDates.length) {
+    autoTable(doc, {
+      startY: y,
+      theme: 'grid',
+      head: [['#', 'Publishing Date']],
+      body: pubDates.map((d, i) => [i + 1, formatDate(d)]),
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [0, 51, 102], textColor: 255 },
+      tableWidth: 80,
     })
+    y = doc.lastAutoTable.finalY + 6
   }
+
+  if (form.specialInstructions) {
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Special Instructions:', 10, y)
+    doc.setFont('helvetica', 'normal')
+    const lines = doc.splitTextToSize(form.specialInstructions, pageWidth - 20)
+    doc.text(lines, 10, y + 5)
+    y += 5 + lines.length * 4.5
+  }
+
+  doc.setFontSize(7)
+  doc.setTextColor(120, 120, 120)
+  doc.text(`Generated ${new Date().toLocaleString('en-UG')} · VGAMS`, 10, 287)
 
   return doc
 }
@@ -1111,10 +1143,8 @@ const downloadOrderSummary = async () => {
   printingSummary.value = true
 
   try {
-    const doc = buildOrderSummaryPdf()
-    const safeClientName = (form.clientName || 'client').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
-    const dateStamp = new Date().toISOString().split('T')[0]
-    doc.save(`advert-summary-${safeClientName}-${dateStamp}.pdf`)
+    const doc = await buildOrderSummaryPdf()
+    doc.save(`advert-${systemReference.value || 'draft'}.pdf`)
     console.log('[PRINT-SUMMARY] SUCCESS - PDF downloaded')
   } catch (error) {
     console.error('[PRINT-SUMMARY] ERROR - Failed to generate PDF:', error)
@@ -1130,7 +1160,7 @@ const printOrderSummary = async () => {
   printingSummary.value = true
 
   try {
-    const doc = buildOrderSummaryPdf()
+    const doc = await buildOrderSummaryPdf()
     doc.autoPrint()
     const blobUrl = doc.output('bloburl')
     const printWindow = window.open(blobUrl, '_blank')
@@ -1163,6 +1193,7 @@ const saveDraft = async () => {
   }
   
   console.log('[DRAFT-SAVE] Form discount value:', form.discount)
+
 
   try {
     savingDraft.value = true
@@ -1226,6 +1257,14 @@ const saveDraft = async () => {
     const referenceNumber = result.reference || result.data?.reference
     const bcReference = result.bc_reference || result.data?.bc_reference
     const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
+    const advertRecordId = result.id || result.data?.id
+    
+    // Persist for the print/download summary - previously only submitAdvert()
+    // did this, so the summary PDF kept showing "Not yet assigned (draft)"
+    // even right after a successful draft save.
+    if (referenceNumber) systemReference.value = referenceNumber
+    if (bcReference) bcReferenceNumber.value = bcReference
+    if (advertRecordId) createdAdvertId.value = advertRecordId
     
     console.log('[DRAFT-SAVE] Reference:', referenceNumber)
     console.log('[DRAFT-SAVE] BC Reference:', bcReference)
@@ -1488,10 +1527,12 @@ const submitAdvert = async () => {
     const referenceNumber = result.reference || result.data?.reference
     const bcReference = result.bc_reference || result.data?.bc_reference
     const bcSyncSuccess = result.bc_sync_success || result.data?.bc_sync_success || false
+    const advertRecordId = result.id || result.data?.id
     
     // Persist for the print/download summary
     if (referenceNumber) systemReference.value = referenceNumber
     if (bcReference) bcReferenceNumber.value = bcReference
+    if (advertRecordId) createdAdvertId.value = advertRecordId
     
     // If BC sync is already complete and successful
     if (bcSyncSuccess && bcReference) {
@@ -1694,6 +1735,7 @@ const resetForm = () => {
   classifiedAdStore.clear()
   systemReference.value = ''
   bcReferenceNumber.value = ''
+  createdAdvertId.value = null
   console.log('[RESET] SUCCESS - Form reset complete')
 }
 </script>
