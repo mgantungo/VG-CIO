@@ -1,3 +1,4 @@
+<!-- components/design/QueueCard.vue -->
 <template>
   <div class="dd-clip" :class="{ 'dd-clip--on-layout': onLayout }">
     <div class="dd-clip-top">
@@ -39,6 +40,17 @@
         {{ canAddToBoard ? '+ Add to Board' : 'Not for this date' }}
       </button>
       <button v-if="advert.hasBrief" class="dd-btn small ghost" @click="$emit('view-brief', advert)">View brief</button>
+      <button
+        v-if="attachmentsCount > 0"
+        class="dd-btn small ghost dd-btn-files"
+        :title="`${attachmentsCount} file${attachmentsCount !== 1 ? 's' : ''} attached`"
+        @click="$emit('view-attachments', advert)"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M1.5 4.2c0-.66.54-1.2 1.2-1.2h3.4l1.3 1.6h6.9c.66 0 1.2.54 1.2 1.2v6.4c0 .66-.54 1.2-1.2 1.2H2.7c-.66 0-1.2-.54-1.2-1.2V4.2z" stroke-linejoin="round"/>
+        </svg>
+        {{ attachmentsCount }}
+      </button>
     </div>
 
     <!-- Show which file group this advert belongs to -->
@@ -58,7 +70,11 @@ const props = defineProps({
   fileGroupName: { type: String, default: null }, // Name of the file group this advert belongs to
 })
  
-defineEmits(['add-to-board', 'view-brief'])
+defineEmits(['add-to-board', 'view-brief', 'view-attachments'])
+
+const attachmentsCount = computed(() =>
+  props.advert.attachmentsCount ?? props.advert.attachments?.length ?? 0
+)
  
 const scheduledForDate = computed(() =>
   props.advert.scheduledForThisDate ?? (props.activeDate ? props.advert.scheduledDates?.includes(props.activeDate) : false)
@@ -262,5 +278,14 @@ function formatShort(dateStr) {
 .dd-btn.small {
   padding: 5px 9px;
   font-size: 11.5px;
+}
+
+.dd-btn-files {
+  color: var(--dd-amber, #a3691a);
+  border-color: var(--dd-amber, #a3691a);
+}
+
+.dd-btn-files:hover {
+  background: var(--dd-amber-soft, #f6ecdb);
 }
 </style>

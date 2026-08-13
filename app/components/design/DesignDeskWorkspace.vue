@@ -123,6 +123,7 @@
             :file-group-name="getFileGroupName(advert.id)"
             @add-to-board="onAddToBoard"
             @view-brief="briefAdvert = $event"
+            @view-attachments="attachmentsAdvert = $event"
           />
         </template>
 
@@ -210,6 +211,7 @@
     </div>
 
     <BriefModal :advert="briefAdvert" @close="briefAdvert = null" />
+    <AttachmentsModal :advert="attachmentsAdvert" @close="attachmentsAdvert = null" />
 
     <AttachScheduleModal
       :batch="attachTarget"
@@ -232,6 +234,7 @@ import { useDesignHouse } from '~/composables/useDesignHouse'
 import QueueCard from './QueueCard.vue'
 import FileGroupCard from './FileGroupCard.vue'
 import BriefModal from './BriefModal.vue'
+import AttachmentsModal from './AttachmentsModal.vue'
 import AttachScheduleModal from './AttachScheduleModal.vue'
 import BatchDetailModal from './BatchDetailModal.vue'
 
@@ -458,6 +461,7 @@ async function assignToNewGroup() {
 
 // ── Modals ───────────────────────────────────────────────────────────────
 const briefAdvert = ref(null)
+const attachmentsAdvert = ref(null)
 const attachTarget = ref(null)
 const detailBatch = ref(null)
 
