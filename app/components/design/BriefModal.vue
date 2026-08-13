@@ -34,7 +34,16 @@
 
         <div class="dd-modal-foot">
 
-          <button class="dd-btn ghost" @click="copyBrief">📋 Copy</button>
+          <button
+            class="dd-btn ghost dd-copy-btn"
+            :class="[copyState, { pulse: pulsing }]"
+            @click="copyBrief"
+            @animationend="pulsing = false"
+          >
+            <span v-if="copyState === 'copied'">✓ Copied</span>
+            <span v-else-if="copyState === 'error'">✗ Couldn't copy</span>
+            <span v-else>📋 Copy</span>
+          </button>
 
           <button class="dd-btn primary" @click="$emit('close')">Close</button>
 
@@ -52,6 +61,8 @@
 
 <script setup>
 
+import { ref, onUnmounted } from 'vue'
+
 const props = defineProps({
 
   advert: { type: Object, default: null },
@@ -60,13 +71,32 @@ const props = defineProps({
 
 defineEmits(['close'])
 
+const copyState = ref('idle') // 'idle' | 'copied' | 'error'
+const pulsing = ref(false)
+let resetTimer = null
+
+function pulse() {
+  // restart the animation even on rapid repeat clicks
+  pulsing.value = false
+  requestAnimationFrame(() => { pulsing.value = true })
+}
+
+function setCopyState(state) {
+  copyState.value = state
+  clearTimeout(resetTimer)
+  resetTimer = setTimeout(() => { copyState.value = 'idle' }, 1800)
+}
+
 function copyBrief() {
+  pulse()
   // advert.specialInstructions is the raw text — the template only adds
   // quotation marks for display, so reading it directly here keeps the
   // copied text free of the wrapping quotes.
   const text = props.advert?.specialInstructions || ''
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+    navigator.clipboard.writeText(text)
+      .then(() => setCopyState('copied'))
+      .catch(() => fallbackCopy(text))
   } else {
     fallbackCopy(text)
   }
@@ -82,11 +112,15 @@ function fallbackCopy(text) {
   ta.select()
   try {
     document.execCommand('copy')
+    setCopyState('copied')
   } catch (e) {
     console.error('[BriefModal] Copy failed:', e)
+    setCopyState('error')
   }
   document.body.removeChild(ta)
 }
+
+onUnmounted(() => clearTimeout(resetTimer))
 
 </script>
 
@@ -143,5 +177,15 @@ function fallbackCopy(text) {
 .dd-brief-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12.5px;}
 
 .dd-brief-grid .k{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#6b6658;margin-bottom:2px;}
+
+.dd-copy-btn{transition:background .15s ease,border-color .15s ease,color .15s ease;min-width:78px;justify-content:center;}
+.dd-copy-btn.copied{color:#2f6f4f;border-color:#2f6f4f;background:#e5efe9;}
+.dd-copy-btn.error{color:#a8261e;border-color:#a8261e;background:#f7e6e5;}
+.dd-copy-btn.pulse{animation:dd-copy-pulse .32s ease;}
+@keyframes dd-copy-pulse{
+  0%{transform:scale(1);}
+  45%{transform:scale(.9);}
+  100%{transform:scale(1);}
+}
 
 </style>

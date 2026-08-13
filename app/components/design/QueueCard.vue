@@ -1,4 +1,3 @@
-<!-- components/design/QueueCard.vue -->
 <template>
   <div class="dd-clip" :class="{ 'dd-clip--on-layout': onLayout }">
     <div class="dd-clip-top">

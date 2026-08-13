@@ -30,6 +30,7 @@
             <h3>Design Queue — Spreadsheet View</h3>
             <div class="sub">
               {{ dateLabel }} · {{ bookings.length }} booking{{ bookings.length !== 1 ? 's' : '' }}
+              <span v-if="productLabel"> · {{ productLabel }}</span>
               <span v-if="activeBatch"> · Batch {{ activeBatch.reference }}</span>
             </div>
           </div>
@@ -204,6 +205,7 @@ const props = defineProps({
   pendingAssignAdvert: { type: Object, default: null }, // same ref DesignDeskWorkspace already has
   activeDate: { type: String, default: null },         // targetRunDate / selectedDate, for the "+ Batch" enabled check
   dateLabel: { type: String, default: '' },
+  productLabel: { type: String, default: null },       // selected product name, for header display only — filtering itself happens server-side before `bookings` arrives
 })
 
 defineEmits([

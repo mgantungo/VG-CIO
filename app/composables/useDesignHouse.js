@@ -34,26 +34,46 @@ export function useDesignHouse() {
   // ── Design House (advert-level) ───────────────────────────────────────────
 
   /** Day-first working view — every advert booked to run on one exact date. */
-  async function fetchBookingsByDate(date) {
+  async function fetchBookingsByDate(date, productId = null, scope = 'print') {
     return request('/design-house/adverts/by-date', {
       method: 'POST',
-      body: { date },
+      body: { date, ...(productId ? { productId } : {}), scope },
     })
   }
 
   /** Full "still pending, across all dates" queue. */
-  async function fetchActiveAdverts(startDate = null, endDate = null) {
+  async function fetchActiveAdverts(startDate = null, endDate = null, productId = null, scope = 'print') {
     return request('/design-house/active-adverts', {
       method: 'POST',
-      body: { ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) },
+      body: {
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+        ...(productId ? { productId } : {}),
+        scope,
+      },
     })
   }
 
-  async function fetchDesignStats(startDate = null, endDate = null) {
+  async function fetchDesignStats(startDate = null, endDate = null, productId = null, scope = 'print') {
     return request('/design-house/stats', {
       method: 'POST',
-      body: { ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) },
+      body: {
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+        ...(productId ? { productId } : {}),
+        scope,
+      },
     })
+  }
+
+  /** Products for the product filter dropdown, scoped by category (defaults to print). */
+  async function fetchProducts(scope = 'print') {
+    return request('/design-house/products', { method: 'GET', params: { scope } })
+  }
+
+  /** Every product category that exists — powers the scope radio buttons dynamically. */
+  async function fetchProductCategories() {
+    return request('/design-house/product-categories', { method: 'GET' })
   }
 
   async function fetchAdvertDetails(advertId) {
@@ -173,6 +193,8 @@ export function useDesignHouse() {
     fetchDesignStats,
     fetchAdvertDetails,
     markDesignComplete,
+    fetchProducts,
+    fetchProductCategories,
     // design-batch
     createBatch,
     listBatches,

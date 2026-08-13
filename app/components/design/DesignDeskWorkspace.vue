@@ -84,6 +84,34 @@
         <button v-if="searchQuery" class="dd-search-clear" @click="searchQuery = ''">&times;</button>
       </div>
 
+      <div class="dd-scope-group" role="radiogroup" aria-label="Filter by category">
+        <label
+          v-for="opt in scopeOptions"
+          :key="opt.value"
+          class="dd-scope-pill"
+          :class="{ active: selectedScope === opt.value }"
+        >
+          <input
+            type="radio"
+            name="dd-scope"
+            :value="opt.value"
+            v-model="selectedScope"
+            @change="onScopeChange"
+          />
+          {{ opt.label }}
+        </label>
+      </div>
+
+      <select
+        v-model="selectedProductId"
+        class="dd-product-select"
+        title="Filter by product"
+        @change="onProductFilterChange"
+      >
+        <option value="">All Products</option>
+        <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+      </select>
+
       <button class="dd-btn ghost" @click="showSheetModal = true">📊 Spreadsheet View</button>
       <button class="dd-btn primary" @click="newBatch">+ New Batch</button>
     </div>
@@ -231,6 +259,7 @@
       :pending-assign-advert="pendingAssignAdvert"
       :active-date="activeBatch?.targetRunDate || selectedDate"
       :date-label="currentDayMonth"
+      :product-label="selectedProductName"
       @close="showSheetModal = false"
       @view-brief="briefAdvert = $event"
       @view-attachments="attachmentsAdvert = $event"
@@ -278,6 +307,8 @@ const {
   markReady,
   archiveBatch,
   markDesignComplete,
+  fetchProducts,
+  fetchProductCategories,
 } = useDesignHouse()
 
 // ── Date state ───────────────────────────────────────────────────────────
@@ -349,9 +380,52 @@ const batchNotes = ref('')
 const batchLabel = ref('')
 const stats = ref({})
 
+// ── Category scope (radio) + product filter (select) ───────────────────────
+// scope defaults to 'print' — Design House works on print layout day-to-day —
+// but the radio options themselves come from whatever categories actually
+// exist (product-category), so nothing here is a hardcoded guess at TV/Radio/
+// Billboard/etc. spellings.
+const categories = ref([])
+const selectedScope = ref('print')
+const products = ref([])
+const selectedProductId = ref('') // '' = all products within the current scope
+
+const scopeOptions = computed(() => [
+  ...categories.value.map(c => ({ value: c.type, label: c.name })),
+  { value: 'all', label: 'All' },
+])
+
+const selectedProductName = computed(() => {
+  if (selectedProductId.value) {
+    return products.value.find(p => String(p.id) === String(selectedProductId.value))?.name || null
+  }
+  const scopeOpt = scopeOptions.value.find(o => o.value === selectedScope.value)
+  return scopeOpt && scopeOpt.value !== 'all' ? scopeOpt.label : null
+})
+
+async function loadCategories() {
+  try {
+    const res = await fetchProductCategories()
+    categories.value = res.categories || []
+  } catch (e) { /* surfaced via composable's error ref if needed */ }
+}
+
+async function loadProducts() {
+  try {
+    const res = await fetchProducts(selectedScope.value)
+    products.value = res.products || []
+    // The previously selected product may not exist in the new scope —
+    // fall back to "All Products" within that scope rather than silently
+    // keeping a stale, now-invalid productId in subsequent requests.
+    if (selectedProductId.value && !products.value.some(p => String(p.id) === String(selectedProductId.value))) {
+      selectedProductId.value = ''
+    }
+  } catch (e) { /* surfaced via composable's error ref if needed */ }
+}
+
 async function loadStats() {
   try {
-    const res = await fetchDesignStats()
+    const res = await fetchDesignStats(null, null, selectedProductId.value || null, selectedScope.value)
     stats.value = res.statistics || {}
   } catch (e) { /* surfaced via composable's error ref if needed */ }
 }
@@ -365,7 +439,7 @@ async function loadDay() {
   loadingDay.value = true
   try {
     const [bookingsRes] = await Promise.all([
-      fetchBookingsByDate(selectedDate.value),
+      fetchBookingsByDate(selectedDate.value, selectedProductId.value || null, selectedScope.value),
       refreshBatchesList(),
     ])
     bookings.value = bookingsRes.adverts || []
@@ -384,6 +458,15 @@ async function loadDay() {
   } finally {
     loadingDay.value = false
   }
+}
+
+async function onScopeChange() {
+  await loadProducts()
+  await Promise.all([loadDay(), loadStats()])
+}
+
+async function onProductFilterChange() {
+  await Promise.all([loadDay(), loadStats()])
 }
 
 async function refreshActiveBatch() {
@@ -551,6 +634,8 @@ async function onDeleteFromDetail(batch) {
 }
 
 onMounted(() => {
+  loadCategories()
+  loadProducts()
   loadStats()
   loadDay()
 })
@@ -755,6 +840,40 @@ onMounted(() => {
   margin-left: 5px;
 }
 
+/* ── Scope radio pills ────────────────────────────────────────────────── */
+.dd-scope-group {
+  display: flex;
+  gap: 2px;
+  background: #f6f3ec;
+  border: 1px solid #d9d3c3;
+  border-radius: 2px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.dd-scope-pill {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 11px;
+  border-radius: 2px;
+  cursor: pointer;
+  color: #6b6658;
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+}
+.dd-scope-pill input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.dd-scope-pill.active {
+  background: #1c3fa8;
+  color: #fff;
+}
+.dd-scope-pill:hover:not(.active) {
+  background: #efe9d8;
+}
+
 /* ── Search Box ────────────────────────────────────────────────────────── */
 .dd-search {
   display: flex;
@@ -799,6 +918,25 @@ onMounted(() => {
 }
 .dd-search-clear:hover {
   color: #a8261e;
+}
+
+.dd-product-select {
+  height: 34px;
+  padding: 0 10px;
+  background: #fffdf8;
+  border: 1px solid #b7ae97;
+  border-radius: 2px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12.5px;
+  color: #1c1b18;
+  cursor: pointer;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+.dd-product-select:focus {
+  outline: none;
+  border-color: #1c3fa8;
+  box-shadow: 0 0 0 3px rgba(28, 63, 168, 0.15);
 }
 
 .dd-btn {
