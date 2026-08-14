@@ -10,6 +10,9 @@
         <p class="page-hd__sub">Assign page/slot numbers, adjust run dates and times, and manage publication status.</p>
       </div>
       <div class="page-hd__right">
+        <button class="pager-trigger pager-trigger--ghost" @click="paidAdvertsOpen = true">
+          💰 Paid Adverts
+        </button>
         <button class="pager-trigger" @click="pagerOpen = true">
           📰 Pager
         </button>
@@ -55,7 +58,7 @@
         <!-- Search -->
         <div class="filter-group">
           <label class="filter-lbl">Search</label>
-          <input type="text" v-model="filters.search" class="filter-search" placeholder="Client or advert title…" @input="applySearch">
+          <input type="text" v-model="filters.search" class="filter-search" placeholder="Client or advert title…">
         </div>
         <button class="filter-refresh-btn" @click="load" title="Refresh">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 3A7 7 0 1 0 14 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 3v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -219,6 +222,9 @@
     <!-- PAGER POPUP -->
     <PagerPopup v-model:open="pagerOpen" :checked-advert-ids="checkedAdvertIdsFlat" />
 
+    <!-- PAID ADVERTS (read-only, Design House's view for a chosen date) -->
+    <PaidAdvertsModal :open="paidAdvertsOpen" @close="paidAdvertsOpen = false" />
+
     <!-- CONFLICT ALERT — blocking, no click-outside dismiss on purpose -->
     <div v-if="showConflictModal" class="cf-overlay">
       <div class="cf-panel">
@@ -261,6 +267,7 @@ import ScheduleReviewQueue  from './ScheduleReviewQueue.vue'
 import ScheduleDetailsModal from './ScheduleDetailsModal.vue'
 import BulkPageUpdateModal  from './BulkPageUpdateModal.vue'
 import PagerPopup           from '~/components/pager/PagerPopup.vue'
+import PaidAdvertsModal     from './PaidAdvertsModal.vue'
 import { useAdverts } from '~/composables/useAdverts'
 import { usePager } from '~/composables/usePager'
 
@@ -281,6 +288,11 @@ const {
 } = useAdverts()
 
 const pager = usePager()
+// Destructured so the template can use it like every other ref here
+// (auto-unwrapped) instead of needing pager.publications.value —
+// destructuring a ref off a plain object keeps its reactivity intact,
+// this isn't reactive()/Pinia state that would break on destructuring.
+const { publications: pagerPublications } = pager
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 const schedules     = ref([])
@@ -291,12 +303,12 @@ const editTarget    = ref(null)
 const showBulkModal = ref(false)
 const bulkTargets   = ref([])
 const pagerOpen     = ref(false)
+const paidAdvertsOpen = ref(false)
 
 // ── PRINT QUEUE SELECTION ────────────────────────────────────────────────────
 const pqCollapsed         = ref(false)
 const checkedUnitKeys     = ref(new Set())
 const targetPublicationId = ref('')
-const pagerPublications   = ref([])
 const sendingToPager      = ref(false)
 const showConflictModal   = ref(false)
 const pagerConflicts      = ref([])
@@ -382,13 +394,6 @@ const load = async () => {
   } catch (e) {
     pageError.value = e.message || 'Failed to load schedules'
   }
-}
-
-// ── SEARCH (debounce) ─────────────────────────────────────────────────────
-let searchTimer = null
-const applySearch = () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {}, 300) // search is client-side, no reload needed
 }
 
 // ── ACTION HANDLERS ───────────────────────────────────────────────────────
@@ -549,7 +554,7 @@ const toggleAll = (checked) => {
 
 const loadPagerPublications = async () => {
   try {
-    pagerPublications.value = await pager.fetchPublications()
+    await pager.fetchPublications()
   } catch (e) {
     // non-fatal — the panel just shows an empty publication list
   }
@@ -641,7 +646,7 @@ onMounted(() => {
 .page-hd__eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9DC3E6; }
 .page-hd__title   { font-size: 22px; font-weight: 700; color: #1F3864; margin: 4px 0 4px; }
 .page-hd__sub     { font-size: 12px; color: #888; margin: 0; }
-.page-hd__right   { flex-shrink: 0; }
+.page-hd__right   { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
 
 .pager-trigger {
   font-size: 12px; font-weight: 700; padding: 8px 16px;
@@ -649,6 +654,8 @@ onMounted(() => {
   cursor: pointer; font-family: inherit;
 }
 .pager-trigger:hover { background: #0066CC; }
+.pager-trigger--ghost { background: #fff; color: #1F3864; border: 1.5px solid #BDD7EE; }
+.pager-trigger--ghost:hover { background: #F0F4F8; border-color: #9DC3E6; }
 
 /* PRINT QUEUE SELECTION */
 .pq-band {
