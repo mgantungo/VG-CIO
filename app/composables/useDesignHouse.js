@@ -87,6 +87,19 @@ export function useDesignHouse() {
     })
   }
 
+  /**
+   * Reverse an accidental "mark as complete". bcCodeSuffix is whatever the
+   * user typed in step 1 of the confirmation flow (with or without the
+   * "B-SO-" prefix) - the server does the real re-verification against
+   * this advert's actual bc_reference_number.
+   */
+  async function unmarkDesignComplete(advertId, bcCodeSuffix, notes = '') {
+    return request(`/design-house/adverts/${advertId}/unmark-complete`, {
+      method: 'POST',
+      body: { bcCodeSuffix, notes },
+    })
+  }
+
   // ── Design Batches ───────────────────────────────────────────────────────
   // Matches design-batch.js exactly: camelCase body fields, label required
   // on create, one advert per call for group membership, dedicated upload
@@ -193,6 +206,7 @@ export function useDesignHouse() {
     fetchDesignStats,
     fetchAdvertDetails,
     markDesignComplete,
+    unmarkDesignComplete,
     fetchProducts,
     fetchProductCategories,
     // design-batch

@@ -1,3 +1,4 @@
+<!--components/design/AttachmentsModal.vue-->
 <template>
   <Teleport to="body">
     <div class="dd-modal-backdrop" :class="{ open: !!advert }" @click.self="$emit('close')">

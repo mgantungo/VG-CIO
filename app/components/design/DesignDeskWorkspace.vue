@@ -229,6 +229,7 @@
 
     <BriefModal :advert="briefAdvert" @close="briefAdvert = null" />
     <AttachmentsModal :advert="attachmentsAdvert" @close="attachmentsAdvert = null" />
+    <UnmarkCompleteModal :advert="unmarkTargetAdvert" @close="unmarkTargetAdvert = null" @unmarked="onUnmarked" />
 
     <AttachScheduleModal
       :batch="attachTarget"
@@ -264,6 +265,7 @@
       @remove-group="onRemoveGroup"
       @add-group="addEmptyGroup"
       @toggle-handled="toggleHandled"
+      @request-unmark="unmarkTargetAdvert = $event"
     />
   </div>
 </template>
@@ -275,6 +277,7 @@ import QueueCard from './QueueCard.vue'
 import FileGroupCard from './FileGroupCard.vue'
 import BriefModal from './BriefModal.vue'
 import AttachmentsModal from './AttachmentsModal.vue'
+import UnmarkCompleteModal from './ext/UnmarkCompleteModal.vue'
 import AttachScheduleModal from './AttachScheduleModal.vue'
 import BatchDetailModal from './BatchDetailModal.vue'
 import AssignBar from './ext/AssignBar.vue'
@@ -571,10 +574,9 @@ async function assignAdvertDirectly(groupId, advertId) {
   }
 }
 
-// "Handled" checkbox in QueueSheetModal. markDesignComplete is one-way — it
-// sets isApproved = true server-side and there's no unmark endpoint, so this
-// only ever fires unhandled -> handled. Updates the local row optimistically
-// rather than reloading the whole day for a snappier check.
+// "Handled" checkbox in QueueSheetModal. markDesignComplete sets isApproved
+// = true server-side. Updates the local row optimistically rather than
+// reloading the whole day for a snappier check.
 async function toggleHandled(advertId) {
   try {
     await markDesignComplete(advertId)
@@ -585,9 +587,18 @@ async function toggleHandled(advertId) {
   }
 }
 
+// Fired by UnmarkCompleteModal once the server confirms the two-step
+// verified reversal actually went through - same optimistic local-row
+// update convention as toggleHandled above, just flipping isApproved back.
+function onUnmarked(advertId) {
+  const row = bookings.value.find(a => String(a.id) === String(advertId))
+  if (row) row.isApproved = false
+}
+
 // ── Modals ───────────────────────────────────────────────────────────────
 const briefAdvert = ref(null)
 const attachmentsAdvert = ref(null)
+const unmarkTargetAdvert = ref(null)
 const attachTarget = ref(null)
 const detailBatch = ref(null)
 const showSheetModal = ref(false)

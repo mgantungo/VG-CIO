@@ -84,21 +84,37 @@
         <button v-if="searchQuery" class="dd-search-clear" @click="searchQuery = ''">&times;</button>
       </div>
 
+      <select
+        v-model="selectedScope"
+        class="dd-product-select"
+        title="Filter by category"
+        @change="onScopeChange"
+      >
+        <option v-for="opt in scopeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+      </select>
+
+      <select
+        v-model="selectedProductId"
+        class="dd-product-select"
+        title="Filter by product"
+        @change="onProductFilterChange"
+      >
+        <option value="">All Products</option>
+        <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+      </select>
+
+      <button class="dd-btn ghost" @click="showSheetModal = true">📊 Spreadsheet View</button>
       <button class="dd-btn primary" @click="newBatch">+ New Batch</button>
     </div>
 
-    <!-- Assign bar — appears while placing a queue advert into an ad slot -->
-    <div v-if="pendingAssignAdvert" class="dd-note-box" style="margin:0 28px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <span>Assign <b>{{ pendingAssignAdvert.advertTitle }}</b> to:</span>
-      <button
-        v-for="g in (activeBatch?.fileGroups || [])"
-        :key="g.id"
-        class="dd-btn small ghost"
-        @click="assignToGroup(g.id)"
-      >{{ g.label || `Group ${g.id}` }}</button>
-      <button class="dd-btn small primary" @click="assignToNewGroup">+ New Group</button>
-      <button class="dd-btn small ghost" @click="pendingAssignAdvert = null">Cancel</button>
-    </div>
+    <!-- Assign bar — reused inside QueueSheetModal too -->
+    <AssignBar
+      :advert="pendingAssignAdvert"
+      :groups="activeBatch?.fileGroups || []"
+      @assign="assignToGroup"
+      @assign-new="assignToNewGroup"
+      @cancel="pendingAssignAdvert = null"
+    />
 
     <!-- Main split -->
     <div class="dd-board">
@@ -192,6 +208,7 @@
             @upload-file="file => onGroupFile(group.id, file)"
             @remove-advert="advertId => onGroupRemoveAdvert(group.id, advertId)"
             @remove-group="onRemoveGroup(group.id)"
+            @assign-advert="advertId => assignAdvertDirectly(group.id, advertId)"
           />
 
           <button class="dd-btn ghost" style="width:100%;justify-content:center;margin-bottom:16px;" @click="addEmptyGroup">
@@ -225,6 +242,29 @@
       @edit="onEditFromDetail"
       @delete="onDeleteFromDetail"
     />
+
+    <QueueSheetModal
+      :open="showSheetModal"
+      :bookings="filteredBookings"
+      :active-batch="activeBatch"
+      :pending-assign-advert="pendingAssignAdvert"
+      :active-date="activeBatch?.targetRunDate || selectedDate"
+      :date-label="currentDayMonth"
+      :product-label="selectedProductName"
+      @close="showSheetModal = false"
+      @view-brief="briefAdvert = $event"
+      @view-attachments="attachmentsAdvert = $event"
+      @add-to-board="onAddToBoard"
+      @assign="assignToGroup"
+      @assign-new="assignToNewGroup"
+      @cancel-assign="pendingAssignAdvert = null"
+      @assign-advert-to-group="({ groupId, advertId }) => assignAdvertDirectly(groupId, advertId)"
+      @upload-file="({ groupId, file }) => onGroupFile(groupId, file)"
+      @remove-advert="({ groupId, advertId }) => onGroupRemoveAdvert(groupId, advertId)"
+      @remove-group="onRemoveGroup"
+      @add-group="addEmptyGroup"
+      @toggle-handled="toggleHandled"
+    />
   </div>
 </template>
 
@@ -237,6 +277,8 @@ import BriefModal from './BriefModal.vue'
 import AttachmentsModal from './AttachmentsModal.vue'
 import AttachScheduleModal from './AttachScheduleModal.vue'
 import BatchDetailModal from './BatchDetailModal.vue'
+import AssignBar from './ext/AssignBar.vue'
+import QueueSheetModal from './ext/QueueSheetModal.vue'
 
 
 const {
@@ -255,6 +297,9 @@ const {
   attachBatch,
   markReady,
   archiveBatch,
+  markDesignComplete,
+  fetchProducts,
+  fetchProductCategories,
 } = useDesignHouse()
 
 // ── Date state ───────────────────────────────────────────────────────────
@@ -326,9 +371,52 @@ const batchNotes = ref('')
 const batchLabel = ref('')
 const stats = ref({})
 
+// ── Category scope (radio) + product filter (select) ───────────────────────
+// scope defaults to 'print' — Design House works on print layout day-to-day —
+// but the radio options themselves come from whatever categories actually
+// exist (product-category), so nothing here is a hardcoded guess at TV/Radio/
+// Billboard/etc. spellings.
+const categories = ref([])
+const selectedScope = ref('print')
+const products = ref([])
+const selectedProductId = ref('') // '' = all products within the current scope
+
+const scopeOptions = computed(() => [
+  ...categories.value.map(c => ({ value: c.type, label: c.name })),
+  { value: 'all', label: 'All' },
+])
+
+const selectedProductName = computed(() => {
+  if (selectedProductId.value) {
+    return products.value.find(p => String(p.id) === String(selectedProductId.value))?.name || null
+  }
+  const scopeOpt = scopeOptions.value.find(o => o.value === selectedScope.value)
+  return scopeOpt && scopeOpt.value !== 'all' ? scopeOpt.label : null
+})
+
+async function loadCategories() {
+  try {
+    const res = await fetchProductCategories()
+    categories.value = res.categories || []
+  } catch (e) { /* surfaced via composable's error ref if needed */ }
+}
+
+async function loadProducts() {
+  try {
+    const res = await fetchProducts(selectedScope.value)
+    products.value = res.products || []
+    // The previously selected product may not exist in the new scope —
+    // fall back to "All Products" within that scope rather than silently
+    // keeping a stale, now-invalid productId in subsequent requests.
+    if (selectedProductId.value && !products.value.some(p => String(p.id) === String(selectedProductId.value))) {
+      selectedProductId.value = ''
+    }
+  } catch (e) { /* surfaced via composable's error ref if needed */ }
+}
+
 async function loadStats() {
   try {
-    const res = await fetchDesignStats()
+    const res = await fetchDesignStats(null, null, selectedProductId.value || null, selectedScope.value)
     stats.value = res.statistics || {}
   } catch (e) { /* surfaced via composable's error ref if needed */ }
 }
@@ -342,7 +430,7 @@ async function loadDay() {
   loadingDay.value = true
   try {
     const [bookingsRes] = await Promise.all([
-      fetchBookingsByDate(selectedDate.value),
+      fetchBookingsByDate(selectedDate.value, selectedProductId.value || null, selectedScope.value),
       refreshBatchesList(),
     ])
     bookings.value = bookingsRes.adverts || []
@@ -361,6 +449,15 @@ async function loadDay() {
   } finally {
     loadingDay.value = false
   }
+}
+
+async function onScopeChange() {
+  await loadProducts()
+  await Promise.all([loadDay(), loadStats()])
+}
+
+async function onProductFilterChange() {
+  await Promise.all([loadDay(), loadStats()])
 }
 
 async function refreshActiveBatch() {
@@ -459,11 +556,41 @@ async function assignToNewGroup() {
   }
 }
 
+// Drag-and-drop path — an advert row was dropped directly onto a FileGroupCard
+// inside QueueSheetModal, bypassing the AssignBar picker. Only reachable when
+// activeBatch already exists, since that's the only way a FileGroupCard is
+// rendered to drop onto in the first place — so no "create batch first" step
+// is needed here, unlike onAddToBoard.
+async function assignAdvertDirectly(groupId, advertId) {
+  try {
+    await addAdvertToFileGroup(activeBatch.value.id, groupId, advertId)
+    await refreshActiveBatch()
+    await refreshBatchesList()
+  } catch (e) {
+    alert(e?.data?.message || 'Could not add this advert to the group.')
+  }
+}
+
+// "Handled" checkbox in QueueSheetModal. markDesignComplete is one-way — it
+// sets isApproved = true server-side and there's no unmark endpoint, so this
+// only ever fires unhandled -> handled. Updates the local row optimistically
+// rather than reloading the whole day for a snappier check.
+async function toggleHandled(advertId) {
+  try {
+    await markDesignComplete(advertId)
+    const row = bookings.value.find(a => String(a.id) === String(advertId))
+    if (row) row.isApproved = true
+  } catch (e) {
+    alert(e?.data?.message || 'Could not mark this advert as handled.')
+  }
+}
+
 // ── Modals ───────────────────────────────────────────────────────────────
 const briefAdvert = ref(null)
 const attachmentsAdvert = ref(null)
 const attachTarget = ref(null)
 const detailBatch = ref(null)
+const showSheetModal = ref(false)
 
 function openAttach() {
   attachTarget.value = activeBatch.value
@@ -498,6 +625,8 @@ async function onDeleteFromDetail(batch) {
 }
 
 onMounted(() => {
+  loadCategories()
+  loadProducts()
   loadStats()
   loadDay()
 })
@@ -746,6 +875,25 @@ onMounted(() => {
 }
 .dd-search-clear:hover {
   color: #a8261e;
+}
+
+.dd-product-select {
+  height: 34px;
+  padding: 0 10px;
+  background: #fffdf8;
+  border: 1px solid #b7ae97;
+  border-radius: 2px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12.5px;
+  color: #1c1b18;
+  cursor: pointer;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+.dd-product-select:focus {
+  outline: none;
+  border-color: #1c3fa8;
+  box-shadow: 0 0 0 3px rgba(28, 63, 168, 0.15);
 }
 
 .dd-btn {
