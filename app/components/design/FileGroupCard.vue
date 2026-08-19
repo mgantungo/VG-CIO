@@ -32,6 +32,19 @@
       <input type="file" accept=".pdf,image/*" @change="onFileChange" />
     </label>
 
+    <div class="dd-scan-add">
+      <span class="scan-icon">📷</span>
+      <input
+        ref="scanInputEl"
+        v-model="scanValue"
+        type="text"
+        class="scan-input"
+        placeholder="Scan or type reference/BC code, then Enter…"
+        autocomplete="off"
+        @keyup.enter="submitScan"
+      >
+    </div>
+
     <div class="dd-pinned">
       <div v-for="a in group.adverts" :key="a.id" class="dd-pin">
         <span class="dd-mono" style="color:var(--dd-ink-soft);font-size:10.5px;">{{ a.reference || a.id }}</span>
@@ -39,7 +52,7 @@
         <span class="x" @click="$emit('remove-advert', a.id)">&times;</span>
       </div>
       <div v-if="!group.adverts || group.adverts.length === 0" style="font-size:11.5px;color:var(--dd-ink-soft);">
-        No adverts pinned yet — drag one here, or use "+ Add to Board" on a queue card.
+        No adverts pinned yet — drag one here, scan a code above, or use "+ Add to Board" on a queue card.
       </div>
     </div>
   </div>
@@ -52,7 +65,7 @@ import { useDesignHouse } from '~/composables/useDesignHouse'
 const props = defineProps({
   group: { type: Object, required: true }, // shape from getBatchDetail: { id, label, file, adverts }
 })
-const emit = defineEmits(['upload-file', 'remove-advert', 'remove-group', 'assign-advert'])
+const emit = defineEmits(['upload-file', 'remove-advert', 'remove-group', 'assign-advert', 'scan-advert'])
 
 const { resolveUrl } = useDesignHouse()
 
@@ -80,6 +93,31 @@ function onFileChange(e) {
 
 function openFile() {
   if (props.group.file?.url) window.open(resolveUrl(props.group.file.url), '_blank')
+}
+
+// ── Scan to add ─────────────────────────────────────────────────────────
+// Barcode scanners emulate a keyboard: they type the encoded value fast
+// then send an Enter keystroke, which is what @keyup.enter catches here.
+// The scanned/typed value could be either the advert's system reference or
+// its BC reference (the barcode on booking confirmations encodes the
+// system reference — see useAdvertPdf.js — but a person might also type a
+// BC code by hand), so resolution against the day's full booking list
+// happens one level up in QueueSheetModal, which has that list. This
+// component just reports the raw scanned text and lets the parent match it
+// to an advert - same as the existing drag-and-drop path resolves an
+// advertId from a drag event before doing anything with it.
+const scanValue = ref('')
+const scanInputEl = ref(null)
+
+function submitScan() {
+  const value = scanValue.value.trim()
+  if (!value) return
+  emit('scan-advert', value)
+  scanValue.value = ''
+  // Re-focus for continuous scanning - a person scanning several adverts in
+  // a row into the same slot shouldn't need to click back into the field
+  // between scans.
+  scanInputEl.value?.focus()
 }
 
 // ── Drag and drop ──────────────────────────────────────────────────────────
@@ -138,6 +176,17 @@ function onDrop(e) {
 .dd-proof .ficon{width:28px;height:28px;border-radius:2px;background:#a8261e;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;}
 .dd-proof .fn{font-size:12px;font-weight:600;}
 .dd-proof .fs{font-size:10.5px;color:#6b6658;}
+
+.dd-scan-add{
+  display:flex; align-items:center; gap:6px; margin-top:10px;
+  border:1px solid #b7ae97; border-radius:2px; background:#fff; padding:0 8px;
+}
+.dd-scan-add .scan-icon{ font-size:12px; opacity:.7; }
+.dd-scan-add .scan-input{
+  flex:1; border:none; outline:none; padding:7px 0; background:transparent;
+  font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#1c1b18;
+}
+.dd-scan-add:focus-within{ border-color:#1c3fa8; box-shadow:0 0 0 3px #e7ecfb; }
 
 .dd-pinned{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
 .dd-pin{

@@ -15,10 +15,13 @@
     2. Click "+ Batch" on the row — same as clicking "+ Add to Board" on a
        QueueCard — opens the existing AssignBar to pick a group.
 
-  NOTE on "Handled": your backend's markDesignComplete(advertId) is one-way
-  (sets isApproved = true; there's no unmark endpoint). So this checkbox
-  reflects advert.isApproved and, once checked, is locked — it is NOT a free
-  toggle. If you want it reversible, that needs a small backend addition.
+  NOTE on "Handled": your backend's markDesignComplete(advertId) sets
+  isApproved = true, and the checkbox itself stays a one-way, locked toggle
+  (disabled once checked) - it is NOT a free toggle. To reverse a mistaken
+  mark, a separate "↺" button appears next to the checkbox once handled;
+  clicking it emits 'request-unmark' for the parent to open
+  UnmarkCompleteModal.vue, which requires typing the advert's BC reference
+  code plus an explicit confirm before calling unmarkDesignComplete.
 -->
 <template>
   <Teleport to="body">
@@ -109,9 +112,15 @@
                       type="checkbox"
                       :checked="a.isApproved"
                       :disabled="a.isApproved"
-                      title="Handled — one-way; cannot be unmarked"
+                      title="Handled — click the ↺ to unmark (requires verification)"
                       @click="$emit('toggle-handled', a.id)"
                     >
+                    <button
+                      v-if="a.isApproved"
+                      class="unmark-btn"
+                      title="Unmark as complete (requires BC code verification)"
+                      @click="$emit('request-unmark', a)"
+                    >↺</button>
                   </td>
                   <td class="mono ref-cell">{{ a.reference }}</td>
                   <td class="mono bc-cell">{{ a.bcReference }}</td>
@@ -222,6 +231,7 @@ defineEmits([
   'remove-group',            // FileGroupCard -> onRemoveGroup
   'add-group',               // "+ New Ad Slot" -> addEmptyGroup
   'toggle-handled',          // checkbox -> markDesignComplete
+  'request-unmark',          // ↺ button -> parent opens UnmarkCompleteModal (two-step verified)
 ])
 
 const filterText = ref('')
@@ -384,7 +394,13 @@ table.dd-sheet-tbl{ width:100%; border-collapse:collapse; font-size:12px; table-
 .title-cell{ font-weight:500; line-height:1.35; }
 .adsize-cell{ line-height:1.35; color:var(--dd-ink-soft, #6b6658); }
 .amount-cell{ text-align:right; font-weight:600; white-space:nowrap; }
-.chk-col{ width:30px; text-align:center; vertical-align:middle; }
+.chk-col{ width:52px; text-align:center; vertical-align:middle; }
+.unmark-btn{
+  margin-left: 4px; background: none; border: 1px solid var(--dd-rule-strong, #b7ae97);
+  border-radius: 2px; color: var(--dd-ink-soft, #6b6658); font-size: 11px; line-height: 1;
+  width: 18px; height: 18px; cursor: pointer; padding: 0; vertical-align: middle;
+}
+.unmark-btn:hover{ background: #FCE4D6; border-color: #E31E24; color: #9C0006; }
 .vcenter{ vertical-align:middle; }
 .batch-col{ width:76px; vertical-align:middle; }
 

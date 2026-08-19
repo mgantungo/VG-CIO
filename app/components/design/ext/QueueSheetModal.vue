@@ -171,6 +171,9 @@
               <div class="meta" v-else>No active batch yet — add a row to start one.</div>
             </div>
             <div class="dd-batch-body">
+              <div v-if="scanFeedback" class="dd-scan-feedback" :class="scanFeedback.type">
+                {{ scanFeedback.message }}
+              </div>
               <template v-if="activeBatch">
                 <FileGroupCard
                   v-for="group in activeBatch.fileGroups"
@@ -180,6 +183,7 @@
                   @remove-advert="advertId => $emit('remove-advert', { groupId: group.id, advertId })"
                   @remove-group="$emit('remove-group', group.id)"
                   @assign-advert="advertId => $emit('assign-advert-to-group', { groupId: group.id, advertId })"
+                  @scan-advert="value => onScanAdvert(group.id, value)"
                 />
                 <button class="dd-btn ghost" style="width:100%;justify-content:center;" @click="$emit('add-group')">
                   + New Ad Slot
@@ -217,7 +221,7 @@ const props = defineProps({
   productLabel: { type: String, default: null },       // selected product name, for header display only — filtering itself happens server-side before `bookings` arrives
 })
 
-defineEmits([
+const emit = defineEmits([
   'close',
   'view-brief',
   'view-attachments',
@@ -272,6 +276,44 @@ function formatCurrency(amount) {
 function onDragStart(evt, advert) {
   evt.dataTransfer.setData('text/plain', String(advert.id))
   evt.dataTransfer.effectAllowed = 'move'
+}
+
+// ── Scan to add ─────────────────────────────────────────────────────────
+// Resolves a scanned/typed code (system reference or BC reference — see
+// FileGroupCard's comment on why both are checked) against the day's full
+// booking list, then re-emits the SAME 'assign-advert-to-group' event the
+// drag-and-drop path already uses — so from DesignDeskWorkspace's
+// perspective, a scan is indistinguishable from a drag: same handler
+// (assignAdvertDirectly), same server-side validation, nothing new to wire.
+const scanFeedback = ref(null)
+let scanFeedbackTimer = null
+
+function flashScanFeedback(type, message) {
+  clearTimeout(scanFeedbackTimer)
+  scanFeedback.value = { type, message }
+  scanFeedbackTimer = setTimeout(() => { scanFeedback.value = null }, 4000)
+}
+
+function onScanAdvert(groupId, rawValue) {
+  const q = rawValue.trim().toLowerCase()
+
+  const match = props.bookings.find(a =>
+    (a.reference || '').toLowerCase() === q ||
+    (a.bcReference || '').toLowerCase() === q
+  )
+
+  if (!match) {
+    flashScanFeedback('error', `No booking for "${rawValue}" today — check the code and try again.`)
+    return
+  }
+
+  if (pinnedAdvertIds.value.has(String(match.id))) {
+    flashScanFeedback('error', `${match.reference} is already in the batch.`)
+    return
+  }
+
+  emit('assign-advert-to-group', { groupId, advertId: match.id })
+  flashScanFeedback('success', `Added ${match.reference} — ${match.advertTitle}`)
 }
 
 // ── Excel export ────────────────────────────────────────────────────────
@@ -369,6 +411,11 @@ async function exportExcel() {
 .dd-batch-head .name{ font-family:'Source Serif 4',serif; font-weight:600; font-size:14.5px; }
 .dd-batch-head .meta{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--dd-ink-soft, #6b6658); margin-top:2px; }
 .dd-batch-body{ padding:12px 14px; display:flex; flex-direction:column; gap:10px; flex:1; }
+.dd-scan-feedback{
+  font-size:11.5px; padding:7px 10px; border-radius:2px; line-height:1.4;
+}
+.dd-scan-feedback.success{ background:var(--dd-green-soft, #e5efe9); color:var(--dd-green, #2f6f4f); border:1px solid var(--dd-green, #2f6f4f); }
+.dd-scan-feedback.error{ background:#FCE4D6; color:#9C0006; border:1px solid #E31E24; }
 
 table.dd-sheet-tbl{ width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; }
 .dd-sheet-tbl thead th{
