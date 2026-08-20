@@ -2,9 +2,9 @@
 <template>
   <div class="dd-root">
     <!-- Masthead -->
-    <div class="dd-masthead">
+    <div class="dd-masthead dd-fade" style="--dd-d:0s;">
       <div class="dd-masthead-left">
-        <span class="dd-eyebrow">VGAMS</span>
+        <span class="dd-eyebrow"><i class="dd-led dd-led-live"></i>VGAMS</span>
         <h1>Design Desk</h1>
       </div>
       <div class="dd-masthead-right">
@@ -17,30 +17,30 @@
 
     <!-- Stats strip (overview, not date-scoped) -->
     <div class="dd-stats">
-      <div class="dd-stat accent-amber">
+      <div class="dd-stat accent-amber dd-fade" style="--dd-d:.05s;">
         <span class="n">{{ stats.pendingDesign ?? '—' }}</span>
-        <span class="l">Pending Design</span>
+        <span class="l"><i class="dd-led"></i>Pending Design</span>
       </div>
-      <div class="dd-stat accent-blue">
+      <div class="dd-stat accent-blue dd-fade" style="--dd-d:.10s;">
         <span class="n">{{ stats.designApproved ?? '—' }}</span>
-        <span class="l">Design Approved</span>
+        <span class="l"><i class="dd-led"></i>Design Approved</span>
       </div>
-      <div class="dd-stat accent-green">
+      <div class="dd-stat accent-green dd-fade" style="--dd-d:.15s;">
         <span class="n">{{ stats.scheduled ?? '—' }}</span>
-        <span class="l">Scheduled</span>
+        <span class="l"><i class="dd-led"></i>Scheduled</span>
       </div>
-      <div class="dd-stat">
+      <div class="dd-stat dd-fade" style="--dd-d:.20s;">
         <span class="n">{{ stats.upcoming ?? '—' }}</span>
-        <span class="l">Upcoming</span>
+        <span class="l"><i class="dd-led"></i>Upcoming</span>
       </div>
-      <div class="dd-stat">
+      <div class="dd-stat dd-fade" style="--dd-d:.25s;">
         <span class="n">{{ stats.totalFiles ?? '—' }}</span>
-        <span class="l">Files on Record</span>
+        <span class="l"><i class="dd-led"></i>Files on Record</span>
       </div>
     </div>
 
     <!-- Day switcher -->
-    <div class="dd-day-switcher">
+    <div class="dd-day-switcher dd-fade" style="--dd-d:.28s;">
       <div class="dd-day-center">
         <button class="dd-day-nav" @click="shiftDay(-1)">
           <span class="arrow">&larr;</span>
@@ -63,7 +63,7 @@
     </div>
 
     <!-- Toolbar with search -->
-    <div class="dd-toolbar">
+    <div class="dd-toolbar dd-fade" style="--dd-d:.34s;">
       <div class="dd-tabs">
         <button class="dd-tab" :class="{ active: activeTab === 'queue' }" @click="activeTab = 'queue'">
           Queue <span class="count dd-mono">{{ bookings.length }}</span>
@@ -131,12 +131,14 @@
           <div v-else-if="bookings.length === 0" class="dd-empty">No bookings touch this day.</div>
           <div v-else-if="filteredBookings.length === 0" class="dd-empty">No matches for "{{ searchQuery }}".</div>
           <QueueCard
-            v-for="advert in filteredBookings"
+            v-for="(advert, qi) in filteredBookings"
             :key="advert.id"
             :advert="advert"
             :active-date="activeBatch?.targetRunDate || selectedDate"
             :on-layout="pinnedAdvertIds.has(String(advert.id))"
             :file-group-name="getFileGroupName(advert.id)"
+            class="dd-fade"
+            :style="{ '--dd-d': Math.min(qi * 0.06, 0.4) + 's' }"
             @add-to-board="onAddToBoard"
             @view-brief="briefAdvert = $event"
             @view-attachments="attachmentsAdvert = $event"
@@ -644,22 +646,92 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ══════════════════════════════════════════════════════════
+   Design tokens — brushed-metal / machined control-panel look.
+   Kept local to this component (scoped), matching the pattern
+   already used by QueueCard.vue.
+   ══════════════════════════════════════════════════════════ */
 .dd-root{
-  background:#f6f3ec;
-  color:#1c1b18;
-  font-family:'Inter',sans-serif;
-  font-size:14px;
-  line-height:1.45;
+  --dd-metal-50:   #F7F8F9;
+  --dd-metal-100:  #EEF0F2;
+  --dd-metal-200:  #E1E4E7;
+  --dd-metal-300:  #CDD1D6;
+  --dd-metal-rail: #B7BCC2;
+  --dd-ink:        #1D2226;
+  --dd-ink-soft:   #5B6169;
+  --dd-ink-faint:  #8A8F96;
+  --dd-navy:       #00335F;
+  --dd-navy-glow:  #2E5F9E;
+  --dd-navy-soft:  #E7EDF5;
+  --dd-red:        #BE1622;
+  --dd-led-green:  #2E8B57;
+  --dd-led-green-soft: #E6F4EC;
+  --dd-led-amber:  #C08A22;
+  --dd-led-amber-soft: #F8F0DC;
+  --dd-led-blue:   #3E6FB0;
+  --dd-led-blue-soft:  #E9F0F9;
+  --dd-led-red:    #C23B3B;
+  --dd-led-red-soft:   #FBEAEA;
+  --dd-bevel-out:
+    0 1px 0 rgba(255,255,255,.75) inset,
+    0 -1px 0 rgba(0,0,0,.10) inset,
+    0 1px 2px rgba(20,24,28,.08);
+  --dd-bevel-in:
+    0 1px 2px rgba(0,0,0,.14) inset,
+    0 -1px 0 rgba(255,255,255,.5) inset;
+
+  background: var(--dd-metal-50);
+  color: var(--dd-ink);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
 }
 .dd-mono{font-family:'IBM Plex Mono',monospace;}
 
+/* ── Entrance fade-in for native elements in this template ─── */
+.dd-fade{
+  opacity: 0;
+  animation: dd-fade-in .55s cubic-bezier(.22,.68,.36,1) forwards;
+  animation-delay: var(--dd-d, 0s);
+}
+@keyframes dd-fade-in{
+  from{ opacity:0; transform: translateY(8px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+.dd-masthead.dd-fade{ animation-name: dd-power-on; }
+@keyframes dd-power-on{
+  from{ opacity:0; filter: brightness(.6) saturate(.7); }
+  to{ opacity:1; filter: brightness(1) saturate(1); }
+}
+
+/* ── LED indicators (reused across masthead / stats) ────────── */
+.dd-led{
+  width:6px; height:6px; border-radius:50%;
+  background: var(--dd-metal-rail);
+  display:inline-block;
+  flex-shrink:0;
+}
+.dd-led-live{
+  background: var(--dd-led-green);
+  box-shadow: 0 0 6px 1.5px rgba(46,139,87,.9);
+  margin-right: 7px;
+}
+
+/* ── Masthead — lit power-strip header ─────────────────────── */
 .dd-masthead{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:14px 28px;
-  border-bottom:2px solid #1c1b18;
-  background:#f6f3ec;
+  padding:18px 28px 16px;
+  background: linear-gradient(180deg, #0A3D6B 0%, var(--dd-navy) 55%, #002748 100%);
+  position: relative;
+  box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 3px 8px rgba(0,0,0,.25);
+}
+.dd-masthead::after{
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:3px;
+  background: linear-gradient(90deg, var(--dd-led-blue), #6FA8DC 50%, var(--dd-led-blue));
+  box-shadow: 0 0 8px rgba(111,168,220,.7);
 }
 .dd-masthead-left{
   display:flex;
@@ -669,19 +741,19 @@ onMounted(() => {
 .dd-eyebrow{
   font-family:'IBM Plex Mono',monospace;
   font-size:10.5px;
-  letter-spacing:.14em;
-  color:#6b6658;
+  letter-spacing:.16em;
+  color:#9FC2E8;
   text-transform:uppercase;
-  border:1px solid #b7ae97;
-  padding:3px 7px;
-  border-radius:2px;
+  display:inline-flex;
+  align-items:center;
 }
 .dd-masthead h1{
-  font-family:'Source Serif 4',serif;
-  font-weight:900;
-  font-size:26px;
+  font-family:'IBM Plex Sans', sans-serif;
+  font-weight:700;
+  font-size:22px;
   margin:0;
-  letter-spacing:-.01em;
+  letter-spacing:-.005em;
+  color:#F4F7FB;
 }
 .dd-masthead-right{
   display:flex;
@@ -691,155 +763,201 @@ onMounted(() => {
 .dd-today{
   font-family:'IBM Plex Mono',monospace;
   font-size:12px;
-  color:#6b6658;
+  color:#C7D8EB;
   text-align:right;
   line-height:1.3;
 }
 .dd-today b{
-  color:#1c1b18;
+  color:#fff;
   display:block;
-  font-size:12.5px;
+  font-size:13.5px;
 }
 
+/* ── Stats strip — gauge tiles ──────────────────────────────── */
 .dd-stats{
   display:flex;
-  border-bottom:1px solid #b7ae97;
-  background:#efeade;
+  background: var(--dd-metal-300);
+  border-bottom:1px solid var(--dd-metal-rail);
   flex-wrap:wrap;
+  gap:1px;
 }
 .dd-stat{
   flex:1;
   min-width:120px;
-  padding:12px 20px;
-  border-right:1px solid #d9d3c3;
+  padding:14px 20px 12px;
+  background: linear-gradient(180deg, #FCFDFD, var(--dd-metal-100));
   display:flex;
   flex-direction:column;
-  gap:2px;
+  gap:5px;
+  position: relative;
 }
-.dd-stat:last-child{border-right:none;}
+.dd-stat::before{
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:2px;
+  background: var(--dd-stat-color, var(--dd-metal-rail));
+  opacity:.75;
+}
 .dd-stat .n{
   font-family:'IBM Plex Mono',monospace;
   font-size:22px;
   font-weight:600;
+  color: var(--dd-ink);
 }
 .dd-stat .l{
+  display:flex; align-items:center; gap:6px;
   font-size:10.5px;
-  letter-spacing:.08em;
+  letter-spacing:.06em;
   text-transform:uppercase;
-  color:#6b6658;
+  color:var(--dd-ink-soft);
 }
-.dd-stat.accent-blue .n{color:#1c3fa8;}
-.dd-stat.accent-red .n{color:#a8261e;}
-.dd-stat.accent-green .n{color:#2f6f4f;}
-.dd-stat.accent-amber .n{color:#a3691a;}
+.dd-stat .l .dd-led{ background: var(--dd-stat-color, var(--dd-metal-rail)); }
+.dd-stat.accent-blue{ --dd-stat-color: var(--dd-led-blue); }
+.dd-stat.accent-blue .n{ color: var(--dd-led-blue); }
+.dd-stat.accent-red{ --dd-stat-color: var(--dd-led-red); }
+.dd-stat.accent-red .n{ color: var(--dd-led-red); }
+.dd-stat.accent-green{ --dd-stat-color: var(--dd-led-green); }
+.dd-stat.accent-green .n{ color: var(--dd-led-green); }
+.dd-stat.accent-amber{ --dd-stat-color: var(--dd-led-amber); }
+.dd-stat.accent-amber .n{ color: var(--dd-led-amber); }
 
-/* ── Day Switcher ──────────────────────────────────────────────────────── */
+/* ── Day Switcher — tactile control ─────────────────────────── */
 .dd-day-switcher {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 14px 28px;
-  border-bottom: 1px solid #b7ae97;
-  background: #f6f3ec;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--dd-metal-300);
+  background: var(--dd-metal-100);
+  flex-wrap: wrap;
 }
 
 .dd-day-center {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 18px;
 }
 .dd-day-nav {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   cursor: pointer;
-  padding: 4px 12px;
-  border-radius: 2px;
-  color: #6b6658;
-  background: none;
+  padding: 6px 16px;
+  border-radius: 20px;
+  color: var(--dd-navy);
+  background: linear-gradient(180deg, #FDFDFE, var(--dd-metal-200));
+  box-shadow: var(--dd-bevel-out), 0 2px 3px rgba(20,24,28,.10);
   border: none;
   font-family: inherit;
+  transition: box-shadow .1s ease, transform .1s ease;
 }
 .dd-day-nav:hover {
-  background: #efeade;
+  box-shadow: var(--dd-bevel-out), 0 2px 5px rgba(20,24,28,.16);
+}
+.dd-day-nav:active {
+  box-shadow: var(--dd-bevel-in);
+  transform: translateY(1px);
 }
 .dd-day-nav .arrow {
   font-size: 14px;
 }
 .dd-day-nav .peek {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
+  font-size: 9px;
 }
 .dd-day-current {
   text-align: center;
+  min-width: 116px;
+  background: linear-gradient(180deg, #23282D, #14181B);
+  border-radius: 4px;
+  padding: 8px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3), 0 0 0 1px rgba(0,0,0,.4);
 }
 .dd-day-current .dow {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10.5px;
-  letter-spacing: .1em;
+  font-size: 10px;
+  letter-spacing: .12em;
   text-transform: uppercase;
-  color: #1c3fa8;
+  color: #6FA8DC;
 }
 .dd-day-current .dm {
-  font-family: 'Source Serif 4', serif;
-  font-weight: 900;
-  font-size: 24px;
-  line-height: 1.1;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.3;
+  color: #F4F7FB;
 }
 
 .dd-day-jump {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #6b6658;
+  gap: 9px;
+  font-size: 11.5px;
+  color: var(--dd-ink-soft);
 }
 .dd-day-jump input[type="date"] {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 12px;
-  border: 1px solid #b7ae97;
-  border-radius: 2px;
-  padding: 5px 8px;
-  background: #fffdf8;
-  color: #1c1b18;
+  border: none;
+  border-radius: 3px;
+  padding: 7px 9px;
+  background: #fff;
+  box-shadow: var(--dd-bevel-in), 0 0 0 1px var(--dd-metal-300);
+  color: var(--dd-ink);
 }
 
-/* ── Toolbar ───────────────────────────────────────────────────────────── */
+/* ── Toolbar ─────────────────────────────────────────────────── */
 .dd-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 28px;
-  border-bottom: 1px solid #d9d3c3;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--dd-metal-300);
+  background: var(--dd-metal-50);
   flex-wrap: wrap;
   gap: 12px;
 }
 
 .dd-tabs {
   display: flex;
+  background: var(--dd-metal-200);
+  border-radius: 4px;
+  padding: 3px;
+  box-shadow: var(--dd-bevel-in);
   gap: 2px;
 }
 .dd-tab {
   font-size: 12.5px;
   font-weight: 600;
-  padding: 7px 13px;
-  border-radius: 2px;
+  padding: 8px 16px;
+  border-radius: 3px;
   cursor: pointer;
-  color: #6b6658;
-  border: 1px solid transparent;
+  color: var(--dd-ink-soft);
+  border: none;
   background: none;
   font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: background .12s ease, color .12s ease, box-shadow .12s ease;
 }
 .dd-tab.active {
-  background: #1c1b18;
-  color: #f6f3ec;
+  background: linear-gradient(180deg, #fff, var(--dd-metal-100));
+  color: var(--dd-navy);
+  box-shadow: var(--dd-bevel-out);
 }
 .dd-tab .count {
   font-family: 'IBM Plex Mono', monospace;
-  opacity: .65;
-  margin-left: 5px;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--dd-metal-300);
+  color: var(--dd-ink-soft);
+}
+.dd-tab.active .count {
+  background: var(--dd-navy-soft);
+  color: var(--dd-navy);
 }
 
 /* ── Search Box ────────────────────────────────────────────────────────── */
@@ -850,13 +968,13 @@ onMounted(() => {
   flex: 1 1 300px;
   max-width: 400px;
   min-width: 180px;
-  background: #fffdf8;
-  border: 1px solid #b7ae97;
-  border-radius: 2px;
+  background: #fff;
+  border-radius: 4px;
   padding: 0 10px;
+  box-shadow: var(--dd-bevel-in), 0 0 0 1px var(--dd-metal-300);
 }
 .dd-search-icon {
-  color: #6b6658;
+  color: var(--dd-ink-faint);
   font-size: 14px;
   flex-shrink: 0;
 }
@@ -866,18 +984,18 @@ onMounted(() => {
   background: none;
   font-family: 'Inter', sans-serif;
   font-size: 13px;
-  padding: 7px 4px;
-  color: #1c1b18;
+  padding: 8px 4px;
+  color: var(--dd-ink);
   outline: none;
   min-width: 100px;
 }
 .dd-search-input::placeholder {
-  color: #6b6658;
+  color: var(--dd-ink-faint);
 }
 .dd-search-clear {
   border: none;
   background: none;
-  color: #6b6658;
+  color: var(--dd-ink-faint);
   font-size: 18px;
   cursor: pointer;
   line-height: 1;
@@ -885,56 +1003,70 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .dd-search-clear:hover {
-  color: #a8261e;
+  color: var(--dd-red);
 }
 
 .dd-product-select {
-  height: 34px;
+  height: 36px;
   padding: 0 10px;
-  background: #fffdf8;
-  border: 1px solid #b7ae97;
-  border-radius: 2px;
+  background: #fff;
+  border: none;
+  border-radius: 4px;
+  box-shadow: var(--dd-bevel-in), 0 0 0 1px var(--dd-metal-300);
   font-family: 'Inter', sans-serif;
   font-size: 12.5px;
-  color: #1c1b18;
+  color: var(--dd-ink);
   cursor: pointer;
   min-width: 140px;
   flex-shrink: 0;
 }
 .dd-product-select:focus {
   outline: none;
-  border-color: #1c3fa8;
-  box-shadow: 0 0 0 3px rgba(28, 63, 168, 0.15);
+  box-shadow: var(--dd-bevel-in), 0 0 0 2px var(--dd-navy-glow);
 }
 
 .dd-btn {
   font-family: 'Inter', sans-serif;
   font-size: 12.5px;
   font-weight: 600;
-  padding: 8px 14px;
-  border-radius: 2px;
-  border: 1px solid #1c1b18;
-  background: #fffdf8;
-  color: #1c1b18;
+  padding: 9px 15px;
+  border-radius: 4px;
+  border: none;
+  background: linear-gradient(180deg, #fff, var(--dd-metal-100));
+  color: var(--dd-ink);
+  box-shadow: var(--dd-bevel-out), 0 0 0 1px var(--dd-metal-300);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  transition: box-shadow .1s ease, transform .1s ease, background .12s ease;
+}
+.dd-btn:active{
+  box-shadow: var(--dd-bevel-in);
+  transform: translateY(1px);
 }
 .dd-btn:disabled {
   opacity: .45;
   cursor: not-allowed;
 }
 .dd-btn.primary {
-  background: #1c3fa8;
-  border-color: #1c3fa8;
+  background: linear-gradient(180deg, var(--dd-navy-glow), var(--dd-navy));
+  border-color: var(--dd-navy);
   color: #fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 2px 4px rgba(0,51,95,.35);
+}
+.dd-btn.primary:hover:not(:disabled){
+  background: linear-gradient(180deg, #3B6EAE, #06427A);
+}
+.dd-btn.primary:active{
+  box-shadow: 0 1px 3px rgba(0,51,95,.4) inset;
 }
 .dd-btn.ghost {
   background: transparent;
+  box-shadow: 0 0 0 1px var(--dd-metal-300);
 }
 .dd-btn.small {
-  padding: 5px 9px;
+  padding: 6px 11px;
   font-size: 11.5px;
 }
 
@@ -965,7 +1097,7 @@ onMounted(() => {
   display:grid;
   grid-template-columns:1fr 1.7fr;
   gap:0;
-  border-bottom:1px solid #b7ae97;
+  border-bottom:1px solid var(--dd-metal-300);
 }
 @media (max-width: 900px){
   .dd-board{
@@ -973,55 +1105,58 @@ onMounted(() => {
   }
 }
 .dd-col{
-  padding:18px 24px;
+  padding:20px 24px 26px;
 }
 .dd-col-queue{
-  border-right:1px solid #b7ae97;
-  background:#f6f3ec;
+  border-right:1px solid var(--dd-metal-300);
+  background:var(--dd-metal-100);
   max-height:720px;
   overflow-y:auto;
 }
 .dd-col-layout{
-  background:#efeade;
+  background:#FBFCFC;
 }
 .dd-col-heading{
   display:flex;
   align-items:baseline;
   justify-content:space-between;
-  margin-bottom:14px;
+  margin-bottom:16px;
   gap:8px;
   flex-wrap:wrap;
 }
 .dd-col-heading h2{
-  font-family:'Source Serif 4',serif;
+  font-family:'IBM Plex Sans', sans-serif;
   font-weight:700;
-  font-size:15px;
+  font-size:13px;
   margin:0;
   text-transform:uppercase;
-  letter-spacing:.04em;
+  letter-spacing:.07em;
+  color: var(--dd-ink);
+  padding-left: 10px;
+  border-left: 3px solid var(--dd-navy);
 }
 .dd-col-heading .hint{
   font-size:11px;
-  color:#6b6658;
+  color:var(--dd-ink-faint);
 }
 .dd-empty{
   padding:30px 10px;
   text-align:center;
-  color:#6b6658;
+  color:var(--dd-ink-faint);
   font-size:12.5px;
 }
 
 .dd-ticket{
-  background:#fffdf8;
-  border:1px solid #b7ae97;
-  border-radius:2px;
-  padding:14px 16px;
-  margin-bottom:16px;
+  background:linear-gradient(180deg, #fff, var(--dd-metal-50));
+  border-radius:4px;
+  box-shadow: var(--dd-bevel-out), 0 0 0 1px var(--dd-metal-300);
+  padding:16px 18px;
+  margin-bottom:18px;
 }
 .dd-ticket-row{
   display:flex;
   gap:16px;
-  margin-bottom:10px;
+  margin-bottom:12px;
   flex-wrap:wrap;
 }
 .dd-field{
@@ -1030,35 +1165,38 @@ onMounted(() => {
 }
 .dd-field label{
   display:block;
-  font-size:10px;
-  letter-spacing:.06em;
+  font-size:9.5px;
+  letter-spacing:.08em;
   text-transform:uppercase;
-  color:#6b6658;
-  margin-bottom:4px;
+  color:var(--dd-ink-faint);
+  margin-bottom:5px;
+  font-weight:600;
 }
 .dd-field input,
 .dd-field select,
 .dd-field textarea{
   width:100%;
   font-family:'Inter',sans-serif;
-  font-size:13px;
-  padding:7px 9px;
-  border:1px solid #b7ae97;
-  border-radius:2px;
-  background:#fffdf8;
-  color:#1c1b18;
+  font-size:12.5px;
+  padding:8px 10px;
+  border:none;
+  border-radius:3px;
+  background:#fff;
+  box-shadow: var(--dd-bevel-in), 0 0 0 1px var(--dd-metal-300);
+  color:var(--dd-ink);
 }
 .dd-field input:disabled{
-  color:#6b6658;
-  background:#efeade;
+  color:var(--dd-ink-soft);
+  background:var(--dd-metal-100);
+  box-shadow: 0 0 0 1px var(--dd-metal-300);
 }
 
 .dd-note-box{
-  background:#e7ebf8;
-  color:#1c3fa8;
+  background: var(--dd-navy-soft);
+  color: var(--dd-navy);
   font-size:12px;
   padding:10px 12px;
-  border-radius:2px;
+  border-radius:4px;
   margin-top:12px;
 }
 
@@ -1067,50 +1205,67 @@ onMounted(() => {
   align-items:center;
   justify-content:space-between;
   gap:10px;
-  padding:10px 12px;
-  background:#fffdf8;
-  border:1px solid #d9d3c3;
-  border-radius:2px;
+  padding:11px 13px;
+  background:linear-gradient(180deg, #fff, var(--dd-metal-50));
+  border-radius:4px;
+  box-shadow: var(--dd-bevel-out), 0 0 0 1px var(--dd-metal-300);
   margin-bottom:8px;
   cursor:pointer;
+  transition: transform .14s cubic-bezier(.22,.68,.36,1), box-shadow .14s ease;
 }
 .dd-batch-row:hover{
-  border-color:#b7ae97;
+  transform: translateY(-1px);
+  box-shadow: var(--dd-bevel-out), 0 0 0 1px var(--dd-metal-rail), 0 6px 14px -8px rgba(20,24,28,.2);
 }
 .dd-batch-row .br-title{
   font-weight:600;
   font-size:12.5px;
+  color: var(--dd-ink);
 }
 .dd-batch-row .br-meta{
   font-size:11px;
-  color:#6b6658;
+  color:var(--dd-ink-soft);
 }
 
 .dd-stamp{
   font-family:'IBM Plex Mono',monospace;
-  font-size:10.5px;
+  font-size:10px;
   font-weight:700;
-  letter-spacing:.06em;
+  letter-spacing:.05em;
   text-transform:uppercase;
-  padding:3px 9px;
-  border-radius:2px;
-  display:inline-block;
+  padding:4px 10px 4px 8px;
+  border-radius:10px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.dd-stamp::before{
+  content:'';
+  width:6px; height:6px; border-radius:50%;
+  background: currentColor;
 }
 .dd-stamp.attached{
-  color:#2f6f4f;
-  border:1.5px solid #2f6f4f;
-  transform:rotate(-2deg);
+  color:#1e5c3d;
+  background: var(--dd-led-green-soft);
 }
 .dd-stamp.draft{
-  color:#6b6658;
-  border:1.5px dashed #b7ae97;
+  color:var(--dd-ink-soft);
+  background: var(--dd-metal-200);
 }
 .dd-stamp.ready{
-  color:#1c3fa8;
-  border:1.5px solid #1c3fa8;
+  color:var(--dd-navy);
+  background: var(--dd-navy-soft);
 }
 .dd-stamp.archived{
-  color:#6b6658;
-  border:1.5px solid #b7ae97;
+  color:var(--dd-ink-faint);
+  background: var(--dd-metal-200);
+}
+
+/* ── Motion preferences ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce){
+  .dd-fade{ animation:none !important; opacity:1 !important; transform:none !important; filter:none !important; }
+  .dd-batch-row{ transition: box-shadow .14s ease; }
+  .dd-batch-row:hover{ transform:none; }
+  .dd-day-nav{ transition: box-shadow .1s ease; }
 }
 </style>
