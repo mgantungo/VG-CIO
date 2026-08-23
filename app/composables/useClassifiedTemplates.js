@@ -26,6 +26,34 @@
 //      is billable print content, so the whole thing is counted - there's
 //      no separate label-vs-value split for these.
 
+// Split on any whitespace, ignore empty tokens
+const countWords = (str) => {
+  if (!str) return 0
+  const trimmed = String(str).trim()
+  if (!trimmed) return 0
+  return trimmed.split(/\s+/).filter(Boolean).length
+}
+
+// Billing adjustments (on top of the base Label:value / compose counting
+// described above), applied only in the non-manual-count path:
+//
+//   dropLeadingWord: true
+//     The template's leading "Lost"/"Property"/"Transfer" word (the name
+//     line for generic templates, or the first word of the composed
+//     sentence for compose templates) is not billed. Only the single
+//     leading word is dropped - the rest of the name/sentence, including
+//     any later repeated occurrence of the same word (e.g. the second
+//     "TRANSFER" inside the transfer templates' sentence), is unaffected.
+//
+//   computeWordCount(values)
+//     Used instead of countWords(composedText) for templates where a
+//     literal count-of-words(compose output) would be wrong for reasons
+//     beyond the leading-word drop: `vehicle_number` is always billed as
+//     exactly 1 word regardless of internal spaces (e.g. "UAB 089X" bills
+//     as 1 word, not 2). The fixed phrase "MOTOR VEHICLE NO" / "MOTOR
+//     CYCLE NO" bills at its natural 3-word count. Only used on compose
+//     templates; the composed text shown to the user is unchanged, this
+//     only affects the counted total.
 const TEMPLATES = [
   {
     id: 'lost_academic_document',
@@ -33,6 +61,7 @@ const TEMPLATES = [
     // Not in ADVERTISING_FORMATS.docx - no source for its exact printed
     // wording, so this stays on the generic Label: value assembly rather
     // than a guessed compose() sentence.
+    dropLeadingWord: true,
     fields: [
       { key: 'registration_number', label: 'Registration Number:', required: true },
       { key: 'name', label: 'Name:', required: true },
@@ -43,6 +72,7 @@ const TEMPLATES = [
   {
     id: 'lost_driving_permit',
     name: 'Lost Driving Permit',
+    dropLeadingWord: true,
     fields: [
       { key: 'permit_number', label: 'Permit Number:', required: true },
       { key: 'name', label: 'Name:', required: true },
@@ -61,6 +91,7 @@ const TEMPLATES = [
     // Not explicitly in ADVERTISING_FORMATS.docx, but follows the identical
     // "LOST [document] NO / NAME / CONTACT" pattern shown for Driving
     // Permit and Passport, so composed the same way for consistency.
+    dropLeadingWord: true,
     fields: [
       { key: 'id_number', label: 'Id Number:', required: true },
       { key: 'name', label: 'Name:', required: true },
@@ -80,6 +111,7 @@ const TEMPLATES = [
     // PROPRIETOR, CONTACT. The old `advocation_of_land` field didn't exist
     // in the real format and has been removed; `land_at` (which the real
     // ad has and the old template was missing) has been added.
+    dropLeadingWord: true,
     fields: [
       { key: 'block_number', label: 'Block Number:', required: true },
       { key: 'plot_number', label: 'Plot Number:', required: true },
@@ -113,6 +145,14 @@ const TEMPLATES = [
       const vehicleNumber = (values?.vehicle_number ?? '').toString().trim()
       const contact = (values?.contact ?? '').toString().trim()
       return `LOST LOG BOOK FOR ${vehicleType} NO ${vehicleNumber}\nCONTACT: ${contact}`
+    },
+    // Billing count, not the printed text: drop leading "LOST" (1) and
+    // bill vehicle_number as exactly 1 word regardless of internal spaces.
+    // "LOG BOOK FOR" (3) and "MOTOR VEHICLE/CYCLE NO" (3) are both billed
+    // at their natural word counts, then the CONTACT line as normal.
+    computeWordCount: (values) => {
+      const contact = (values?.contact ?? '').toString().trim()
+      return 3 + 3 + 1 + countWords(`CONTACT: ${contact}`)
     }
   },
   {
@@ -130,11 +170,20 @@ const TEMPLATES = [
       const vehicleNumber = (values?.vehicle_number ?? '').toString().trim()
       const contact = (values?.contact ?? '').toString().trim()
       return `LOST NUMBER PLATE FOR ${vehicleType} NO ${vehicleNumber}\nCONTACT: ${contact}`
+    },
+    // Billing count: drop leading "LOST" (1) and bill vehicle_number as
+    // exactly 1 word regardless of internal spaces. "NUMBER PLATE FOR" (3)
+    // and "MOTOR VEHICLE/CYCLE NO" (3) are billed at their natural word
+    // counts, then the CONTACT line as normal.
+    computeWordCount: (values) => {
+      const contact = (values?.contact ?? '').toString().trim()
+      return 3 + 3 + 1 + countWords(`CONTACT: ${contact}`)
     }
   },
   {
     id: 'lost_passport',
     name: 'Lost Passport',
+    dropLeadingWord: true,
     fields: [
       { key: 'passport_number', label: 'Passport Number:', required: true },
       { key: 'name', label: 'Name:', required: true },
@@ -166,6 +215,16 @@ const TEMPLATES = [
       const vehicleNumber = (values?.vehicle_number ?? '').toString().trim()
       const contact = (values?.contact ?? '').toString().trim()
       return `TRANSFER ${names} REPORT TO MINISTRY OF WORKS TO TRANSFER MOTOR VEHICLE NO ${vehicleNumber}\nCONTACT: ${contact}`
+    },
+    // Billing count: drop the leading "TRANSFER" (1) but keep the second
+    // "TRANSFER" mid-sentence billable, and bill vehicle_number as exactly
+    // 1 word regardless of internal spaces. "REPORT TO MINISTRY OF WORKS
+    // TO TRANSFER" (7) and "MOTOR VEHICLE NO" (3) are billed at their
+    // natural word counts, then names and CONTACT line as normal.
+    computeWordCount: (values) => {
+      const names = (values?.names_in_logbook ?? '').toString().trim()
+      const contact = (values?.contact ?? '').toString().trim()
+      return 7 + 3 + 1 + countWords(names) + countWords(`CONTACT: ${contact}`)
     }
   },
   {
@@ -181,11 +240,19 @@ const TEMPLATES = [
       const vehicleNumber = (values?.vehicle_number ?? '').toString().trim()
       const contact = (values?.contact ?? '').toString().trim()
       return `TRANSFER ${names} REPORT TO MINISTRY OF WORKS TO TRANSFER MOTOR CYCLE NO ${vehicleNumber}\nCONTACT: ${contact}`
+    },
+    // Same billing adjustments as Transfer of Motor Vehicle, with "MOTOR
+    // CYCLE NO" (3 words) in place of "MOTOR VEHICLE NO".
+    computeWordCount: (values) => {
+      const names = (values?.names_in_logbook ?? '').toString().trim()
+      const contact = (values?.contact ?? '').toString().trim()
+      return 7 + 3 + 1 + countWords(names) + countWords(`CONTACT: ${contact}`)
     }
   },
   {
     id: 'property_to_let',
     name: 'Property to Let / Lease',
+    dropLeadingWord: true,
     fields: [
       // Free text field. Label is shown but not counted toward the word count.
       { key: 'advert_text', label: 'Advert Text:', required: true, excludeLabelFromCount: true, freeText: true }
@@ -194,6 +261,7 @@ const TEMPLATES = [
   {
     id: 'property_for_rent',
     name: 'Property For Rent',
+    dropLeadingWord: true,
     fields: [
       { key: 'advert_text', label: 'Advert Text:', required: true, excludeLabelFromCount: true, freeText: true }
     ]
@@ -217,14 +285,6 @@ const TEMPLATES = [
     }
   }
 ]
-
-// Split on any whitespace, ignore empty tokens
-const countWords = (str) => {
-  if (!str) return 0
-  const trimmed = String(str).trim()
-  if (!trimmed) return 0
-  return trimmed.split(/\s+/).filter(Boolean).length
-}
 
 export const useClassifiedTemplates = () => {
   const getTemplate = (templateId) => {
@@ -276,7 +336,14 @@ export const useClassifiedTemplates = () => {
     // Compose-based templates: the assembled text is a fixed sentence with
     // the type name embedded inline, not a title line above a field list.
     // Every word is billable print content, so the entire composed string
-    // is counted - there's no label-vs-value split to apply here.
+    // is counted - there's no label-vs-value split to apply here. Two
+    // adjustments on top of that plain count, both skipped in manual-count
+    // mode (the manual figure is the total, full stop):
+    //   - computeWordCount (when present) replaces countWords(composed)
+    //     entirely, for templates with fixed-phrase/field billing rules
+    //     (see the templates array for details).
+    //   - dropLeadingWord subtracts 1 for the template's leading billed
+    //     word (e.g. "LOST", "TRANSFER") when no computeWordCount is set.
     if (template.compose) {
       if (isManualCount) {
         const naValues = {}
@@ -285,7 +352,15 @@ export const useClassifiedTemplates = () => {
         return { text: composed, wordCount: manualWordCount }
       }
       const composed = template.compose(values || {})
-      return { text: composed, wordCount: countWords(composed) }
+      let composedWordCount
+      if (template.computeWordCount) {
+        composedWordCount = template.computeWordCount(values || {})
+      } else if (template.dropLeadingWord) {
+        composedWordCount = Math.max(0, countWords(composed) - 1)
+      } else {
+        composedWordCount = countWords(composed)
+      }
+      return { text: composed, wordCount: composedWordCount }
     }
 
     let wordCount = 0
@@ -294,10 +369,14 @@ export const useClassifiedTemplates = () => {
     // Text type name is always the first printed line. It counts toward the
     // word total unless the template explicitly opts out via
     // excludeNameFromCount (currently only "Others"), or a manual count is
-    // in effect (the manual figure is the total, full stop).
+    // in effect (the manual figure is the total, full stop). dropLeadingWord
+    // bills the name line minus its single leading word (e.g. "Lost",
+    // "Property") rather than dropping the whole name.
     lines.push(template.name)
     if (!template.excludeNameFromCount && !isManualCount) {
-      wordCount += countWords(template.name)
+      wordCount += template.dropLeadingWord
+        ? Math.max(0, countWords(template.name) - 1)
+        : countWords(template.name)
     }
 
     template.fields.forEach((field) => {
