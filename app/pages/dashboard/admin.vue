@@ -94,6 +94,12 @@
           <span v-html="ic.settings"></span>Settings
         </button>
 
+        <p class="rail__grp">System</p>
+
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'user_management' }" @click="go('user_management')">
+          <span v-html="ic.users"></span>User Management
+        </button>
+
       </div><!-- /rail__scroll -->
 
       <div class="rail__foot">
@@ -231,6 +237,13 @@
           <BcTestBypass />
         </div>
 
+        <!-- ── USER MANAGEMENT ─────────────────────────────────────────
+             ~/components/admin/UserManagement.vue
+        -->
+        <div v-show="s === 'user_management'" class="bare">
+          <UserManagement />
+        </div>
+
       </div><!-- /body -->
     </div><!-- /main -->
   </div><!-- /admin-shell -->
@@ -263,6 +276,7 @@ import { usePayments } from '~/composables/usePayments'
 
 import Settings from '~/components/admin/Settings.vue'
 import BcTestBypass from '~/components/admin/BcTestBypass.vue'
+import UserManagement from '~/components/admin/UserManagement.vue'
 
 // ── layout: 'admin' ──────────────────────────────────────────────────────────
 // Uses layouts/admin.vue — a bare full-screen wrapper with no AppHeader,
@@ -312,6 +326,7 @@ const titles = {
   finance_payments:    'Finance — Payments',
   finance_reports:     'Finance — Reports',
   payment_training:    'Payment Training — BC Test Bypass',
+  user_management:     'System — User Management',
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -328,6 +343,7 @@ const ic = {
   arr:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
   settings: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H5.78a1.65 1.65 0 0 0-1.51 1 1.65 1.65 0 0 0 .33 1.82l.03.03A10 10 0 0 0 12 17.66a10 10 0 0 0 6.37-2.63z"/></svg>`,
   flask:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 2v6.5L3.5 18a2 2 0 001.7 3h13.6a2 2 0 001.7-3L15 8.5V2"/><path d="M8.5 2h7"/><path d="M6.5 15h11"/></svg>`,
+  users:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>`,
 }
 
 // ── Overview tiles ─────────────────────────────────────────────────────────
@@ -342,6 +358,7 @@ const workspaces = [
   { id:'finance_reports',     label:'Reports',           desc:'Generate and export revenue reports.',            key:'finance_team',        icon:ic.bar,    cls:'ws-ic--finance' },
   { id:'payment_training',    label:'Payment Training',  desc:'Simulate BC-confirmed payment for testing.',      key:'administrator',       icon:ic.flask,  cls:'ws-ic--test'    },
   { id:'settings', label:'Settings', desc:'System configuration and client sync.', key:'administrator', icon:ic.settings, cls:'ws-ic--settings' },
+  { id:'user_management', label:'User Management', desc:'Create, edit, and deactivate VGAMS accounts.', key:'administrator', icon:ic.users, cls:'ws-ic--settings' },
 ]
 
 // ── KPI ────────────────────────────────────────────────────────────────────
