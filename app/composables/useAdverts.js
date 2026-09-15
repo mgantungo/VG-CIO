@@ -292,6 +292,30 @@ export const useAdverts = () => {
     }
   }
 
+  // ── Schedule range adverts (run date, not booked date) ──────────────────────
+  // Not to be confused with "Schedule helpers" below (advert-daily-schedules,
+  // for print run scheduling) - this filters by whether an advert's run
+  // window (start_date/end_date) overlaps the given range, regardless of
+  // when it was booked. Hits its own isolated backend controller
+  // (advert-schedule.js) rather than getDateRangeAdverts' endpoint.
+  const getScheduleAdverts = async (params = {}) => {
+    loading.value = true
+    error.value   = null
+    try {
+      return await $fetch(`${API_BASE}/adverts-schedule-range`, {
+        method: 'GET',
+        params,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    } catch (err) {
+      error.value = err.message || 'Failed to get schedule range adverts'
+      console.error('Failed to get schedule range adverts:', err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   // ── Schedule helpers ─────────────────────────────────────────────────────────
   const scheduleAdvert = async (advertId, scheduleData) => {
     loading.value = true
@@ -478,6 +502,7 @@ export const useAdverts = () => {
     getAdvertForEdit,
     calculatePrice,
     getDateRangeAdverts,
+    getScheduleAdverts,
     getBcSyncStatus, 
     scheduleAdvert,
     getAdvertSchedules,

@@ -25,10 +25,13 @@
           {{ overallStats.uniqueUsers }} user{{ overallStats.uniqueUsers !== 1 ? 's' : '' }}
         </p>
       </div>
-      <button class="btn btn-new" @click="createNewAdvert">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        New Advert
-      </button>
+      <div class="dash-head__actions">
+        <FutureAdvertsCalendar />
+        <button class="btn btn-new" @click="createNewAdvert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Advert
+        </button>
+      </div>
     </header>
 
     <!-- ════════════════════════════════════════════════════
@@ -36,12 +39,21 @@
     ═════════════════════════════════════════════════════ -->
     <section class="toolbar">
       <div class="tb-row tb-row--dates">
+        <div class="tb-field-group">
+          <label class="tb-label">Filter by</label>
+          <div class="date-field-toggle">
+            <button type="button" class="dft-btn" :class="{ active: dateFieldMode === 'created' }"
+              @click="setDateFieldMode('created')">Booked Date</button>
+            <button type="button" class="dft-btn" :class="{ active: dateFieldMode === 'schedule' }"
+              @click="setDateFieldMode('schedule')">Run Date</button>
+          </div>
+        </div>
         <div class="tb-field">
-          <label class="tb-label" for="startDate">From</label>
+          <label class="tb-label" for="startDate">{{ dateFieldMode === 'schedule' ? 'Runs From' : 'From' }}</label>
           <input type="date" id="startDate" v-model="startDate" class="tb-input" :max="endDate">
         </div>
         <div class="tb-field">
-          <label class="tb-label" for="endDate">To</label>
+          <label class="tb-label" for="endDate">{{ dateFieldMode === 'schedule' ? 'Runs To' : 'To' }}</label>
           <input type="date" id="endDate" v-model="endDate" class="tb-input" :min="startDate" :max="maxDate">
         </div>
         <div class="tb-quick">
@@ -644,6 +656,7 @@ import { useRouter, useRuntimeConfig } from '#imports';
 import { useAdvertPdf } from '~/composables/useAdvertPdf'
 import { usePaymentAnalysis } from '~/composables/usePaymentAnalysis'
 import PaymentAnalysisPanel from './PaymentAnalysisPanel.vue'
+import FutureAdvertsCalendar from './FutureAdvertsCalendar.vue'
 
 const router = useRouter()
 const config = useRuntimeConfig()
@@ -653,7 +666,8 @@ const { downloadAdvertPdf: downloadPdf, printAdvertPdf: printPdf } = useAdvertPd
 const {
   loading,
   error,
-  getDateRangeAdverts: getDateRangeAdvertsApi
+  getDateRangeAdverts: getDateRangeAdvertsApi,
+  getScheduleAdverts: getScheduleAdvertsApi
 } = useAdverts()
 
 const API_BASE = config.public.apiBase
@@ -687,6 +701,10 @@ const ColumnsGlyph = () => svgIcon([h('rect', { x: 3, y: 4, width: 18, height: 1
 const adverts = ref([])
 const startDate = ref('')
 const endDate = ref('')
+// 'created' filters by when the advert was booked (createdAt, the default);
+// 'schedule' filters by when it actually runs (start_date/end_date overlap),
+// regardless of when it was booked - see the "Upcoming" quick range below.
+const dateFieldMode = ref('created')
 const selectedUserId = ref('')
 const selectedStatus = ref('')
 const selectedPayment = ref('') // '', 'paid', 'unpaid'
@@ -698,6 +716,7 @@ const quickRanges = [
   { key: 'thisWeek',  label: 'This Week' },
   { key: 'thisMonth', label: 'This Month' },
   { key: 'lastMonth', label: 'Last Month' },
+  { key: 'upcoming',  label: 'Upcoming' },
 ]
 const availableUsers = ref([])
 const hoveredStatus = ref(null)
@@ -798,7 +817,18 @@ const toLocalISODate = (date) => {
   return `${y}-${m}-${d}`
 }
 
-const maxDate = computed(() => toLocalISODate(new Date()))
+// Capped at today for "Booked Date" mode (you can't book something in the
+// future) - but "Run Date" mode needs to allow picking future dates, since
+// that's the whole point of the Upcoming view, so it gets a generous bound
+// instead of no cap at all.
+const maxDate = computed(() => {
+  if (dateFieldMode.value === 'schedule') {
+    const farFuture = new Date()
+    farFuture.setFullYear(farFuture.getFullYear() + 5)
+    return toLocalISODate(farFuture)
+  }
+  return toLocalISODate(new Date())
+})
 
 const isDateRangeInvalid = computed(() => {
   if (!startDate.value || !endDate.value) return false
@@ -1036,7 +1066,13 @@ const loadAdverts = async () => {
     if (selectedPayment.value === 'paid') params.isPaid = true
     if (selectedPayment.value === 'unpaid') params.isPaid = false
 
-    const response = await getDateRangeAdvertsApi(params)
+    // "Run Date" mode hits a separate, isolated endpoint
+    // (/adverts/schedule-range) rather than a param on the createdAt-based
+    // one, so a bug in the newer schedule-filtering logic can't affect the
+    // existing booked-date endpoint other callers depend on.
+    const response = dateFieldMode.value === 'schedule'
+      ? await getScheduleAdvertsApi(params)
+      : await getDateRangeAdvertsApi(params)
 
     adverts.value = (response.data || []).map(a => ({
       ...a,
@@ -1071,6 +1107,10 @@ const setDateRange = (range) => {
   const today = new Date()
   const result = new Date()
   activeQuickRange.value = range
+  // Every quick range except "Upcoming" is a booked-date range - reset back
+  // to that mode here so switching away from "Upcoming" doesn't leave the
+  // filter bar stuck showing "Run Date" labels for a createdAt-based range.
+  dateFieldMode.value = 'created'
 
   switch (range) {
     case 'today':
@@ -1104,6 +1144,19 @@ const setDateRange = (range) => {
       endDate.value = toLocalISODate(endOfLastMonth)
       break
     }
+    case 'upcoming': {
+      // Adverts still running or about to run, regardless of when they were
+      // booked: today through a generous future bound. The backend treats
+      // this as an overlap against start_date/end_date, not an exact match,
+      // so an advert that started last week but runs through next month
+      // still shows up.
+      dateFieldMode.value = 'schedule'
+      const farFuture = new Date(today)
+      farFuture.setFullYear(farFuture.getFullYear() + 1)
+      startDate.value = toLocalISODate(today)
+      endDate.value = toLocalISODate(farFuture)
+      break
+    }
   }
   loadAdverts()
 }
@@ -1112,6 +1165,7 @@ const applySearch = () => {}
 
 const resetFilters = () => {
   initializeDates()
+  dateFieldMode.value = 'created'
   selectedUserId.value = ''
   selectedStatus.value = ''
   selectedPayment.value = ''
@@ -1119,6 +1173,17 @@ const resetFilters = () => {
   activeQuickRange.value = 'thisMonth'
   sortKey.value = 'date'
   sortDir.value = 'desc'
+  loadAdverts()
+}
+
+// Manually flips between "Booked Date" and "Run Date" filtering, for a
+// custom From/To range rather than the "Upcoming" quick range. Clears the
+// active quick-range highlight since the resulting range is custom once
+// this is touched directly.
+const setDateFieldMode = (mode) => {
+  if (dateFieldMode.value === mode) return
+  dateFieldMode.value = mode
+  activeQuickRange.value = ''
   loadAdverts()
 }
 
@@ -1750,6 +1815,7 @@ onMounted(() => {
 
 /* ── Page header ── */
 .dash-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.dash-head__actions { display: flex; align-items: center; gap: 0.625rem; }
 .dash-head__eyebrow { display: flex; align-items: center; gap: 0.5rem; font-size: 1.25rem; font-weight: 700; color: var(--navy); letter-spacing: -.01em; }
 .dash-head__eyebrow svg { width: 22px; height: 22px; }
 .dash-head__sub { margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--muted); display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
@@ -1777,6 +1843,16 @@ onMounted(() => {
 .tb-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
 .tb-field { display: flex; flex-direction: column; gap: 0.3125rem; min-width: 130px; }
 .tb-field--search { flex: 1; min-width: 220px; }
+.tb-field-group { display: flex; flex-direction: column; gap: 0.3125rem; }
+.date-field-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; height: 2.25rem; }
+.dft-btn {
+  padding: 0 0.75rem; border: none; background: var(--surface); color: var(--muted);
+  font-family: var(--font-ui); font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  transition: all var(--t); border-right: 1px solid var(--border);
+}
+.dft-btn:last-child { border-right: none; }
+.dft-btn:hover { background: var(--page-bg); }
+.dft-btn.active { background: var(--blue-lt); color: var(--blue); }
 .tb-label { font-size: 0.6875rem; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
 .tb-input {
   height: 2.25rem; padding: 0 0.625rem; border: 1px solid var(--border); border-radius: 6px;
