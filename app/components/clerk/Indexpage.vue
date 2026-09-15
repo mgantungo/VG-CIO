@@ -422,7 +422,7 @@
               </div>
             </div>
             <button class="toolbar-btn accent" @click="exportData" :disabled="filteredAdverts.length === 0" title="Export to Excel (.xlsx)">
-              <ExportGlyph /><span>Export</span>
+              <ExportGlyph /><span>Download Excel</span>
             </button>
           </div>
         </div>
