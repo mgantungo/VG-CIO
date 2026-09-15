@@ -18,7 +18,7 @@
 // {
 //   systemReference, bcReference, statusLabel,
 //   clientName, contactPerson, contactEmail, contactPhone, clientRefNo, marketSector,
-//   advertTitle, product, adSize, officeLocation,
+//   advertTitle, product, adSize, officeLocation, salesAgent, colorType,
 //   basePrice, surcharge, discountPercent, totalAmount,   // raw numbers - formatted here
 //   paymentMethod, paymentStatus,
 //   publishingDates,       // array of date strings/Dates
@@ -31,6 +31,16 @@ const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-UG', { style: 'currency', currency: 'UGX', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount)
 }
 
+// Color/Type is a plain toggle in the booking form ('full_color' /
+// 'black_white') but is important downstream (design house, print ops need
+// to know at a glance which plate to run) - spelled out here rather than
+// left as the raw internal value.
+const formatColorType = (colorType) => {
+  if (colorType === 'full_color') return 'Full Color'
+  if (colorType === 'black_white') return 'Black & White'
+  return colorType || ''
+}
+
 const formatDate = (dateValue) => {
   if (!dateValue) return ''
   try {
@@ -38,6 +48,41 @@ const formatDate = (dateValue) => {
   } catch {
     return String(dateValue)
   }
+}
+
+// Publishing dates can run into the dozens for adverts that repeat over a
+// month or more, so a long run is compacted into "Mon{d,d,d}" groups (e.g.
+// "Jan{1,2,4,6,21,27}, Feb{3,6,10}") once there are enough of them that the
+// full list would overflow the space next to the Pricing & Payment table.
+// Below that threshold, dates are just spelled out in full and comma-joined.
+const COMPACT_DATE_THRESHOLD = 15
+
+const formatPublishingDatesCompact = (dates) => {
+  const parsed = (dates || [])
+    .map((d) => (d instanceof Date ? d : new Date(d)))
+    .filter((d) => !isNaN(d))
+    .sort((a, b) => a - b)
+
+  if (!parsed.length) return '—'
+
+  if (parsed.length < COMPACT_DATE_THRESHOLD) {
+    return parsed.map((d) => formatDate(d)).join(', ')
+  }
+
+  const groups = []
+  parsed.forEach((d) => {
+    // Key by month+year so a run spanning a year boundary doesn't merge two
+    // different Januarys into one group; the label itself stays short.
+    const monthYearKey = `${d.getFullYear()}-${d.getMonth()}`
+    let group = groups.find((g) => g.key === monthYearKey)
+    if (!group) {
+      group = { key: monthYearKey, label: d.toLocaleDateString('en-UG', { month: 'short' }), days: [] }
+      groups.push(group)
+    }
+    group.days.push(d.getDate())
+  })
+
+  return groups.map((g) => `${g.label}{${g.days.join(',')}}`).join(', ')
 }
 
 export const useAdvertPdf = () => {
@@ -72,12 +117,19 @@ export const useAdvertPdf = () => {
 
     // Product is key information for downstream teams (design house, print
     // ops, finance) - shown prominently here in a larger bold line, in
-    // addition to its row in the Advert & Booking table below.
-    if (data.product) {
+    // addition to its row in the Advert & Booking table below. Color/Type
+    // rides along on the same line since it's just as critical for whoever
+    // is running the plate - they need to see "Full Color" vs "B&W" without
+    // hunting through the table.
+    if (data.product || data.colorType) {
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(0, 51, 102)
-      doc.text(`Product: ${data.product}`, 10, y)
+      const productLine = [
+        data.product ? `Product: ${data.product}` : null,
+        data.colorType ? formatColorType(data.colorType) : null,
+      ].filter(Boolean).join('  ·  ')
+      doc.text(productLine, 10, y)
       doc.setTextColor(20, 20, 20)
       doc.setFont('helvetica', 'normal')
       y += 8
@@ -140,11 +192,16 @@ export const useAdvertPdf = () => {
       ['BC Reference No.', data.bcReference || '—'],
       ['Advert Title', data.advertTitle || '—'],
       ['Product', data.product || '—'],
-      ['Ad Size', data.adSize || '—'],
+      ['Ad Definition', data.adSize || '—'],
+      ['Color/Type', data.colorType ? formatColorType(data.colorType) : '—'],
+      ['Sales Agent', data.salesAgent || '—'],
       ['Office Location', data.officeLocation || '—'],
       ['Status', data.statusLabel || '—'],
     ]
-    const productRowIndex = advertBookingRows.findIndex((row) => row[0] === 'Product')
+    // Product, Ad Definition, and Color/Type are the fields downstream teams
+    // (design house, print ops) scan for first - bolded here (both label and
+    // value column) in addition to Product's larger standalone line above.
+    const boldedRowLabels = new Set(['Product', 'Ad Definition', 'Color/Type'])
 
     autoTable(doc, {
       startY: y,
@@ -156,10 +213,8 @@ export const useAdvertPdf = () => {
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
       tableWidth: colWidth,
       margin: { left: pageMargin + colWidth + gap, right: pageMargin },
-      // Product is key information for downstream teams - bolded here in
-      // addition to the larger standalone line shown above.
       didParseCell: (cellData) => {
-        if (cellData.row.index === productRowIndex) {
+        if (boldedRowLabels.has(advertBookingRows[cellData.row.index]?.[0])) {
           cellData.cell.styles.fontStyle = 'bold'
         }
       },
@@ -180,25 +235,35 @@ export const useAdvertPdf = () => {
         ['Payment Method', (data.paymentMethod || '—').toString().replace(/_/g, ' ')],
         ['Payment Status', data.paymentStatus || '—'],
       ],
-      styles: { fontSize: 10, cellPadding: 2.5 },
+      styles: { fontSize: 9.5, cellPadding: 2.5 },
       headStyles: { fillColor: [0, 102, 204], textColor: 255 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: colWidth * 0.42 } },
+      tableWidth: colWidth,
+      margin: { left: pageMargin, right: pageMargin + colWidth + gap },
     })
-    y = doc.lastAutoTable.finalY + 6
+    const pricingFinalY = doc.lastAutoTable.finalY
 
+    // Publishing Dates sits beside Pricing & Payment rather than below it -
+    // a single column, two-row table (header + one comma-separated cell)
+    // instead of one row per date, so a long run of dates doesn't push the
+    // page length out.
     const pubDates = data.publishingDates || []
+    let pubDatesFinalY = pricingFinalY
     if (pubDates.length) {
       autoTable(doc, {
         startY: y,
         theme: 'grid',
-        head: [['#', 'Publishing Date']],
-        body: pubDates.map((d, i) => [i + 1, formatDate(d)]),
-        styles: { fontSize: 10, cellPadding: 2.5 },
+        head: [['Publishing Dates']],
+        body: [[formatPublishingDatesCompact(pubDates)]],
+        styles: { fontSize: 9, cellPadding: 2.5, overflow: 'linebreak' },
         headStyles: { fillColor: [0, 51, 102], textColor: 255 },
-        tableWidth: 80,
+        tableWidth: colWidth,
+        margin: { left: pageMargin + colWidth + gap, right: pageMargin },
       })
-      y = doc.lastAutoTable.finalY + 6
+      pubDatesFinalY = doc.lastAutoTable.finalY
     }
+
+    y = Math.max(pricingFinalY, pubDatesFinalY) + 6
 
     // Special Instructions can now include structured layout details (size,
     // column count, photo/logo count, word count) alongside any assembled

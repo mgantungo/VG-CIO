@@ -227,6 +227,7 @@ import { useAdvertPdf } from '~/composables/useAdvertPdf'
 import { useProducts } from '~/composables/useProducts'
 import { useAdverts} from '~/composables/useAdverts'
 import { useOfficeLocationsStore } from '~/stores/officeLocation'
+import { useSalesAgentsStore } from '~/stores/salesAgents'
 import { useClassifiedAdStore } from '~/stores/classifiedAd'
 import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from '#imports'
@@ -253,6 +254,7 @@ const { createAdvert, getBcSyncStatus } = useAdverts()
 // Use office locations store
 const officeLocationsStore = useOfficeLocationsStore()
 const { locations: officeLocations, loading: officeLocationsLoading } = storeToRefs(officeLocationsStore)
+const salesAgentsStore = useSalesAgentsStore()
 
 // Classified ad ('per word' rate card) builder state - persists across ad type
 // toggles within a booking, cleared explicitly on full form reset
@@ -1018,6 +1020,16 @@ const buildAdvertPdfData = () => {
     : (systemReference.value ? 'Draft' : 'Not Saved')
   const finalTotal = schedulePricingRef.value?.calculateFinalTotal?.() || priceCalculation.value?.total || 0
 
+  // Office location is stored on the form as its short code (e.g. "KLA") -
+  // resolve it to the human-readable office name for the PDF, falling back
+  // to the raw code if the location list hasn't loaded or doesn't match.
+  const officeLocationEntry = officeLocations.value.find(loc => loc.code === form.officeLocation)
+  const officeLocationDisplay = officeLocationEntry?.office || form.officeLocation
+
+  // Sales agent is stored as an id - look up the agent's name from the
+  // sales agents store for display on the PDF.
+  const selectedSalesAgent = form.salesAgentId ? salesAgentsStore.getAgentById(form.salesAgentId) : null
+
   return {
     systemReference: systemReference.value,
     bcReference: bcReferenceNumber.value,
@@ -1031,7 +1043,9 @@ const buildAdvertPdfData = () => {
     advertTitle: form.advertTitle,
     product: selectedProduct.value?.product_name || selectedProduct.value?.name || selectedProduct.value?.productName || '',
     adSize: form.adSize,
-    officeLocation: form.officeLocation,
+    colorType: form.adType,
+    salesAgent: selectedSalesAgent?.name || '',
+    officeLocation: officeLocationDisplay,
     basePrice: priceCalculation.value?.basePrice || 0,
     surcharge: priceCalculation.value?.surcharge || 0,
     discountPercent: Number(form.discount || 0),

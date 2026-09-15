@@ -180,16 +180,53 @@
             </ul>
           </div>
           <div class="trend-chart">
-            <div v-for="b in trendBuckets" :key="b.key" class="trend-col"
-                 :title="`${b.label}: ${formatCurrency(b.total)} across ${b.count} advert${b.count !== 1 ? 's' : ''}`">
-              <div class="trend-bars">
-                <div class="trend-bar trend-bar--unpaid" :style="{ height: b.unpaidHeightPct + '%' }"></div>
-                <div class="trend-bar trend-bar--paid" :style="{ height: b.paidHeightPct + '%' }"></div>
+            <template v-if="trendLineChart && trendLineChart.mode === 'line'">
+              <svg class="trend-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line x1="0" y1="100" x2="100" y2="100" class="trend-axis" vector-effect="non-scaling-stroke" />
+                <polyline :points="trendLineChart.unpaidPoints" class="trend-line trend-line--unpaid" vector-effect="non-scaling-stroke" />
+                <polyline :points="trendLineChart.paidPoints" class="trend-line trend-line--paid" vector-effect="non-scaling-stroke" />
+                <g v-for="(b, i) in trendLineChart.buckets" :key="b.key">
+                  <circle :cx="b.x" :cy="b.unpaidY" r="1.6" class="trend-dot trend-dot--unpaid" vector-effect="non-scaling-stroke">
+                    <title>{{ b.label }}: {{ formatCurrency(b.unpaidValue) }} unpaid</title>
+                  </circle>
+                  <circle :cx="b.x" :cy="b.paidY" r="1.6" class="trend-dot trend-dot--paid" vector-effect="non-scaling-stroke">
+                    <title>{{ b.label }}: {{ formatCurrency(b.paidValue) }} paid</title>
+                  </circle>
+                </g>
+              </svg>
+              <div class="trend-x-labels">
+                <span v-for="b in trendLineChart.buckets" v-show="b.showLabel" :key="b.key" class="trend-x-label" :style="{ left: b.x + '%' }">{{ b.label }}</span>
               </div>
-              <span class="trend-label">{{ b.label }}</span>
+            </template>
+
+            <!-- A line needs 2+ points to show a trend - a single-bucket
+                 range (e.g. "today") is shown as a plain snapshot instead
+                 of a flat, meaningless line. -->
+            <div v-else-if="trendLineChart && trendLineChart.mode === 'single'" class="trend-single">
+              <div class="trend-single-stat">
+                <span class="trend-single-label"><span class="dot dot-paid"></span> Paid</span>
+                <span class="trend-single-value trend-single-value--paid">{{ formatCurrency(trendLineChart.paidValue) }}</span>
+              </div>
+              <div class="trend-single-divider"></div>
+              <div class="trend-single-stat">
+                <span class="trend-single-label"><span class="dot dot-unpaid"></span> Unpaid</span>
+                <span class="trend-single-value trend-single-value--unpaid">{{ formatCurrency(trendLineChart.unpaidValue) }}</span>
+              </div>
+              <span class="trend-single-date">{{ trendLineChart.label }}</span>
             </div>
+
+            <div v-else class="trend-empty">No data in the selected range</div>
           </div>
         </section>
+
+        <!-- ════════════════════════════════════════════════════
+             PAYMENT ANALYSIS — paid vs unpaid over time + split
+        ═════════════════════════════════════════════════════ -->
+        <PaymentAnalysisPanel
+          :adverts="filteredAdverts"
+          :start-date="startDate"
+          :end-date="endDate"
+        />
 
         <!-- ════════════════════════════════════════════════════
              CHARTS ROW — payment ledger / status mix / top breakdown
@@ -605,6 +642,8 @@ import { useAdverts } from '~/composables/useAdverts'
 import { ref, computed, watch, onMounted, h } from 'vue'
 import { useRouter, useRuntimeConfig } from '#imports';
 import { useAdvertPdf } from '~/composables/useAdvertPdf'
+import { usePaymentAnalysis } from '~/composables/usePaymentAnalysis'
+import PaymentAnalysisPanel from './PaymentAnalysisPanel.vue'
 
 const router = useRouter()
 const config = useRuntimeConfig()
@@ -652,7 +691,7 @@ const selectedUserId = ref('')
 const selectedStatus = ref('')
 const selectedPayment = ref('') // '', 'paid', 'unpaid'
 const searchQuery = ref('')
-const activeQuickRange = ref('today')
+const activeQuickRange = ref('thisMonth')
 const quickRanges = [
   { key: 'today',     label: 'Today' },
   { key: 'yesterday', label: 'Yesterday' },
@@ -748,7 +787,18 @@ const dateRangeDisplay = computed(() => {
   return start === end ? start : `${start} - ${end}`
 })
 
-const maxDate = computed(() => new Date().toISOString().split('T')[0])
+// `.toISOString()` converts to UTC first, so building a date at local
+// midnight and formatting it that way can roll back a day for any
+// timezone ahead of UTC (e.g. Uganda, UTC+3) - this formats the date's own
+// local year/month/day instead, with no UTC conversion involved.
+const toLocalISODate = (date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const maxDate = computed(() => toLocalISODate(new Date()))
 
 const isDateRangeInvalid = computed(() => {
   if (!startDate.value || !endDate.value) return false
@@ -867,60 +917,49 @@ const statusBreakdown = computed(() => {
 })
 
 // ── Trend over time (paid vs unpaid value per bucket) ──
-const trendGranularity = computed(() => {
-  const list = filteredAdverts.value
-  if (!list.length) return 'day'
-  const times = list.map(a => new Date(a.createdAt).getTime()).filter(t => !Number.isNaN(t))
-  if (!times.length) return 'day'
-  const spanDays = Math.max(1, Math.round((Math.max(...times) - Math.min(...times)) / 86400000) + 1)
-  if (spanDays > 90) return 'month'
-  if (spanDays > 31) return 'week'
-  return 'day'
-})
+// Reuses the same granularity/bucketing rules as the Payment Analysis panel
+// (day / month / quarter, driven by the selected date range) so the two
+// panels never disagree on what "by month" vs "by quarter" means for the
+// same range.
+const { granularity: trendGranularity, buckets: trendBuckets, paidVsUnpaid: paymentValueSplit } = usePaymentAnalysis(filteredAdverts, startDate, endDate)
 
-const formatBucketLabel = (date, granularity) => {
-  if (granularity === 'day') return date.toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })
-  if (granularity === 'week') return date.toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })
-  return date.toLocaleDateString('en-UG', { month: 'short', year: '2-digit' })
-}
+// Paid/unpaid trend as a line graph (one shared origin/axis) rather than a
+// per-bucket bar pair. A line only says something with 2+ points to compare,
+// so a single bucket (e.g. a one-day range) is shown as a plain paid/unpaid
+// snapshot instead of a fabricated "flat line".
+const trendLineChart = computed(() => {
+  const buckets = trendBuckets.value
+  if (!buckets.length) return null
 
-const trendBuckets = computed(() => {
-  const list = filteredAdverts.value
-  const granularity = trendGranularity.value
-
-  const bucketKey = (d) => {
-    if (granularity === 'day') return d.toISOString().split('T')[0]
-    if (granularity === 'week') {
-      const tmp = new Date(d)
-      const day = tmp.getDay()
-      tmp.setDate(tmp.getDate() - day + (day === 0 ? -6 : 1))
-      return tmp.toISOString().split('T')[0]
-    }
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  if (buckets.length === 1) {
+    const only = buckets[0]
+    return { mode: 'single', label: only.label, paidValue: only.paidValue, unpaidValue: only.unpaidValue }
   }
 
-  const map = new Map()
-  list.forEach(a => {
-    const d = new Date(a.createdAt)
-    if (Number.isNaN(d.getTime())) return
-    const key = bucketKey(d)
-    if (!map.has(key)) map.set(key, { key, date: new Date(key), count: 0, paidValue: 0, unpaidValue: 0 })
-    const e = map.get(key)
-    e.count++
-    if (a.isPaid) e.paidValue += Number(a.totalAmount) || 0
-    else e.unpaidValue += Number(a.totalAmount) || 0
-  })
+  const maxValue = Math.max(1, ...buckets.map(b => Math.max(b.paidValue, b.unpaidValue)))
+  const n = buckets.length
+  const toX = (i) => (i / (n - 1)) * 100
+  const toY = (v) => 100 - Math.min(100, (v / maxValue) * 100)
 
-  const arr = Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key))
-  const maxTotal = Math.max(1, ...arr.map(x => x.paidValue + x.unpaidValue))
+  // Cap x-axis labels so they don't crowd out on wide date ranges - always
+  // show the first and last bucket, plus evenly spaced ones in between.
+  const maxLabels = 6
+  const labelStep = Math.max(1, Math.ceil(n / maxLabels))
 
-  return arr.map(x => ({
-    ...x,
-    total: x.paidValue + x.unpaidValue,
-    paidHeightPct: Math.round((x.paidValue / maxTotal) * 100),
-    unpaidHeightPct: Math.round((x.unpaidValue / maxTotal) * 100),
-    label: formatBucketLabel(x.date, granularity)
+  const plotted = buckets.map((b, i) => ({
+    ...b,
+    x: toX(i),
+    paidY: toY(b.paidValue),
+    unpaidY: toY(b.unpaidValue),
+    showLabel: i === 0 || i === n - 1 || i % labelStep === 0,
   }))
+
+  return {
+    mode: 'line',
+    buckets: plotted,
+    paidPoints: plotted.map(b => `${b.x},${b.paidY}`).join(' '),
+    unpaidPoints: plotted.map(b => `${b.x},${b.unpaidY}`).join(' '),
+  }
 })
 
 // Real (non-decorative) sparkline series for the KPI tiles, drawn from the last 8 trend buckets
@@ -971,11 +1010,12 @@ const kpis = computed(() => [
   { title: 'Unpaid Value',  subtitle: `${paymentBreakdown.value.unpaid} advert${paymentBreakdown.value.unpaid !== 1 ? 's' : ''}`, display: formatCurrency(paymentBreakdown.value.unpaidValue), icon: 'hourglass', color: 'danger', spark: sparkSeries(b => b.unpaidValue) },
 ])
 
-// ── Initialize with today's date ──
+// ── Initialize with this month's date range ──
 const initializeDates = () => {
   const today = new Date()
-  startDate.value = today.toISOString().split('T')[0]
-  endDate.value = today.toISOString().split('T')[0]
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  startDate.value = toLocalISODate(startOfMonth)
+  endDate.value = toLocalISODate(today)
 }
 
 // ── Load adverts ──
@@ -1034,34 +1074,34 @@ const setDateRange = (range) => {
 
   switch (range) {
     case 'today':
-      startDate.value = today.toISOString().split('T')[0]
-      endDate.value = today.toISOString().split('T')[0]
+      startDate.value = toLocalISODate(today)
+      endDate.value = toLocalISODate(today)
       break
     case 'yesterday':
       result.setDate(today.getDate() - 1)
-      startDate.value = result.toISOString().split('T')[0]
-      endDate.value = result.toISOString().split('T')[0]
+      startDate.value = toLocalISODate(result)
+      endDate.value = toLocalISODate(result)
       break
     case 'thisWeek': {
       const startOfWeek = new Date(today)
       const day = startOfWeek.getDay()
       const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1)
       startOfWeek.setDate(diff)
-      startDate.value = startOfWeek.toISOString().split('T')[0]
-      endDate.value = today.toISOString().split('T')[0]
+      startDate.value = toLocalISODate(startOfWeek)
+      endDate.value = toLocalISODate(today)
       break
     }
     case 'thisMonth': {
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-      startDate.value = startOfMonth.toISOString().split('T')[0]
-      endDate.value = today.toISOString().split('T')[0]
+      startDate.value = toLocalISODate(startOfMonth)
+      endDate.value = toLocalISODate(today)
       break
     }
     case 'lastMonth': {
       const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
       const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0)
-      startDate.value = lastMonth.toISOString().split('T')[0]
-      endDate.value = endOfLastMonth.toISOString().split('T')[0]
+      startDate.value = toLocalISODate(lastMonth)
+      endDate.value = toLocalISODate(endOfLastMonth)
       break
     }
   }
@@ -1076,18 +1116,312 @@ const resetFilters = () => {
   selectedStatus.value = ''
   selectedPayment.value = ''
   searchQuery.value = ''
-  activeQuickRange.value = 'today'
+  activeQuickRange.value = 'thisMonth'
   sortKey.value = 'date'
   sortDir.value = 'desc'
   loadAdverts()
 }
 
-// ── Export to Excel (.xlsx) — column widths, currency/date number formats, autofilter, summary sheet ──
+// ── Chart drawing primitives (plain Canvas 2D, no charting library) ──
+// Used to rasterize the same numbers shown on-screen (Value Trend,
+// Payment Analysis, Paid vs Unpaid) into PNGs for the Excel export's
+// dedicated Charts sheet - see the note above exportData for why this is
+// a picture rather than a native/editable Excel chart object.
+const CHART_COLORS = { paid: '#2563eb', unpaid: '#d97706', grid: '#e5e7eb', text: '#374151', title: '#111827' }
+
+const drawChartTitle = (ctx, text, x, y) => {
+  ctx.font = 'bold 13px Arial'
+  ctx.fillStyle = CHART_COLORS.title
+  ctx.textAlign = 'left'
+  ctx.fillText(text, x, y)
+}
+
+const drawBarChart = (ctx, { x, y, width, height, buckets }) => {
+  const bottom = y + height
+  ctx.strokeStyle = CHART_COLORS.grid
+  ctx.beginPath()
+  ctx.moveTo(x, bottom)
+  ctx.lineTo(x + width, bottom)
+  ctx.stroke()
+
+  if (!buckets.length) {
+    ctx.font = '12px Arial'
+    ctx.fillStyle = CHART_COLORS.text
+    ctx.textAlign = 'center'
+    ctx.fillText('No data in the selected range', x + width / 2, y + height / 2)
+    return
+  }
+
+  const maxValue = Math.max(1, ...buckets.map(b => Math.max(b.paidValue, b.unpaidValue)))
+  const groupWidth = width / buckets.length
+  const barWidth = Math.max(2, Math.min(26, groupWidth * 0.38))
+  const labelStep = Math.max(1, Math.ceil(buckets.length / 12))
+
+  ctx.font = '10px Arial'
+  ctx.textAlign = 'center'
+  buckets.forEach((b, i) => {
+    const groupCenter = x + groupWidth * i + groupWidth / 2
+    const paidHeight = (b.paidValue / maxValue) * height
+    const unpaidHeight = (b.unpaidValue / maxValue) * height
+
+    ctx.fillStyle = CHART_COLORS.paid
+    ctx.fillRect(groupCenter - barWidth - 1, bottom - paidHeight, barWidth, paidHeight)
+    ctx.fillStyle = CHART_COLORS.unpaid
+    ctx.fillRect(groupCenter + 1, bottom - unpaidHeight, barWidth, unpaidHeight)
+
+    if (i === 0 || i === buckets.length - 1 || i % labelStep === 0) {
+      ctx.fillStyle = CHART_COLORS.text
+      ctx.fillText(b.label, groupCenter, bottom + 14)
+    }
+  })
+}
+
+// Mirrors trendLineChart's presentation rules: 2+ buckets draw a line,
+// exactly 1 bucket shows a plain paid/unpaid snapshot instead of a
+// meaningless flat line, 0 buckets shows an empty-state message.
+const drawLineChart = (ctx, { x, y, width, height, buckets }) => {
+  const bottom = y + height
+
+  ctx.strokeStyle = CHART_COLORS.grid
+  ctx.beginPath()
+  ctx.moveTo(x, bottom)
+  ctx.lineTo(x + width, bottom)
+  ctx.stroke()
+
+  if (!buckets.length) {
+    ctx.font = '12px Arial'
+    ctx.fillStyle = CHART_COLORS.text
+    ctx.textAlign = 'center'
+    ctx.fillText('No data in the selected range', x + width / 2, y + height / 2)
+    return
+  }
+
+  if (buckets.length === 1) {
+    const only = buckets[0]
+    ctx.font = 'bold 14px Arial'
+    ctx.textAlign = 'center'
+    ctx.fillStyle = CHART_COLORS.paid
+    ctx.fillText(`Paid: ${formatCurrency(only.paidValue)}`, x + width * 0.3, y + height / 2 - 6)
+    ctx.fillStyle = CHART_COLORS.unpaid
+    ctx.fillText(`Unpaid: ${formatCurrency(only.unpaidValue)}`, x + width * 0.7, y + height / 2 - 6)
+    ctx.font = '11px Arial'
+    ctx.fillStyle = CHART_COLORS.text
+    ctx.fillText(only.label, x + width / 2, y + height / 2 + 16)
+    return
+  }
+
+  const maxValue = Math.max(1, ...buckets.map(b => Math.max(b.paidValue, b.unpaidValue)))
+  const n = buckets.length
+  const toX = (i) => x + (i / (n - 1)) * width
+  const toY = (v) => bottom - (v / maxValue) * height
+
+  const drawSeries = (color, pick) => {
+    ctx.beginPath()
+    buckets.forEach((b, i) => {
+      const px = toX(i)
+      const py = toY(pick(b))
+      if (i === 0) ctx.moveTo(px, py)
+      else ctx.lineTo(px, py)
+    })
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+  drawSeries(CHART_COLORS.unpaid, b => b.unpaidValue)
+  drawSeries(CHART_COLORS.paid, b => b.paidValue)
+
+  const labelStep = Math.max(1, Math.ceil(n / 8))
+  ctx.font = '10px Arial'
+  ctx.fillStyle = CHART_COLORS.text
+  ctx.textAlign = 'center'
+  buckets.forEach((b, i) => {
+    if (i === 0 || i === n - 1 || i % labelStep === 0) {
+      ctx.fillText(b.label, toX(i), bottom + 14)
+    }
+  })
+}
+
+const drawPieChart = (ctx, { cx, cy, r, split }) => {
+  const total = split.paidValue + split.unpaidValue
+  if (total <= 0) {
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+    ctx.strokeStyle = CHART_COLORS.grid
+    ctx.lineWidth = 2
+    ctx.stroke()
+    return
+  }
+
+  const paidAngle = (split.paidValue / total) * Math.PI * 2
+  const start = -Math.PI / 2
+
+  ctx.beginPath()
+  ctx.moveTo(cx, cy)
+  ctx.arc(cx, cy, r, start, start + paidAngle)
+  ctx.closePath()
+  ctx.fillStyle = CHART_COLORS.paid
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.moveTo(cx, cy)
+  ctx.arc(cx, cy, r, start + paidAngle, start + Math.PI * 2)
+  ctx.closePath()
+  ctx.fillStyle = CHART_COLORS.unpaid
+  ctx.fill()
+}
+
+const drawPieLegend = (ctx, { x, y, split }) => {
+  ctx.font = '12px Arial'
+  ctx.textAlign = 'left'
+  ctx.fillStyle = CHART_COLORS.paid
+  ctx.fillRect(x, y - 10, 10, 10)
+  ctx.fillStyle = CHART_COLORS.text
+  ctx.fillText(`Paid  ${split.paidPct}%  (${formatCurrency(split.paidValue)})`, x + 16, y - 1)
+
+  ctx.fillStyle = CHART_COLORS.unpaid
+  ctx.fillRect(x, y + 14, 10, 10)
+  ctx.fillStyle = CHART_COLORS.text
+  ctx.fillText(`Unpaid  ${split.unpaidPct}%  (${formatCurrency(split.unpaidValue)})`, x + 16, y + 23)
+}
+
+const newChartCanvas = (width, height) => {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, width, height)
+  return ctx
+}
+
+const buildLineChartImage = (buckets) => {
+  const width = 860
+  const height = 260
+  const ctx = newChartCanvas(width, height)
+  if (!ctx) return null
+  drawChartTitle(ctx, 'Value Trend (Paid vs Unpaid)', 20, 20)
+  drawLineChart(ctx, { x: 20, y: 34, width: width - 40, height: height - 74, buckets })
+  return ctx.canvas.toDataURL('image/png')
+}
+
+const buildBarChartImage = (buckets) => {
+  const width = 860
+  const height = 260
+  const ctx = newChartCanvas(width, height)
+  if (!ctx) return null
+  drawChartTitle(ctx, 'Payment Analysis (Paid vs Unpaid per Period)', 20, 20)
+  drawBarChart(ctx, { x: 20, y: 34, width: width - 40, height: height - 74, buckets })
+  return ctx.canvas.toDataURL('image/png')
+}
+
+const buildPieChartImage = (split) => {
+  const width = 500
+  const height = 260
+  const ctx = newChartCanvas(width, height)
+  if (!ctx) return null
+  drawChartTitle(ctx, 'Paid vs Unpaid (Overall Split)', 20, 20)
+  const cx = 130
+  const cy = height / 2 + 6
+  const r = 78
+  drawPieChart(ctx, { cx, cy, r, split })
+  drawPieLegend(ctx, { x: cx + r + 24, y: cy - 4, split })
+  return ctx.canvas.toDataURL('image/png')
+}
+
+// ── Excel sheet formatting helper: header styling, alternating row bands,
+//    currency/date number formats, autofilter (gives sortable columns via
+//    Excel's own filter-dropdown "Sort A-Z/Z-A"), and a frozen header row.
+//    Shared by the Adverts sheet and every breakdown/pivot-style sheet so
+//    they all look and behave the same way. ──
+const HEADER_FILL = 'FF0F1C2E'   // matches --header-bg in the dashboard
+const HEADER_FONT = 'FFFFFFFF'
+const BAND_FILL = 'FFF3F4F6'     // matches --stripe-bg in the dashboard
+
+const addFormattedSheet = (workbook, { name, headers, colWidths = [], rows, currencyCols = [], dateCols = [] }) => {
+  const sheet = workbook.addWorksheet(name)
+  sheet.columns = headers.map((header, i) => ({ header, width: colWidths[i] || 16 }))
+
+  const headerRow = sheet.getRow(1)
+  headerRow.height = 20
+  headerRow.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: HEADER_FONT } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } }
+  })
+
+  rows.forEach((r, i) => {
+    const row = sheet.addRow(r)
+    if (i % 2 === 1) {
+      row.eachCell({ includeEmpty: true }, cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BAND_FILL } }
+      })
+    }
+  })
+
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    currencyCols.forEach(c => { sheet.getCell(r, c).numFmt = '#,##0' })
+    dateCols.forEach(c => {
+      const cell = sheet.getCell(r, c)
+      if (cell.value instanceof Date) cell.numFmt = 'dd mmm yyyy'
+    })
+  }
+
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } }
+  sheet.views = [{ state: 'frozen', ySplit: 1 }]
+
+  return sheet
+}
+
+// Groups adverts by an arbitrary key (client, product, captured-by user,
+// status...) into count/paid/unpaid/total rows - the "pivot table" style
+// breakdown sheets are built from this. Sorted by total value, highest first.
+const aggregateAdvertsBy = (rows, keyFn) => {
+  const map = new Map()
+  rows.forEach(a => {
+    const key = keyFn(a) || 'Unknown'
+    if (!map.has(key)) map.set(key, { label: key, count: 0, paidValue: 0, unpaidValue: 0 })
+    const e = map.get(key)
+    e.count++
+    const amount = Number(a.totalAmount) || 0
+    if (a.isPaid) e.paidValue += amount
+    else e.unpaidValue += amount
+  })
+  return Array.from(map.values())
+    .map(e => ({ ...e, totalValue: e.paidValue + e.unpaidValue }))
+    .sort((a, b) => b.totalValue - a.totalValue)
+}
+
+// ── Export to Excel (.xlsx) — banded/sortable Adverts table, a Summary
+//    sheet, a Charts sheet with all three visuals, a Trend Data sheet
+//    (the raw numbers behind the charts, ready for the user's own native
+//    Excel PivotTable/PivotChart), and pivot-style breakdown sheets by
+//    Client / Product / User / Status ──
+//
+// Uses ExcelJS rather than the xlsx (SheetJS) package used elsewhere in
+// this app: SheetJS's free Community Edition can only write plain data -
+// charts and embedded images are a SheetJS Pro (paid) feature. ExcelJS is
+// free and supports embedding images, so each chart is rendered to a PNG
+// on an offscreen canvas (the draw* / build*Image helpers above) and
+// dropped into the Charts sheet as a picture - a picture, not a live/
+// editable Excel chart object, which would still need SheetJS Pro or
+// similar. Likewise, ExcelJS's mainline package has no reliable native
+// PivotTable support (only an experimental, limited fork exists), so
+// "pivot tables" here are pre-aggregated summary sheets rather than
+// interactive Excel PivotTable objects - the Trend Data sheet's clean,
+// banded rows are meant to be a good starting point if you want to build
+// a real one yourself via Excel's Insert > PivotTable.
+//
+// Requires the "exceljs" package (npm install exceljs).
 const exportData = async () => {
   try {
-    const XLSX = await import('xlsx')
+    const ExcelJS = (await import('exceljs')).default
     const rows = filteredAdverts.value
 
+    const workbook = new ExcelJS.Workbook()
+    workbook.creator = 'VGAMS'
+    workbook.created = new Date()
+
+    // ── Adverts sheet ──
     const headers = [
       'Ref #', 'BC Ref #', 'Captured By', 'Client', 'Advert Title', 'Product', 'Ad Size',
       'Office Location', 'Client Ref No', 'Revenue Stream', 'Cost Stream',
@@ -1095,7 +1429,11 @@ const exportData = async () => {
       'Status', 'Created At', 'Start Date', 'End Date', 'Payment Method',
       'User Email', 'User Role'
     ]
-
+    const colWidths = [
+      20, 16, 18, 20, 26, 16, 10,
+      16, 14, 14, 14, 12, 12, 10,
+      14, 12, 16, 18, 12, 12, 16, 22, 12
+    ]
     const dataRows = rows.map(a => ([
       a.reference || '',
       a.bcReference || '',
@@ -1121,34 +1459,18 @@ const exportData = async () => {
       a.createdBy?.email || '',
       a.createdBy?.role || ''
     ]))
+    addFormattedSheet(workbook, {
+      name: 'Adverts',
+      headers,
+      colWidths,
+      rows: dataRows,
+      currencyCols: [12, 13, 15],   // Base Price, Surcharge, Total Amount
+      dateCols: [18, 19, 20],       // Created At, Start Date, End Date
+    })
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows])
-
-    ws['!cols'] = [
-      { wch: 20 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 26 }, { wch: 16 }, { wch: 10 },
-      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
-      { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 22 }, { wch: 12 }
-    ]
-    ws['!rows'] = [{ hpx: 22 }]
-
-    const range = XLSX.utils.decode_range(ws['!ref'])
-    const currencyCols = [11, 12, 14]   // Base Price, Surcharge, Total Amount
-    const dateCols = [17, 18, 19]       // Created At, Start Date, End Date
-    for (let R = 1; R <= range.e.r; R++) {
-      currencyCols.forEach(C => {
-        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
-        if (cell) cell.z = '#,##0'
-      })
-      dateCols.forEach(C => {
-        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
-        if (cell && cell.v instanceof Date) cell.z = 'dd mmm yyyy'
-      })
-    }
-    ws['!autofilter'] = { ref: ws['!ref'] }
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Adverts')
-
+    // ── Summary sheet ──
+    const summarySheet = workbook.addWorksheet('Summary')
+    summarySheet.columns = [{ width: 22 }, { width: 24 }]
     const summaryRows = [
       ['Metric', 'Value'],
       ['Date Range', dateRangeDisplay.value],
@@ -1162,20 +1484,86 @@ const exportData = async () => {
       ['Unique Users', overallStats.value.uniqueUsers],
       ['Generated At', new Date()]
     ]
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows)
-    wsSummary['!cols'] = [{ wch: 22 }, { wch: 24 }]
-    ;[3, 4, 6, 8].forEach(R => {
-      const c = wsSummary[XLSX.utils.encode_cell({ r: R, c: 1 })]
-      if (c) c.z = '#,##0'
+    summaryRows.forEach(r => summarySheet.addRow(r))
+    summarySheet.getRow(1).eachCell(cell => {
+      cell.font = { bold: true, color: { argb: HEADER_FONT } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } }
     })
-    const genCell = wsSummary[XLSX.utils.encode_cell({ r: 10, c: 1 })]
-    if (genCell) genCell.z = 'dd mmm yyyy hh:mm'
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
+    // Rows are 1-indexed with row 1 as the header, so summaryRows[3] ("Total
+    // Value") lands on sheet row 4, and so on.
+    ;[4, 5, 7, 9].forEach(r => { summarySheet.getCell(r, 2).numFmt = '#,##0' })
+    summarySheet.getCell(11, 2).numFmt = 'dd mmm yyyy hh:mm'
 
-    XLSX.writeFile(wb, `adverts-report_${startDate.value}_to_${endDate.value}.xlsx`)
+    // ── Charts sheet: all three visuals, stacked ──
+    const chartsSheet = workbook.addWorksheet('Charts')
+    chartsSheet.views = [{ showGridLines: false }]
+    chartsSheet.getColumn(1).width = 4
+
+    const lineImg = buildLineChartImage(trendBuckets.value)
+    const barImg = buildBarChartImage(trendBuckets.value)
+    const pieImg = buildPieChartImage(paymentValueSplit.value)
+
+    let chartRow = 1
+    const placeChart = (dataUrl, rowSpan, imgWidth, imgHeight) => {
+      if (!dataUrl) return
+      const imageId = workbook.addImage({ base64: dataUrl, extension: 'png' })
+      chartsSheet.addImage(imageId, {
+        tl: { col: 1, row: chartRow },
+        ext: { width: imgWidth, height: imgHeight },
+      })
+      chartRow += rowSpan
+    }
+    placeChart(lineImg, 14, 860, 260)
+    placeChart(barImg, 14, 860, 260)
+    placeChart(pieImg, 14, 500, 260)
+
+    // ── Trend Data sheet: the raw numbers behind the charts above, in
+    //    case a real native PivotTable/PivotChart is wanted (Insert >
+    //    PivotTable in Excel, pointed at this sheet) ──
+    const trendRows = trendBuckets.value.map(b => ([
+      b.label, b.paidValue, b.unpaidValue, b.paidCount, b.unpaidCount, b.total
+    ]))
+    addFormattedSheet(workbook, {
+      name: 'Trend Data',
+      headers: ['Period', 'Paid Value', 'Unpaid Value', 'Paid Count', 'Unpaid Count', 'Total Value'],
+      colWidths: [16, 16, 16, 14, 14, 16],
+      rows: trendRows,
+      currencyCols: [2, 3, 6],
+    })
+
+    // ── Pivot-style breakdown sheets (see the note above exportData on
+    //    why these are pre-aggregated summaries rather than native
+    //    PivotTable objects) ──
+    const breakdownHeaders = ['Count', 'Paid Value', 'Unpaid Value', 'Total Value']
+    const breakdownColWidths = [14, 16, 16, 16]
+    const addBreakdownSheet = (name, labelHeader, keyFn) => {
+      const items = aggregateAdvertsBy(rows, keyFn)
+      addFormattedSheet(workbook, {
+        name,
+        headers: [labelHeader, ...breakdownHeaders],
+        colWidths: [24, ...breakdownColWidths],
+        rows: items.map(x => ([x.label, x.count, x.paidValue, x.unpaidValue, x.totalValue])),
+        currencyCols: [3, 4, 5],
+      })
+    }
+    addBreakdownSheet('By Client', 'Client', a => a.clientName)
+    addBreakdownSheet('By Product', 'Product', a => a.product?.name)
+    addBreakdownSheet('By User', 'Captured By', a => a.createdBy?.name)
+    addBreakdownSheet('By Status', 'Status', a => getStatusLabel(a.status))
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `adverts-report_${startDate.value}_to_${endDate.value}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   } catch (err) {
     console.error('Export failed:', err)
-    alert('Failed to export to Excel. Make sure the "xlsx" package is installed (npm install xlsx).')
+    alert('Failed to export to Excel. Make sure the "exceljs" package is installed (npm install exceljs).')
   }
 }
 
@@ -1194,6 +1582,14 @@ const buildAdvertPdfData = (advert) => ({
   advertTitle: advert.advertTitle,
   product: advert.product?.name,
   adSize: advert.adSize,
+  // Same caveat as salesAgent above - not referenced elsewhere in this file,
+  // so confirm this is the right key against your advert API response.
+  colorType: advert.adType || advert.colorType || advert.ad_type || '',
+  // Not accessed anywhere else in this component, so the exact shape the
+  // API returns it in is unconfirmed - covering the common shapes (nested
+  // object with a name, or a flat string field) here. Adjust the field
+  // name below if your advert API uses a different key.
+  salesAgent: advert.salesAgent?.name || advert.salesAgentName || advert.agent?.name || advert.agentName || '',
   officeLocation: advert.officeLocation,
   basePrice: advert.basePrice || 0,
   surcharge: advert.surcharge || 0,
@@ -1497,16 +1893,29 @@ onMounted(() => {
 .dot-paid, .dot-blue { background: var(--blue); }
 .dot-unpaid, .dot-amber { background: var(--amber); }
 
-/* ── Trend chart ── */
-.trend-chart { display: flex; align-items: flex-end; gap: 0.5rem; height: 12rem; overflow-x: auto; padding: 1rem 1rem 0.75rem; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-.trend-chart::-webkit-scrollbar { height: 6px; }
-.trend-chart::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-.trend-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 0.375rem; min-width: 34px; flex: 1 0 auto; height: 100%; }
-.trend-bars { display: flex; flex-direction: column; justify-content: flex-end; width: 100%; height: 9.375rem; background: var(--page-bg); border-radius: 3px 3px 0 0; overflow: hidden; }
-.trend-bar { width: 100%; transition: height .4s ease; }
-.trend-bar--unpaid { background: var(--amber); }
-.trend-bar--paid { background: var(--blue); }
-.trend-label { font-size: 0.625rem; color: var(--faint); white-space: nowrap; font-weight: 600; font-family: var(--font-mono); }
+/* ── Trend chart (paid/unpaid line graph, one shared origin) ── */
+.trend-chart { position: relative; padding: 1rem 1rem 1.5rem; height: 6.5rem; }
+.trend-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.trend-axis { stroke: var(--border); stroke-width: 1; }
+.trend-line { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; transition: d .4s ease; }
+.trend-line--paid { stroke: var(--blue); }
+.trend-line--unpaid { stroke: var(--amber); }
+.trend-dot { stroke: var(--panel-bg, #fff); stroke-width: 0.6; }
+.trend-dot--paid { fill: var(--blue); }
+.trend-dot--unpaid { fill: var(--amber); }
+.trend-x-labels { position: relative; height: 0.875rem; }
+.trend-x-label { position: absolute; top: 0; transform: translateX(-50%); font-size: 0.625rem; color: var(--faint); white-space: nowrap; font-weight: 600; font-family: var(--font-mono); }
+
+/* ── Trend chart: single-bucket snapshot / empty states ── */
+.trend-single { display: flex; align-items: center; justify-content: center; gap: 1.5rem; height: 100%; position: relative; }
+.trend-single-stat { display: flex; flex-direction: column; align-items: center; gap: 0.375rem; }
+.trend-single-label { display: flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+.trend-single-value { font-size: 1.375rem; font-weight: 700; font-family: var(--font-mono); }
+.trend-single-value--paid { color: var(--blue); }
+.trend-single-value--unpaid { color: var(--amber); }
+.trend-single-divider { width: 1px; height: 2.5rem; background: var(--border); }
+.trend-single-date { position: absolute; bottom: -0.25rem; left: 50%; transform: translateX(-50%); font-size: 0.625rem; color: var(--faint); font-weight: 600; font-family: var(--font-mono); }
+.trend-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--faint); font-size: 0.8125rem; }
 
 /* ══════════════════════════════════════════════════════════════════════════════
    CHARTS ROW
