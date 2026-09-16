@@ -15,7 +15,7 @@
   <div class="fac-root">
     <button class="fac-trigger" @click="open">
       <CalendarGlyph />
-      <span>Upcoming Bookings</span>
+      <span>Run Calendar</span>
     </button>
 
     <div v-if="isOpen" class="fac-overlay" @click.self="close">
@@ -23,7 +23,7 @@
         <div class="fac-modal-head">
           <div class="fac-modal-title">
             <CalendarGlyph />
-            <span>Upcoming Bookings</span>
+            <span>Run Calendar</span>
           </div>
           <button class="fac-close" @click="close" title="Close">
             <CloseGlyph />
@@ -32,25 +32,47 @@
 
         <div v-if="error" class="fac-error">{{ error }}</div>
 
-        <div class="fac-search">
-          <SearchGlyph />
-          <input
-            v-model="searchQuery"
-            type="text"
-            class="fac-search-input"
-            placeholder="Search reference, client, title, product…"
-            :disabled="loading"
-          >
-          <button v-if="searchQuery" class="fac-search-clear" @click="searchQuery = ''" title="Clear search">
-            <CloseGlyph />
-          </button>
+        <div class="fac-filter-bar">
+          <div class="fac-search">
+            <SearchGlyph />
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="fac-search-input"
+              placeholder="Search reference, client, contact, phone, title, product…"
+              :disabled="loading"
+            >
+            <button v-if="searchQuery" class="fac-search-clear" @click="searchQuery = ''" title="Clear search">
+              <CloseGlyph />
+            </button>
+          </div>
+
+          <div class="fac-filters">
+            <select v-model="filterProduct" class="fac-filter-select" :disabled="loading">
+              <option value="">All Products</option>
+              <option v-for="p in productOptions" :key="p" :value="p">{{ p }}</option>
+            </select>
+            <select v-model="filterPaymentMethod" class="fac-filter-select" :disabled="loading">
+              <option value="">All Payment Methods</option>
+              <option v-for="m in paymentMethodOptions" :key="m" :value="m">{{ formatPaymentMethod(m) }}</option>
+            </select>
+            <select v-model="filterSalesAgent" class="fac-filter-select" :disabled="loading">
+              <option value="">All Sales Agents</option>
+              <option v-for="s in salesAgentOptions" :key="s" :value="s">{{ s }}</option>
+            </select>
+            <select v-model="filterCapturedBy" class="fac-filter-select" :disabled="loading">
+              <option value="">All Captured By</option>
+              <option v-for="c in capturedByOptions" :key="c" :value="c">{{ c }}</option>
+            </select>
+            <button v-if="hasActiveFilters" class="fac-filter-clear" @click="clearFilters">Clear filters</button>
+          </div>
         </div>
 
         <div v-if="loading" class="fac-loading">Loading upcoming bookings…</div>
 
-        <template v-else-if="isSearching">
+        <template v-else-if="isFiltering">
           <div class="fac-search-results">
-            <div v-if="!searchResults.length" class="fac-empty">No upcoming adverts match “{{ searchQuery }}”.</div>
+            <div v-if="!searchResults.length" class="fac-empty">No upcoming adverts match these filters.</div>
             <ul v-else class="fac-detail-list">
               <li v-for="advert in searchResults" :key="advert.id" class="fac-detail-row">
                 <div class="fac-detail-main">
@@ -64,7 +86,7 @@
                     {{ getStatusLabel(advert.status) }}
                   </span>
                   <span class="fac-detail-value">{{ formatCurrency(advert.totalAmount) }}</span>
-                  <button class="fac-view-btn" @click="viewAdvert(advert)">View</button>
+                  <button class="fac-view-btn" @click="selectedAdvert = advert">Details</button>
                 </div>
               </li>
             </ul>
@@ -127,7 +149,7 @@
                     {{ getStatusLabel(advert.status) }}
                   </span>
                   <span class="fac-detail-value">{{ formatCurrency(advert.totalAmount) }}</span>
-                  <button class="fac-view-btn" @click="viewAdvert(advert)">View</button>
+                  <button class="fac-view-btn" @click="selectedAdvert = advert">Details</button>
                 </div>
               </li>
             </ul>
@@ -135,15 +157,16 @@
         </template>
       </div>
     </div>
+
+    <AdvertLedgerDetail :advert="selectedAdvert" @close="selectedAdvert = null" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, h } from 'vue'
-import { useRouter } from '#imports'
 import { useFutureAdverts } from '~/composables/useFutureAdverts'
+import AdvertLedgerDetail from './AdvertLedgerDetail.vue'
 
-const router = useRouter()
 const { loading, error, adverts, daySummary, fetchFutureAdverts, fetchedThroughMonths } = useFutureAdverts()
 
 const isOpen = ref(false)
@@ -151,6 +174,11 @@ const hasFetched = ref(false)
 const viewMonth = ref(startOfMonth(new Date()))
 const selectedDay = ref(null)
 const searchQuery = ref('')
+const selectedAdvert = ref(null)
+const filterProduct = ref('')
+const filterPaymentMethod = ref('')
+const filterSalesAgent = ref('')
+const filterCapturedBy = ref('')
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -175,7 +203,8 @@ const open = async () => {
 const close = () => {
   isOpen.value = false
   selectedDay.value = null
-  searchQuery.value = ''
+  selectedAdvert.value = null
+  clearFilters()
 }
 
 const isCurrentMonth = computed(() => {
@@ -252,22 +281,75 @@ const formatRunDate = (dateKey) => {
   return new Date(dateKey).toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const isSearching = computed(() => searchQuery.value.trim().length > 0)
+// Phone numbers show up in every locally-conventional form - "0772123456",
+// "+256772123456", "256772123456", with spaces or dashes - so comparisons
+// strip everything but digits, then drop a leading country code or trunk
+// "0" to get the same canonical local-subscriber-number suffix regardless
+// of which form was typed or stored.
+const normalizePhoneDigits = (value) => {
+  let digits = String(value || '').replace(/\D/g, '')
+  if (digits.startsWith('256')) digits = digits.slice(3)
+  else if (digits.startsWith('0')) digits = digits.slice(1)
+  return digits
+}
+
+const matchesQuery = (advert, rawQuery) => {
+  const q = rawQuery.trim().toLowerCase()
+  if (!q) return true
+
+  const textFields = [
+    advert.reference, advert.clientName, advert.client?.name,
+    advert.contactPerson, advert.client?.contactPerson,
+    advert.advertTitle, advert.product?.name,
+  ]
+  if (textFields.some((f) => (f || '').toLowerCase().includes(q))) return true
+
+  const qDigits = normalizePhoneDigits(q)
+  if (qDigits) {
+    const phoneFields = [advert.contactNumber, advert.client?.phone].map(normalizePhoneDigits)
+    if (phoneFields.some((p) => p && p.includes(qDigits))) return true
+  }
+  return false
+}
+
+const matchesFilters = (advert) => {
+  if (filterProduct.value && advert.product?.name !== filterProduct.value) return false
+  if (filterPaymentMethod.value && advert.paymentMethod !== filterPaymentMethod.value) return false
+  if (filterSalesAgent.value && !(advert.salesAgents || []).some((a) => a.name === filterSalesAgent.value)) return false
+  if (filterCapturedBy.value && advert.createdBy?.name !== filterCapturedBy.value) return false
+  return true
+}
+
+const hasActiveFilters = computed(() =>
+  !!(searchQuery.value.trim() || filterProduct.value || filterPaymentMethod.value || filterSalesAgent.value || filterCapturedBy.value)
+)
+const isFiltering = hasActiveFilters
 const searchResults = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return []
+  if (!hasActiveFilters.value) return []
   return adverts.value
-    .filter((a) => [a.reference, a.clientName, a.advertTitle, a.product?.name]
-      .some((field) => (field || '').toLowerCase().includes(q)))
+    .filter((a) => matchesQuery(a, searchQuery.value) && matchesFilters(a))
     .sort((a, b) => (nextRunDate(a) || '').localeCompare(nextRunDate(b) || ''))
 })
-
-const viewAdvert = (advert) => {
-  router.push(`/dashboard/booking/edit/${advert.id}?mode=view`)
+const clearFilters = () => {
+  searchQuery.value = ''
+  filterProduct.value = ''
+  filterPaymentMethod.value = ''
+  filterSalesAgent.value = ''
+  filterCapturedBy.value = ''
 }
+
+// Filter dropdown option lists, derived from whatever's already fetched -
+// no separate lookup call needed.
+const uniqueSorted = (values) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b))
+const productOptions = computed(() => uniqueSorted(adverts.value.map((a) => a.product?.name)))
+const paymentMethodOptions = computed(() => uniqueSorted(adverts.value.map((a) => a.paymentMethod)))
+const salesAgentOptions = computed(() => uniqueSorted(adverts.value.flatMap((a) => (a.salesAgents || []).map((s) => s.name))))
+const capturedByOptions = computed(() => uniqueSorted(adverts.value.map((a) => a.createdBy?.name)))
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-UG', { style: 'currency', currency: 'UGX', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0)
+
+const formatPaymentMethod = (method) => method ? method.replace(/_/g, ' ') : ''
 
 const STATUS_LABELS = {
   draft: 'Draft', pending_review: 'Pending Review', editor_approved: 'Editor Approved',
@@ -317,7 +399,7 @@ const ChevronGlyph = (props) => svgIcon([
 }
 .fac-modal {
   background: var(--surface, #fff); border-radius: var(--radius, 8px);
-  width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto;
+  width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto;
   box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,.08));
   display: flex; flex-direction: column;
 }
@@ -335,19 +417,48 @@ const ChevronGlyph = (props) => svgIcon([
   background: #fee2e2; color: #991b1b; font-size: 0.8125rem;
 }
 
+.fac-filter-bar {
+  margin: 0.875rem 1.25rem 0; padding: 0.875rem;
+  border-radius: 10px; background: var(--page-bg, #f0f4f8);
+  border: 1px solid var(--border, #e5e7eb);
+  display: flex; flex-direction: column; gap: 0.625rem;
+}
+
 .fac-search {
   display: flex; align-items: center; gap: 0.5rem;
-  margin: 0.875rem 1.25rem 0; padding: 0 0.625rem;
-  border: 1px solid var(--border, #e5e7eb); border-radius: 6px; height: 2.25rem;
+  padding: 0 0.75rem; height: 2.5rem;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--blue, #2563eb);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
 }
-.fac-search svg { width: 15px; height: 15px; color: var(--faint, #9ca3af); flex-shrink: 0; }
+.fac-search svg { width: 16px; height: 16px; color: var(--blue, #2563eb); flex-shrink: 0; }
 .fac-search-input {
-  border: none; outline: none; flex: 1; font-size: 0.8125rem; color: var(--ink, #111827);
+  border: none; outline: none; flex: 1; font-size: 0.875rem; color: var(--ink, #111827);
   background: transparent; font-family: inherit;
 }
 .fac-search-clear { background: none; border: none; cursor: pointer; color: var(--faint, #9ca3af); padding: 0.125rem; flex-shrink: 0; }
 .fac-search-clear svg { width: 14px; height: 14px; }
 .fac-search-clear:hover { color: var(--red, #dc2626); }
+
+.fac-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.fac-filter-select {
+  font-size: 0.75rem; font-weight: 600; color: var(--ink, #111827);
+  background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px; padding: 0.375rem 1.75rem 0.375rem 0.75rem; cursor: pointer;
+  max-width: 170px; text-overflow: ellipsis;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 12px;
+}
+.fac-filter-select:hover { border-color: var(--blue, #2563eb); }
+.fac-filter-select:disabled { opacity: 0.6; cursor: not-allowed; }
+.fac-filter-clear {
+  font-size: 0.75rem; font-weight: 600; color: var(--blue, #2563eb);
+  background: var(--blue-lt, #eff6ff); border: none; border-radius: 999px;
+  padding: 0.375rem 0.75rem; cursor: pointer;
+}
+.fac-filter-clear:hover { background: #dbeafe; }
 
 .fac-search-results { padding: 0.875rem 1.25rem 1.25rem; }
 .fac-empty { padding: 1.5rem 0; text-align: center; color: var(--faint, #9ca3af); font-size: 0.8125rem; }
@@ -431,5 +542,6 @@ const ChevronGlyph = (props) => svgIcon([
 
 @media (max-width: 480px) {
   .fac-detail-row { flex-direction: column; align-items: flex-start; }
+  .fac-filter-select { max-width: none; flex: 1 1 auto; }
 }
 </style>
