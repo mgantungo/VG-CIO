@@ -275,6 +275,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useDesignHouse } from '~/composables/useDesignHouse'
+import { useAuth } from '~/composables/useAuth'
 import QueueCard from './QueueCard.vue'
 import FileGroupCard from './FileGroupCard.vue'
 import BriefModal from './BriefModal.vue'
@@ -306,6 +307,9 @@ const {
   fetchProducts,
   fetchProductCategories,
 } = useDesignHouse()
+
+const { user: currentUser } = useAuth()
+const designerEmail = computed(() => currentUser.value?.email || '')
 
 // ── Date state ───────────────────────────────────────────────────────────
 function toDateStr(d) { return d.toISOString().split('T')[0] }
@@ -499,11 +503,11 @@ async function addEmptyGroup() {
 }
 
 async function onGroupFile(groupId, file) {
-  await uploadFileToGroup(activeBatch.value.id, groupId, file)
+  await uploadFileToGroup(activeBatch.value.id, groupId, file, designerEmail.value)
   await refreshActiveBatch()
 }
 async function onGroupRemoveAdvert(groupId, advertId) {
-  await removeAdvertFromFileGroup(activeBatch.value.id, groupId, advertId)
+  await removeAdvertFromFileGroup(activeBatch.value.id, groupId, advertId, designerEmail.value)
   await refreshActiveBatch()
   await refreshBatchesList()
 }
@@ -538,7 +542,7 @@ async function onAddToBoard(advert) {
 
 async function assignToGroup(groupId) {
   try {
-    await addAdvertToFileGroup(activeBatch.value.id, groupId, pendingAssignAdvert.value.id)
+    await addAdvertToFileGroup(activeBatch.value.id, groupId, pendingAssignAdvert.value.id, designerEmail.value)
     pendingAssignAdvert.value = null
     await refreshActiveBatch()
     await refreshBatchesList()
@@ -552,7 +556,7 @@ async function assignToNewGroup() {
     const created = await addFileGroup(activeBatch.value.id, pendingAssignAdvert.value.advertTitle)
     const groups = created.fileGroups || []
     const newGroup = groups[groups.length - 1]
-    await addAdvertToFileGroup(activeBatch.value.id, newGroup.id, pendingAssignAdvert.value.id)
+    await addAdvertToFileGroup(activeBatch.value.id, newGroup.id, pendingAssignAdvert.value.id, designerEmail.value)
     pendingAssignAdvert.value = null
     await refreshActiveBatch()
     await refreshBatchesList()
@@ -568,7 +572,7 @@ async function assignToNewGroup() {
 // is needed here, unlike onAddToBoard.
 async function assignAdvertDirectly(groupId, advertId) {
   try {
-    await addAdvertToFileGroup(activeBatch.value.id, groupId, advertId)
+    await addAdvertToFileGroup(activeBatch.value.id, groupId, advertId, designerEmail.value)
     await refreshActiveBatch()
     await refreshBatchesList()
   } catch (e) {
@@ -581,10 +585,13 @@ async function assignAdvertDirectly(groupId, advertId) {
 // reloading the whole day for a snappier check.
 async function toggleHandled(advertId) {
   try {
-    await markDesignComplete(advertId)
+    await markDesignComplete(advertId, '', designerEmail.value)
     const row = bookings.value.find(a => String(a.id) === String(advertId))
     if (row) row.isApproved = true
   } catch (e) {
+    // The backend now rejects this until the advert has a designed file
+    // pinned to an ad slot — surface that message rather than the generic
+    // fallback so the designer knows what's actually missing.
     alert(e?.data?.message || 'Could not mark this advert as handled.')
   }
 }

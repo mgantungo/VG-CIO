@@ -23,8 +23,8 @@
             <div class="file-details">
               <div class="file-name">{{ file.name }}</div>
               <div class="file-meta">
+                <span class="file-type">{{ getFileTypeLabel(file.name) }}</span>
                 <span class="file-size">{{ formatFileSize(file.size) }}</span>
-                <span class="file-type">{{ getFileExtension(file.name) }}</span>
                 <span class="file-date" v-if="file.uploadedAt">
                   Uploaded {{ formatRelativeTime(file.uploadedAt) }}
                 </span>
@@ -43,6 +43,7 @@
             </a>
             <button 
               v-if="!disabled"
+              type="button"
               class="btn btn-remove"
               @click="removeExistingFile(file.id)"
               title="Remove File"
@@ -65,8 +66,8 @@
         <div class="upload-content">
           <div class="upload-icon">📁</div>
           <div class="upload-text">
-            <strong>Drop files here or click to upload</strong>
-            <p>Max file size: 10MB • Supported: PDF, JPG, PNG, DOC, DOCX</p>
+            <strong>Drop files here or click to browse</strong>
+            <p>Files upload automatically • Max file size: 10MB • Supported: PDF, JPG, PNG, DOC, DOCX</p>
           </div>
           <input
             type="file"
@@ -86,41 +87,54 @@
         </div>
       </div>
 
-      <!-- Selected Files Preview -->
+      <!-- Attached Files (auto-uploaded) -->
       <div v-if="selectedFiles.length > 0" class="selected-files">
         <div class="selected-files-header">
-          <h4>Selected Files ({{ selectedFiles.length }})</h4>
+          <h4>
+            Attached Files ({{ selectedFiles.length }})
+            <span v-if="isUploading" class="header-uploading">
+              <span class="spinner-small"></span> Uploading {{ uploadingCount }}…
+            </span>
+          </h4>
           <button 
             type="button"
             class="btn btn-clear"
             @click="clearAllFiles"
-            v-if="selectedFiles.length > 0"
           >
             🗑️ Clear All
           </button>
         </div>
+
+        <!-- Column headings: name / type / size / status -->
+        <div class="files-table-head">
+          <span class="col-name">Name</span>
+          <span class="col-type">Type</span>
+          <span class="col-size">Size</span>
+          <span class="col-status">Status</span>
+          <span class="col-actions"></span>
+        </div>
         
         <div class="selected-files-list">
-          <div v-for="(file, index) in selectedFiles" :key="index" class="selected-file-item">
-            <div class="file-preview">
+          <div
+            v-for="file in selectedFiles"
+            :key="file.id"
+            class="selected-file-item"
+            :class="{ 'is-error': file.error, 'is-uploaded': file.uploaded }"
+          >
+            <div class="file-preview col-name">
               <div class="file-icon" :class="getFileTypeClass(file)">
                 {{ getFileIcon(file.name) }}
               </div>
               <div class="file-details">
-                <div class="file-name">{{ file.name }}</div>
-                <div class="file-meta">
-                  <span class="file-size">{{ formatFileSize(file.size) }}</span>
-                  <span class="file-status" :class="getUploadStatusClass(file)">
-                    {{ getUploadStatus(file) }}
-                  </span>
-                </div>
+                <div class="file-name" :title="file.name">{{ file.name }}</div>
                 <div v-if="file.error" class="file-error">
                   ⚠️ {{ file.error }}
                 </div>
-                <div v-if="file.progress !== undefined" class="upload-progress">
+                <div v-else class="upload-progress">
                   <div class="progress-bar">
                     <div 
                       class="progress-fill"
+                      :class="{ 'is-complete': file.uploaded }"
                       :style="{ width: `${file.progress}%` }"
                     ></div>
                   </div>
@@ -128,34 +142,33 @@
                 </div>
               </div>
             </div>
-            <div class="file-actions">
+
+            <span class="col-type file-type-cell">{{ getFileTypeLabel(file.name) }}</span>
+            <span class="col-size file-size-cell">{{ formatFileSize(file.size) }}</span>
+            <span class="col-status file-status" :class="getUploadStatusClass(file)">
+              {{ getUploadStatus(file) }}
+            </span>
+
+            <div class="file-actions col-actions">
+              <button
+                v-if="file.uploadFailed"
+                type="button"
+                class="btn btn-retry"
+                @click="retryUpload(file.id)"
+                title="Retry upload"
+              >
+                ↻
+              </button>
               <button 
-                v-if="!file.uploading"
+                type="button"
                 class="btn btn-remove"
-                @click="removeSelectedFile(index)"
-                title="Remove File"
+                @click="removeSelectedFile(file.id)"
+                :title="file.uploading ? 'Cancel upload and remove' : 'Remove file'"
               >
                 🗑️
               </button>
-              <div v-else class="uploading-indicator">
-                <span class="spinner"></span>
-              </div>
             </div>
           </div>
-        </div>
-
-        <div class="upload-actions">
-          <button 
-            type="button"
-            class="btn btn-primary"
-            @click="uploadFiles"
-            :disabled="!canUpload || isUploading"
-          >
-            <span v-if="isUploading">
-              <span class="spinner-small"></span> Uploading...
-            </span>
-            <span v-else>📤 Upload {{ selectedFiles.length }} File(s)</span>
-          </button>
         </div>
       </div>
 
@@ -168,6 +181,7 @@
         </div>
         <button 
           v-if="uploadStatus.dismissible"
+          type="button"
           class="btn-close-status"
           @click="clearUploadStatus"
         >
@@ -193,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRuntimeConfig } from '#imports'
 
 const props = defineProps({
@@ -225,26 +239,32 @@ const config = useRuntimeConfig()
 const fileInput = ref(null)
 const dragover = ref(false)
 const selectedFiles = ref([])
-const isUploading = ref(false)
 const uploadStatus = ref(null)
+
+// Non-reactive bookkeeping for in-flight uploads: fileId -> { cancel }
+const activeUploads = new Map()
+let statusTimer = null
 
 // Accepted file types
 const acceptedTypes = '.pdf,.jpg,.jpeg,.png,.doc,.docx'
+const allowedExts = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']
 
 // Computed properties
-const canUpload = computed(() => {
-  return selectedFiles.value.length > 0 && 
-         selectedFiles.value.every(file => !file.error) &&
-         !isUploading.value
-})
+const isUploading = computed(() => selectedFiles.value.some(f => f.uploading))
+
+const uploadingCount = computed(() => selectedFiles.value.filter(f => f.uploading).length)
 
 const totalSelectedSize = computed(() => {
   return selectedFiles.value.reduce((total, file) => total + file.size, 0)
 })
 
 // Methods
+const getExt = (filename = '') => {
+  const parts = String(filename).split('.')
+  return parts.length > 1 ? parts.pop().toLowerCase() : ''
+}
+
 const getFileIcon = (filename) => {
-  const ext = filename.split('.').pop().toLowerCase()
   const iconMap = {
     pdf: '📕',
     jpg: '🖼️',
@@ -254,11 +274,10 @@ const getFileIcon = (filename) => {
     docx: '📄',
     default: '📎'
   }
-  return iconMap[ext] || iconMap.default
+  return iconMap[getExt(filename)] || iconMap.default
 }
 
 const getFileTypeClass = (file) => {
-  const ext = file.name.split('.').pop().toLowerCase()
   const typeMap = {
     pdf: 'type-pdf',
     jpg: 'type-image',
@@ -268,15 +287,29 @@ const getFileTypeClass = (file) => {
     docx: 'type-doc',
     default: 'type-other'
   }
-  return typeMap[ext] || typeMap.default
+  return typeMap[getExt(file?.name)] || typeMap.default
 }
 
 const getFileExtension = (filename) => {
-  return filename.split('.').pop().toUpperCase()
+  return getExt(filename).toUpperCase()
+}
+
+// Human-readable type shown in the file list
+const getFileTypeLabel = (filename) => {
+  const labelMap = {
+    pdf: 'PDF Document',
+    jpg: 'JPEG Image',
+    jpeg: 'JPEG Image',
+    png: 'PNG Image',
+    doc: 'Word Document',
+    docx: 'Word Document'
+  }
+  const ext = getExt(filename)
+  return labelMap[ext] || (ext ? ext.toUpperCase() : 'Unknown')
 }
 
 const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 Bytes'
+  if (!bytes) return '0 Bytes'
   const k = 1024
   const sizes = ['Bytes', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -313,16 +346,16 @@ const triggerFileInput = () => {
 }
 
 const handleFileSelect = (event) => {
-  const files = Array.from(event.target.files)
+  const files = Array.from(event.target.files || [])
   addFiles(files)
-  event.target.value = '' // Reset input
+  event.target.value = '' // Reset input so the same file can be re-selected
 }
 
 const handleDrop = (event) => {
   dragover.value = false
   if (props.disabled) return
   
-  const files = Array.from(event.dataTransfer.files)
+  const files = Array.from(event.dataTransfer?.files || [])
   addFiles(files)
 }
 
@@ -335,14 +368,21 @@ const validateFile = (file) => {
   }
   
   // Check file type
-  const ext = file.name.split('.').pop().toLowerCase()
-  const allowedExts = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']
-  if (!allowedExts.includes(ext)) {
+  if (!allowedExts.includes(getExt(file.name))) {
     errors.push('File type not supported')
   }
+
+  // Check duplicate (same name + size already attached)
+  const isDuplicate = selectedFiles.value.some(
+    f => !f.error && f.name === file.name && f.size === file.size
+  )
+  if (isDuplicate) {
+    errors.push('File already attached')
+  }
   
-  // Check total number of files
-  const totalFiles = selectedFiles.value.length + props.initialFiles.length
+  // Check total number of files (only valid files count toward the limit)
+  const validCount = selectedFiles.value.filter(f => !f.error).length
+  const totalFiles = validCount + props.initialFiles.length
   if (totalFiles >= props.maxFiles) {
     errors.push(`Maximum ${props.maxFiles} files allowed`)
   }
@@ -350,8 +390,11 @@ const validateFile = (file) => {
   return errors.length > 0 ? errors.join(', ') : null
 }
 
+// Adding files immediately starts their upload — no Upload button needed
 const addFiles = (files) => {
-  if (props.disabled) return
+  if (props.disabled || !files.length) return
+
+  const toUpload = []
   
   files.forEach(file => {
     const error = validateFile(file)
@@ -363,26 +406,44 @@ const addFiles = (files) => {
       size: file.size,
       type: file.type,
       error: error,
+      uploadFailed: false,
       progress: 0,
-      uploading: false
+      uploading: false,
+      uploaded: false
     })
+
+    // Grab the reactive proxy so progress updates re-render
+    const entry = selectedFiles.value[selectedFiles.value.length - 1]
+    if (!error) toUpload.push(entry)
   })
   
-  emit('files-updated', getCombinedFiles())
+  emitFilesUpdated()
+
+  if (toUpload.length > 0) {
+    runUploads(toUpload)
+  }
 }
 
+// Only valid (non-error) files are handed to the parent form
 const getCombinedFiles = () => {
   return [
     ...props.initialFiles,
-    ...selectedFiles.value.map(f => ({
-      id: f.id,
-      name: f.name,
-      size: f.size,
-      type: f.type,
-      file: f.file,
-      uploading: f.uploading
-    }))
+    ...selectedFiles.value
+      .filter(f => !f.error)
+      .map(f => ({
+        id: f.id,
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        file: f.file,
+        uploading: f.uploading,
+        uploaded: f.uploaded
+      }))
   ]
+}
+
+const emitFilesUpdated = () => {
+  emit('files-updated', getCombinedFiles())
 }
 
 const removeExistingFile = (fileId) => {
@@ -391,143 +452,155 @@ const removeExistingFile = (fileId) => {
   const updatedFiles = props.initialFiles.filter(file => file.id !== fileId)
   emit('files-updated', [
     ...updatedFiles,
-    ...selectedFiles.value.map(f => ({
-      id: f.id,
-      name: f.name,
-      size: f.size,
-      type: f.type,
-      file: f.file,
-      uploading: f.uploading
-    }))
+    ...getCombinedFiles().slice(props.initialFiles.length)
   ])
 }
 
-const removeSelectedFile = (index) => {
-  if (props.disabled || isUploading.value) return
-  
-  selectedFiles.value.splice(index, 1)
-  emit('files-updated', getCombinedFiles())
+// Delete works at any time — cancels the upload if it's still in flight
+const removeSelectedFile = (fileId) => {
+  if (props.disabled) return
+
+  cancelUpload(fileId)
+  selectedFiles.value = selectedFiles.value.filter(f => f.id !== fileId)
+  emitFilesUpdated()
+
+  if (selectedFiles.value.length === 0) clearUploadStatus()
 }
 
 const clearAllFiles = () => {
-  if (props.disabled || isUploading.value) return
+  if (props.disabled) return
   
-  if (confirm('Remove all selected files?')) {
+  if (confirm('Remove all attached files?')) {
+    selectedFiles.value.forEach(f => cancelUpload(f.id))
     selectedFiles.value = []
-    emit('files-updated', getCombinedFiles())
+    clearUploadStatus()
+    emitFilesUpdated()
   }
 }
 
+const retryUpload = (fileId) => {
+  const entry = selectedFiles.value.find(f => f.id === fileId)
+  if (!entry || entry.uploading) return
+  entry.error = null
+  entry.uploadFailed = false
+  runUploads([entry])
+}
+
 const getUploadStatus = (file) => {
-  if (file.error) return 'Error'
-  if (file.uploading) return 'Uploading...'
-  if (file.progress === 100) return 'Uploaded'
-  return 'Ready to upload'
+  if (file.uploadFailed) return 'Upload failed'
+  if (file.error) return 'Rejected'
+  if (file.uploading) return 'Uploading…'
+  if (file.uploaded) return 'Uploaded'
+  return 'Queued'
 }
 
 const getUploadStatusClass = (file) => {
   if (file.error) return 'status-error'
   if (file.uploading) return 'status-uploading'
-  if (file.progress === 100) return 'status-uploaded'
+  if (file.uploaded) return 'status-uploaded'
   return 'status-ready'
 }
 
-const uploadFiles = async () => {
-  if (!canUpload.value || isUploading.value) return
-  
-  isUploading.value = true
-  setUploadStatus('info', '📤 Uploading Files', 'Please wait while files are being uploaded...', false)
-  
+/**
+ * Transport for a single file. Must resolve on success, reject on failure,
+ * report progress via onProgress(0-100), and return a cancel() function.
+ *
+ * NOTE: still SIMULATED, exactly like the old Upload button — nothing is sent
+ * to Strapi here. The File object is passed to the parent via files-updated
+ * and createAdvert() handles it as before. To switch to a real upload, replace
+ * only this function (e.g. XHR POST to `${config.public.apiBase}/upload` with
+ * xhr.upload.onprogress) once useAdverts.js has been checked for double-upload.
+ */
+const sendFile = (entry, onProgress) => {
+  let intervalId = null
+  let rejectFn = null
+
+  const promise = new Promise((resolve, reject) => {
+    rejectFn = reject
+    let progress = 0
+    intervalId = setInterval(() => {
+      progress += Math.random() * 20
+      if (progress >= 100) {
+        clearInterval(intervalId)
+        onProgress(100)
+        resolve({ simulated: true })
+        return
+      }
+      onProgress(Math.round(progress))
+    }, 200)
+  })
+
+  const cancel = () => {
+    clearInterval(intervalId)
+    const err = new Error('Upload cancelled')
+    err.cancelled = true
+    rejectFn?.(err)
+  }
+
+  return { promise, cancel }
+}
+
+const uploadSingleFile = async (entry) => {
+  entry.uploading = true
+  entry.uploaded = false
+  entry.progress = 0
+
+  const { promise, cancel } = sendFile(entry, (pct) => {
+    entry.progress = pct
+  })
+  activeUploads.set(entry.id, { cancel })
+
   try {
-    const formData = new FormData()
-    
-    // Add files to FormData
-    selectedFiles.value.forEach((fileObj, index) => {
-      if (fileObj.file && !fileObj.error) {
-        formData.append(`files`, fileObj.file)
-        fileObj.uploading = true
-        fileObj.progress = 0
-      }
-    })
-    
-    // Add advert ID if available
-    if (props.advertId) {
-      formData.append('refId', props.advertId)
-      formData.append('ref', 'api::advert.advert')
-      formData.append('field', 'attachments')
-    }
-    
-    // Simulate upload progress (in real implementation, use axios or fetch with progress)
-    // For now, we'll simulate progress
-    selectedFiles.value.forEach((fileObj, index) => {
-      if (fileObj.file && !fileObj.error) {
-        simulateUploadProgress(fileObj, index)
-      }
-    })
-    
-    // In a real implementation, you would make an API call here:
-    /*
-    const response = await fetch(`${config.public.apiBase}/upload`, {
-      method: 'POST',
-      body: formData
-    })
-    
-    if (!response.ok) {
-      throw new Error('Upload failed')
-    }
-    
-    const result = await response.json()
-    */
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // Mark files as uploaded
-    selectedFiles.value.forEach(fileObj => {
-      if (fileObj.file && !fileObj.error) {
-        fileObj.uploading = false
-        fileObj.progress = 100
-      }
-    })
-    
-    setUploadStatus('success', '✅ Upload Complete', 'All files have been uploaded successfully!', true)
-    emit('upload-complete', getCombinedFiles())
-    
-    // Clear selected files after successful upload
-    setTimeout(() => {
-      selectedFiles.value = []
-      clearUploadStatus()
-    }, 3000)
-    
-  } catch (error) {
-    console.error('Upload failed:', error)
-    setUploadStatus('error', '❌ Upload Failed', error.message || 'Failed to upload files', true)
-    emit('upload-error', error)
-    
-    // Reset upload states
-    selectedFiles.value.forEach(fileObj => {
-      fileObj.uploading = false
-      fileObj.progress = 0
-    })
+    await promise
+    entry.progress = 100
+    entry.uploaded = true
+  } catch (err) {
+    if (err?.cancelled) throw err
+    entry.progress = 0
+    entry.uploadFailed = true
+    entry.error = err?.message || 'Upload failed'
+    throw err
   } finally {
-    isUploading.value = false
+    entry.uploading = false
+    activeUploads.delete(entry.id)
   }
 }
 
-const simulateUploadProgress = (fileObj, index) => {
-  let progress = 0
-  const interval = setInterval(() => {
-    if (progress >= 100) {
-      clearInterval(interval)
-      fileObj.uploading = false
-      return
-    }
-    
-    progress += Math.random() * 20
-    if (progress > 100) progress = 100
-    
-    fileObj.progress = progress
-  }, 200)
+const cancelUpload = (fileId) => {
+  const active = activeUploads.get(fileId)
+  if (active) {
+    active.cancel()
+    activeUploads.delete(fileId)
+  }
+}
+
+const runUploads = async (entries) => {
+  clearUploadStatus()
+
+  const results = await Promise.allSettled(entries.map(uploadSingleFile))
+
+  // Ignore files the clerk removed while they were uploading
+  const stillAttached = entries.filter(e => selectedFiles.value.some(f => f.id === e.id))
+  const failures = results.filter(r => r.status === 'rejected' && !r.reason?.cancelled)
+
+  emitFilesUpdated()
+
+  if (failures.length > 0) {
+    setUploadStatus(
+      'error',
+      '❌ Upload Failed',
+      `${failures.length} file(s) failed to upload. Use ↻ to retry or 🗑️ to remove.`,
+      true
+    )
+    emit('upload-error', failures[0].reason)
+    return
+  }
+
+  if (stillAttached.some(e => e.uploaded) && !isUploading.value) {
+    setUploadStatus('success', '✅ Upload Complete', 'All files have been uploaded successfully!', true)
+    emit('upload-complete', getCombinedFiles())
+    statusTimer = setTimeout(clearUploadStatus, 3000)
+  }
 }
 
 const setUploadStatus = (type, title, message, dismissible = true) => {
@@ -536,6 +609,11 @@ const setUploadStatus = (type, title, message, dismissible = true) => {
     error: '❌',
     warning: '⚠️',
     info: 'ℹ️'
+  }
+
+  if (statusTimer) {
+    clearTimeout(statusTimer)
+    statusTimer = null
   }
   
   uploadStatus.value = {
@@ -548,14 +626,24 @@ const setUploadStatus = (type, title, message, dismissible = true) => {
 }
 
 const clearUploadStatus = () => {
+  if (statusTimer) {
+    clearTimeout(statusTimer)
+    statusTimer = null
+  }
   uploadStatus.value = null
 }
 
 // Watch for initialFiles changes
 watch(() => props.initialFiles, () => {
   // Re-emit combined files when initial files change
-  emit('files-updated', getCombinedFiles())
+  emitFilesUpdated()
 }, { deep: true })
+
+onBeforeUnmount(() => {
+  activeUploads.forEach(({ cancel }) => cancel())
+  activeUploads.clear()
+  clearUploadStatus()
+})
 </script>
 
 <style scoped>
@@ -695,15 +783,6 @@ watch(() => props.initialFiles, () => {
 .spinner-small { width: 13px; height: 13px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.upload-actions {
-  display: flex; justify-content: flex-end; padding: 12px 20px;
-  background: var(--page-bg); border-top: 1px solid var(--border-lt);
-}
-.upload-actions .btn-primary {
-  background: var(--navy); color: #fff; height: 38px; padding: 0 20px; font-size: 13px;
-}
-.upload-actions .btn-primary:hover:not(:disabled) { background: var(--navy-light); }
-.upload-actions .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
 
 .upload-status {
   display: flex; align-items: flex-start; gap: 10px;
@@ -738,6 +817,39 @@ watch(() => props.initialFiles, () => {
   .file-actions { width: 100%; justify-content: flex-end; }
   .selected-files-header { flex-direction: column; gap: 8px; }
   .upload-info { flex-direction: column; }
+}
+
+/* ── Auto-upload file list (name / type / size / status) ── */
+.header-uploading {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;
+  font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--blue);
+}
+.files-table-head, .selected-file-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 90px 110px 88px;
+  align-items: center; column-gap: 12px;
+}
+.files-table-head {
+  padding: 6px 20px; background: var(--surface); border-bottom: 1px solid var(--border-lt);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-4);
+}
+.file-type-cell, .file-size-cell { font-size: 12px; color: var(--text-2); }
+.file-size-cell { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; }
+.file-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-actions { justify-content: flex-end; }
+.selected-file-item.is-error { background: var(--red-bg); }
+.selected-file-item .btn { height: 30px; padding: 0 10px; }
+.progress-fill.is-complete { background: #16a34a; }
+.btn-retry { background: var(--blue-lt); color: var(--blue); border: 1px solid rgba(0,102,204,.2); font-size: 14px; }
+.btn-retry:hover { background: #dce9ff; }
+
+@media (max-width: 768px) {
+  .files-table-head { display: none; }
+  .selected-file-item {
+    grid-template-columns: 1fr auto; row-gap: 6px;
+  }
+  .selected-file-item .col-name { grid-column: 1 / -1; }
+  .selected-file-item .col-actions { grid-column: 2; grid-row: 2 / span 2; }
 }
 
 </style>

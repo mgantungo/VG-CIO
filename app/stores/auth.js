@@ -44,6 +44,7 @@ export const useAuthStore = defineStore('auth', () => {
       'sub_editor': ['review_adverts', 'approve_adverts', 'assign_adverts'],
       'advertising_manager': ['approve_adverts', 'financial_oversight', 'view_reports'],
       'design_house': ['view_attachments', 'upload_creatives', 'version_control'],
+      'design_house_manager': ['view_attachments', 'view_design_reports', 'view_reports'],
       'finance_team': ['process_payments', 'view_financials', 'generate_reports'],
       'administrator': ['manage_users', 'system_settings', 'all_permissions']
     }

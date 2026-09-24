@@ -68,6 +68,9 @@
         <button class="rail__item" :class="{ 'rail__item--on': s === 'design_house' }" @click="go('design_house')">
           <span v-html="ic.design"></span>Design House
         </button>
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'design_house_manager' }" @click="go('design_house_manager')">
+          <span v-html="ic.bar"></span>Design House Reports
+        </button>
 
         <p class="rail__grp">Finance</p>
 
@@ -201,6 +204,14 @@
           <DesignIndex />
         </div>
 
+        <!-- ── DESIGN HOUSE REPORTS ────────────────────────────────────
+             ~/components/design/DesignerHandledDashboard.vue
+             Supervision view — what each designer has handled, per day.
+        -->
+        <div v-show="s === 'design_house_manager'" class="bare">
+          <DesignerHandledDashboard />
+        </div>
+
         <!-- ── FINANCE DASHBOARD ────────────────────────────────────────
              ~/components/finance/Indexpage.vue
         -->
@@ -269,6 +280,7 @@ import FinanceReports from '~/components/finance/reports.vue'    // reports
 
 // design
 import DesignIndex from '~/components/design/DesignDeskWorkspace.vue'          // design house
+import DesignerHandledDashboard from '~/components/design/DesignerHandledDashboard.vue' // design house reports
 
 import { useAuth }     from '~/composables/useAuth'
 import { useAdverts }  from '~/composables/useAdverts'
@@ -322,6 +334,7 @@ const titles = {
   sub_editor:          'Sub-Editor — Schedule Queue',
   advertising_manager: 'Advertising Manager — Approval',
   design_house:        'Design House — Creatives',
+  design_house_manager: 'Design House — Handled Report',
   finance_index:       'Finance Dashboard',
   finance_payments:    'Finance — Payments',
   finance_reports:     'Finance — Reports',
@@ -353,6 +366,7 @@ const workspaces = [
   { id:'sub_editor',          label:'Sub-Editor',        desc:'Schedule queue — assign pages, publish.',         key:'sub_editor',          icon:ic.grid,   cls:'ws-ic--editor'  },
   { id:'advertising_manager', label:'Ad. Manager',       desc:'Approve or reject submitted adverts.',            key:'advertising_manager', icon:ic.tick,   cls:'ws-ic--mgr'     },
   { id:'design_house',        label:'Design House',      desc:'Upload creative files, manage versions.',         key:'design_house',        icon:ic.design, cls:'ws-ic--design'  },
+  { id:'design_house_manager', label:'Design House Reports', desc:'What each designer has handled, per day.',    key:'design_house_manager', icon:ic.bar,   cls:'ws-ic--design'  },
   { id:'finance_index',       label:'Finance Dashboard', desc:'Revenue overview and financial KPIs.',            key:'finance_team',        icon:ic.dollar, cls:'ws-ic--finance' },
   { id:'finance_payments',    label:'Payments',          desc:'Record payments, track collections.',             key:'finance_team',        icon:ic.card,   cls:'ws-ic--finance' },
   { id:'finance_reports',     label:'Reports',           desc:'Generate and export revenue reports.',            key:'finance_team',        icon:ic.bar,    cls:'ws-ic--finance' },

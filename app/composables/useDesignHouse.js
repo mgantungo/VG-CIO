@@ -156,22 +156,29 @@ export function useDesignHouse() {
    * target_run_date must be one of the advert's own pendingDates. A 400
    * here carries a `pendingDates` array explaining why it was rejected.
    */
-  async function addAdvertToFileGroup(batchId, groupId, advertId) {
+  async function addAdvertToFileGroup(batchId, groupId, advertId, designerEmail = '') {
     return request(`/design-batches/${batchId}/file-groups/${groupId}/adverts`, {
       method: 'POST',
-      body: { advertId },
+      body: { advertId, ...(designerEmail ? { designerEmail } : {}) },
     })
   }
 
-  /** DELETE /design-batches/:id/file-groups/:groupId/adverts/:advertId */
-  async function removeAdvertFromFileGroup(batchId, groupId, advertId) {
-    return request(`/design-batches/${batchId}/file-groups/${groupId}/adverts/${advertId}`, { method: 'DELETE' })
+  /**
+   * DELETE /design-batches/:id/file-groups/:groupId/adverts/:advertId
+   * designerEmail rides as a query param since this is a DELETE (no body
+   * convention shared across this app's DELETE routes) — the server
+   * accepts it either way, but the query param is what it's documented for.
+   */
+  async function removeAdvertFromFileGroup(batchId, groupId, advertId, designerEmail = '') {
+    const qs = designerEmail ? `?designerEmail=${encodeURIComponent(designerEmail)}` : ''
+    return request(`/design-batches/${batchId}/file-groups/${groupId}/adverts/${advertId}${qs}`, { method: 'DELETE' })
   }
 
   /** POST /design-batches/:id/file-groups/:groupId/upload — multipart, field name "file" */
-  async function uploadFileToGroup(batchId, groupId, file) {
+  async function uploadFileToGroup(batchId, groupId, file, designerEmail = '') {
     const form = new FormData()
     form.append('file', file)
+    if (designerEmail) form.append('designerEmail', designerEmail)
     return request(`/design-batches/${batchId}/file-groups/${groupId}/upload`, {
       method: 'POST',
       body: form,
@@ -194,6 +201,21 @@ export function useDesignHouse() {
   /** POST /design-batches/:id/archive */
   async function archiveBatch(batchId) {
     return request(`/design-batches/${batchId}/archive`, { method: 'POST' })
+  }
+
+  // ── Designer Report (dashboard) ────────────────────────────────────────
+
+  /** POST /design-house/reports/by-designer — body: { startDate, endDate } */
+  async function fetchDesignerReport(startDate, endDate) {
+    return request('/design-house/reports/by-designer', {
+      method: 'POST',
+      body: { startDate, endDate },
+    })
+  }
+
+  /** GET /design-house/reports/missing-design-file — backlog of adverts blocked by the mark-complete gate */
+  async function fetchMissingDesignFile() {
+    return request('/design-house/reports/missing-design-file', { method: 'GET' })
   }
 
   return {
@@ -223,5 +245,8 @@ export function useDesignHouse() {
     attachBatch,
     markReady,
     archiveBatch,
+    // designer report
+    fetchDesignerReport,
+    fetchMissingDesignFile,
   }
 }

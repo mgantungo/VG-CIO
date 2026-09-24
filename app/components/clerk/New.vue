@@ -29,8 +29,8 @@
           <button 
             type="button" 
             class="btn btn-secondary"
-            @click="saveDraft"
-            :disabled="submitting || categoriesLoading"
+            @click="requestSave"
+            :disabled="submitting || categoriesLoading || savingDraft || preflightVisible"
           >
             <span v-if="savingDraft">Saving...</span>
             <span v-else>Save Advert</span>
@@ -53,7 +53,7 @@
         </div>
       </div>
 
-      <form @submit.prevent="submitAdvert">
+      <form @submit.prevent="requestSubmit">
         <!-- Client Information -->
         <ClientInformation
           v-model:client-name="form.clientName"
@@ -163,8 +163,8 @@
           <button 
             type="button" 
             class="btn btn-secondary" 
-            @click="saveDraft"
-            :disabled="submitting || categoriesLoading || savingDraft || !hasRequiredClientInfo"
+            @click="requestSave"
+            :disabled="submitting || categoriesLoading || savingDraft || preflightVisible"
           >
             <span v-if="savingDraft">Saving...</span>
             <span v-else>Save Advert</span>
@@ -204,6 +204,15 @@
       :auto-close="maskAutoClose"
       @close="closeMask"
     />
+
+    <!-- Pre-flight required-fields checklist (runs before save/submit) -->
+    <BookingPreflightModal
+      :visible="preflightVisible"
+      :checks="preflightChecks"
+      :action-label="preflightActionLabel"
+      @passed="handlePreflightPassed"
+      @close="handlePreflightClose"
+    />
   </div>
 </template>
 
@@ -220,6 +229,7 @@ import SchedulePricing from './SchedulePricing.vue'
 import AdditionalInformation from './AdditionalInformation.vue'
 import SalesAgentSelection from './SalesAgentSelection.vue'
 import FullPageMask from './FullPageMask.vue'
+import BookingPreflightModal from './BookingPreflightModal.vue'
 // PDF generation for the order print summary
 import { useAdvertPdf } from '~/composables/useAdvertPdf'
 
@@ -1505,6 +1515,123 @@ const submitAdvert = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PRE-FLIGHT CHECKLIST
+// Every Save / Submit goes through here first. The clerk sees each required
+// field ticked (✓) or marked missing (✗). Only when every check passes does
+// the modal auto-close and the real action run — otherwise nothing is sent,
+// so no partial or duplicate advert is created. A lock also blocks repeat
+// clicks while the checklist or a save is already in progress.
+// ─────────────────────────────────────────────────────────────────────────
+const preflightVisible = ref(false)
+const preflightChecks = ref([])
+const preflightAction = ref(null) // 'save' | 'submit'
+const preflightActionLabel = computed(() => preflightAction.value === 'submit' ? 'Submit' : 'Save')
+
+const PAYMENT_METHOD_LABELS = {
+  cash: 'Cash',
+  credit: 'Credit (Requires Approval)',
+  pdc: 'Post-Dated Cheque',
+  bank_transfer: 'Bank Transfer',
+  mobile_money: 'Mobile Money'
+}
+
+const hasText = (value) => value !== null && value !== undefined && String(value).trim() !== ''
+
+const buildPreflightChecks = () => {
+  const officeEntry = officeLocations.value?.find(loc => loc.code === form.officeLocation)
+  const productName = selectedProduct.value?.product_name || selectedProduct.value?.name || selectedProduct.value?.productName || ''
+  const rateCardName = selectedRateCard.value ? getRateCardDisplayName(selectedRateCard.value) : ''
+  const finalTotal = Number(schedulePricingRef.value?.calculateFinalTotal?.() || 0)
+  const dateCount = form.datesList?.length || 0
+  const salesAgent = form.salesAgentId ? salesAgentsStore.getAgentById(form.salesAgentId) : null
+
+  const checks = [
+    // Client details
+    { key: 'clientName', section: 'Client Details', label: 'Client name', ok: hasText(form.clientName), value: form.clientName, message: 'select or enter the client' },
+    { key: 'email', section: 'Client Details', label: 'Email', ok: hasText(form.email), value: form.email, message: 'enter a contact email' },
+    { key: 'phone', section: 'Client Details', label: 'Phone', ok: hasText(form.phone), value: form.phone, message: 'enter a contact phone number' },
+    { key: 'marketSector', section: 'Client Details', label: 'Market sector', ok: hasText(form.marketSector), value: form.marketSector, message: 'select the market sector' },
+
+    // Advert details
+    { key: 'advertTitle', section: 'Advert Details', label: 'Advert title', ok: hasText(form.advertTitle), value: form.advertTitle, message: 'enter the advert title' },
+    { key: 'officeLocation', section: 'Advert Details', label: 'Office location', ok: hasText(form.officeLocation), value: officeEntry?.office || form.officeLocation, message: 'select the booking office' },
+    { key: 'platformCategory', section: 'Advert Details', label: 'Platform', ok: hasText(form.platformCategory), value: selectedCategory.value?.category_type_display || form.platformCategory, message: 'select a platform category' },
+    { key: 'product', section: 'Advert Details', label: 'Product', ok: hasText(form.product), value: productName || String(form.product || ''), message: 'select a product' },
+    { key: 'rateCard', section: 'Advert Details', label: 'Rate card', ok: hasText(form.rateCardId), value: rateCardName, message: 'select a rate card' },
+
+    // Schedule & payment
+    { key: 'dates', section: 'Schedule & Payment', label: 'Publishing dates', ok: dateCount > 0, value: `${dateCount} date${dateCount === 1 ? '' : 's'} selected`, message: 'pick at least one publishing date' },
+    { key: 'paymentMethod', section: 'Schedule & Payment', label: 'Payment method', ok: hasText(form.paymentMethod), value: PAYMENT_METHOD_LABELS[form.paymentMethod] || form.paymentMethod, message: 'select a payment method' },
+    { key: 'total', section: 'Schedule & Payment', label: 'Total amount', ok: finalTotal > 0, value: formatCurrency(finalTotal), message: 'total is zero — check rate card, size and dates' },
+
+    // Sales agent
+    { key: 'salesAgent', section: 'Sales Agent', label: 'Sales agent', ok: hasText(form.salesAgentId), value: salesAgent?.name || String(form.salesAgentId || ''), message: 'assign the sales agent for this booking' }
+  ]
+
+  // Attachments are optional — only checked when files are attached
+  const files = Array.isArray(form.files) ? form.files : []
+  const stillUploading = files.filter(f => f && f.uploading).length
+  if (files.length > 0) {
+    checks.push({
+      key: 'attachments',
+      section: 'Attachments',
+      label: 'File uploads',
+      ok: stillUploading === 0,
+      value: `${files.length} file${files.length === 1 ? '' : 's'} ready`,
+      message: `${stillUploading} file${stillUploading === 1 ? ' is' : 's are'} still uploading — wait for it to finish`
+    })
+  }
+
+  // Duplicate guard — this booking already created an advert
+  if (systemReference.value) {
+    checks.push({
+      key: 'notYetSaved',
+      section: 'Duplicate Check',
+      label: 'Not already saved',
+      ok: false,
+      value: '',
+      message: `already saved as ${systemReference.value}. Start a new booking to create another advert`
+    })
+  }
+
+  return checks
+}
+
+const openPreflight = (action) => {
+  // Lock: ignore repeat clicks while checklist is open or a save is running
+  if (preflightVisible.value || savingDraft.value || submitting.value) return
+  preflightAction.value = action
+  preflightChecks.value = buildPreflightChecks()
+  preflightVisible.value = true
+}
+
+const requestSave = () => openPreflight('save')
+const requestSubmit = () => openPreflight('submit')
+
+const handlePreflightPassed = async () => {
+  const action = preflightAction.value
+  preflightVisible.value = false
+  preflightAction.value = null
+
+  // Re-check at the moment of processing — the form may have changed during the countdown
+  if (!buildPreflightChecks().every(c => c.ok)) {
+    openPreflight(action)
+    return
+  }
+
+  if (action === 'submit') {
+    await submitAdvert()
+  } else {
+    await saveDraft()
+  }
+}
+
+const handlePreflightClose = () => {
+  preflightVisible.value = false
+  preflightAction.value = null
 }
 
 // Add cleanup on component unmount
