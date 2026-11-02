@@ -1,5 +1,6 @@
 // composables/useDesignHouse.js
 import { ref } from 'vue'
+import { readVgamsUser, vgamsUserHeaders } from '~/utils/vgamsSession'
 
 export function useDesignHouse() {
   const config = useRuntimeConfig()
@@ -218,10 +219,76 @@ export function useDesignHouse() {
     return request('/design-house/reports/missing-design-file', { method: 'GET' })
   }
 
+  // ── Workflow re-order: artwork per run date + Copy Desk placement ──────
+
+  /**
+   * POST /design-house/adverts/:id/artwork (multipart)
+   * Attach artwork to any cleared booking — new or old — for chosen run
+   * dates; carryForward (default true) fills every later remaining date too.
+   */
+  async function attachArtwork(advertId, { files = [], existingMediaIds = [], runDates = [], carryForward = true, replaceOwn = false, notes = '', designerEmail = '' } = {}) {
+    const form = new FormData()
+    for (const f of files) if (f instanceof File) form.append('files', f)
+    if (existingMediaIds.length) form.append('existingMediaIds', JSON.stringify(existingMediaIds))
+    if (runDates.length) form.append('runDates', JSON.stringify(runDates))
+    form.append('carryForward', String(!!carryForward))
+    form.append('replaceOwn', String(!!replaceOwn))
+    if (notes) form.append('notes', notes)
+    const email = designerEmail || readVgamsUser()?.email || ''
+    if (email) form.append('userEmail', email)
+    return request(`/design-house/adverts/${advertId}/artwork`, {
+      method: 'POST',
+      body: form,
+      headers: vgamsUserHeaders(),
+    })
+  }
+
+  /** POST /design-house/schedules/:scheduleId/drop — reason required */
+  async function dropRunDate(scheduleId, reason) {
+    return request(`/design-house/schedules/${scheduleId}/drop`, {
+      method: 'POST',
+      body: { reason, userEmail: readVgamsUser()?.email || '' },
+      headers: vgamsUserHeaders(),
+    })
+  }
+
+  /** POST /design-batches/:id/attach-multi — runDates: string[] | 'all_pending' */
+  async function attachBatchMulti(batchId, runDates = 'all_pending', runTime = null) {
+    return request(`/design-batches/${batchId}/attach-multi`, {
+      method: 'POST',
+      body: { runDates, ...(runTime ? { runTime } : {}), userEmail: readVgamsUser()?.email || '' },
+      headers: vgamsUserHeaders(),
+    })
+  }
+
+  /**
+   * POST /design-house/placements — Copy Desk page + artwork state per run date.
+   * Returns { [advertId]: { runDates, placed, nextPlacement, nextUnplaced } }.
+   * Never throws: placement badges are a convenience, not a blocker.
+   */
+  async function fetchPlacements(advertIds = []) {
+    if (!advertIds.length) return {}
+    try {
+      const res = await $fetch(`${API_BASE}/design-house/placements`, {
+        method: 'POST',
+        body: { advertIds },
+      })
+      return res?.data || {}
+    } catch (e) {
+      console.warn('[useDesignHouse] placements unavailable:', e?.data ?? e)
+      return {}
+    }
+  }
+
   return {
     loading,
     error,
     resolveUrl,
+    // workflow re-order
+    attachArtwork,
+    dropRunDate,
+    attachBatchMulti,
+    fetchPlacements,
     // design-house
     fetchBookingsByDate,
     fetchActiveAdverts,

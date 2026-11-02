@@ -96,6 +96,16 @@
           @office-location-selected="handleOfficeLocationSelected"
         />
 
+        <!-- Display ad / Classified — required whenever the platform is print -->
+        <PrintAdClassPicker
+          v-if="isPrintMedia"
+          v-model="form.printAdClass"
+          :suggested="suggestedPrintAdClass"
+          :disabled="submitting || categoriesLoading"
+          :show-missing="printAdClassMissing"
+          @picked="printAdClassTouched = true"
+        />
+
         <!-- Schedule & Pricing -->
         <SchedulePricing
           ref="schedulePricingRef"
@@ -118,6 +128,13 @@
           @discount-change="handleDiscountChange"
           @dates-updated="handleDatesUpdated"
         />
+
+        <!-- Copy Desk has already confirmed (locked) the layout for some of these dates -->
+        <div v-if="isPrintMedia && confirmedRunDates.length" class="ld-warn" role="alert">
+          <strong>Layout already confirmed for {{ confirmedRunDates.map(fmtLayoutDate).join(', ') }}.</strong>
+          Copy Desk has closed {{ confirmedRunDates.length === 1 ? 'that day' : 'those days' }}, so this advert will most likely be deferred to another day.
+          Pick a later date, or agree it with Copy Desk before telling the client.
+        </div>
 
         <!-- Sales Agent Assignment -->
         <SalesAgentSelection
@@ -225,6 +242,7 @@ import RateCardDetailsModal from './RateCardDetailsModal.vue'
 // Import form section components
 import ClientInformation from './ClientInformation.vue'
 import AdvertInformation from './AdvertInformation.vue'
+import PrintAdClassPicker from './PrintAdClassPicker.vue'
 import SchedulePricing from './SchedulePricing.vue'
 import AdditionalInformation from './AdditionalInformation.vue'
 import SalesAgentSelection from './SalesAgentSelection.vue'
@@ -236,6 +254,7 @@ import { useAdvertPdf } from '~/composables/useAdvertPdf'
 // Import composables and stores
 import { useProducts } from '~/composables/useProducts'
 import { useAdverts} from '~/composables/useAdverts'
+import { useCopyDesk } from '~/composables/useCopyDesk'
 import { useOfficeLocationsStore } from '~/stores/officeLocation'
 import { useSalesAgentsStore } from '~/stores/salesAgents'
 import { useClassifiedAdStore } from '~/stores/classifiedAd'
@@ -305,7 +324,8 @@ const form = reactive({
   specialInstructions: '',
   files: [],
   datesList: [],
-  salesAgentId: ''
+  salesAgentId: '',
+  printAdClass: ''
 })
 
 // Loading states
@@ -337,6 +357,36 @@ const bcReferenceNumber = ref('')
 const isPrintMedia = computed(() => {
   return form.platformCategory === 'print'
 })
+
+// ── Display ad / Classified (workflow re-order) ────────────────────────────
+// Suggested from the chosen rate card with the same rule used everywhere
+// else (ad_type "classified" or size_dimension "per word"). Pre-selected
+// until the clerk picks one by hand; cleared when the platform changes.
+const printAdClassTouched = ref(false)
+const printAdClassMissing = ref(false)
+
+const suggestedPrintAdClass = computed(() => {
+  if (!isPrintMedia.value || !form.rateCardId) return ''
+  const rc = rateCards.value.find(r => String(r.id) === String(form.rateCardId))
+  if (!rc) return ''
+  const adType = String(rc.ad_type || '').toLowerCase()
+  const size = String(rc.size_dimension || '').toLowerCase()
+  return (adType.includes('classified') || size.includes('per word')) ? 'classified' : 'display'
+})
+
+watch(suggestedPrintAdClass, (next) => {
+  if (next && !printAdClassTouched.value) form.printAdClass = next
+})
+
+watch(() => form.platformCategory, (next) => {
+  if (next !== 'print') {
+    form.printAdClass = ''
+    printAdClassTouched.value = false
+  }
+  printAdClassMissing.value = false
+})
+
+watch(() => form.printAdClass, (v) => { if (v) printAdClassMissing.value = false })
 
 // Add a new ref for polling
 let pollingInterval = null
@@ -395,6 +445,32 @@ const buildPublishingDates = () => {
   ].filter(Boolean))
   return [...datesSet].sort()
 }
+
+// ── Confirmed-layout warning (workflow re-order) ─────────────────────────
+// Booking continues all day; once Copy Desk confirms a day's layout it is
+// locked, so warn the clerk before booking onto that day. Advisory only —
+// Copy Desk defers any late advert.
+const copyDeskApi = useCopyDesk()
+const layoutStatusByDate = ref({})
+const confirmedRunDates = computed(() =>
+  buildPublishingDates().filter(d => layoutStatusByDate.value[d]?.status === 'confirmed')
+)
+const fmtLayoutDate = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+let layoutCheckTimer = null
+watch(
+  () => [isPrintMedia.value, form.product, buildPublishingDates().join(',')],
+  ([isPrint, productId, joined]) => {
+    clearTimeout(layoutCheckTimer)
+    if (!isPrint || !joined) { layoutStatusByDate.value = {}; return }
+    layoutCheckTimer = setTimeout(async () => {
+      try {
+        layoutStatusByDate.value = await copyDeskApi.fetchLayoutStatus(joined.split(',').slice(0, 62), productId || null)
+      } catch {
+        layoutStatusByDate.value = {}
+      }
+    }, 400)
+  }
+)
 
 // Computed properties
 const activeCategories = computed(() => {
@@ -1150,6 +1226,7 @@ const saveDraft = async () => {
       officeLocation: form.officeLocation,
       publishOnWeb: form.publishOnWeb,
       platformCategory: form.platformCategory,
+      printAdClass: isPrintMedia.value ? (form.printAdClass || null) : null,
       product: form.product,
       rateCard: form.rateCardId,
       adSize: form.adSize || '',
@@ -1306,6 +1383,7 @@ const submitAdvert = async () => {
       officeLocation: form.officeLocation,
       publishOnWeb: form.publishOnWeb,
       platformCategory: form.platformCategory,
+      printAdClass: isPrintMedia.value ? (form.printAdClass || null) : null,
       product: form.product,
       rateCard: form.rateCardId,
       adSize: form.adSize || '',
@@ -1418,6 +1496,7 @@ const submitAdvert = async () => {
       officeLocation: form.officeLocation,
       publishOnWeb: form.publishOnWeb,
       platformCategory: form.platformCategory,
+      printAdClass: isPrintMedia.value ? (form.printAdClass || null) : null,
       product: form.product,
       rateCard: form.rateCardId,
       adSize: form.adSize || '',
@@ -1561,6 +1640,7 @@ const buildPreflightChecks = () => {
     { key: 'platformCategory', section: 'Advert Details', label: 'Platform', ok: hasText(form.platformCategory), value: selectedCategory.value?.category_type_display || form.platformCategory, message: 'select a platform category' },
     { key: 'product', section: 'Advert Details', label: 'Product', ok: hasText(form.product), value: productName || String(form.product || ''), message: 'select a product' },
     { key: 'rateCard', section: 'Advert Details', label: 'Rate card', ok: hasText(form.rateCardId), value: rateCardName, message: 'select a rate card' },
+    ...(isPrintMedia.value ? [{ key: 'printAdClass', section: 'Advert Details', label: 'Print advert type', ok: hasText(form.printAdClass), value: form.printAdClass === 'classified' ? 'Classified' : (form.printAdClass === 'display' ? 'Display ad' : ''), message: 'choose Display ad or Classified' }] : []),
 
     // Schedule & payment
     { key: 'dates', section: 'Schedule & Payment', label: 'Publishing dates', ok: dateCount > 0, value: `${dateCount} date${dateCount === 1 ? '' : 's'} selected`, message: 'pick at least one publishing date' },
@@ -1604,6 +1684,7 @@ const openPreflight = (action) => {
   // Lock: ignore repeat clicks while checklist is open or a save is running
   if (preflightVisible.value || savingDraft.value || submitting.value) return
   preflightAction.value = action
+  printAdClassMissing.value = isPrintMedia.value && !form.printAdClass
   preflightChecks.value = buildPreflightChecks()
   preflightVisible.value = true
 }
@@ -1774,6 +1855,8 @@ const resetForm = () => {
   rateCardDetails.value = null
   selectedCurrency.value = 'UGX'
   classifiedAdStore.clear()
+  printAdClassTouched.value = false
+  printAdClassMissing.value = false
   systemReference.value = ''
   bcReferenceNumber.value = ''
   console.log('[RESET] SUCCESS - Form reset complete')
@@ -1994,4 +2077,8 @@ const resetForm = () => {
     gap: 10px;
   }
 }
+
+/* Confirmed-layout warning */
+.ld-warn { margin: 12px 0; padding: 10px 14px; background: #FFF7E6; border: 1px solid #F2C46D; border-left: 3px solid #C08A22; border-radius: 2px; font-size: 13px; color: #7A4A00; line-height: 1.5; }
+.ld-warn strong { color: #5C3800; }
 </style>

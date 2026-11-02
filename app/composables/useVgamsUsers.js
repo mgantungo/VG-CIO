@@ -25,13 +25,14 @@ export const PROTECTED_EMAILS = [
 
 export const VGAMS_ROLES = [
   { value: 'booking_clerk',        label: 'Booking Clerk' },
-  { value: 'sub_editor',           label: 'Sub-Editor' },
+  { value: 'sub_editor',           label: 'Copy Desk (Sub-Editor)' },
   { value: 'advertising_manager',  label: 'Advertising Manager' },
   { value: 'design_house',         label: 'Design House' },
   { value: 'finance_team',         label: 'Finance Team' },
   { value: 'administrator',        label: 'Administrator' },
   { value: 'sales_team',           label: 'Sales Team' },
   { value: 'hr_team',              label: 'HR Team' },
+  { value: 'invoicing_officer',    label: 'Invoicing Officer' },
 ]
 
 // Candidate localStorage keys — admin.vue's onMounted comment confirms

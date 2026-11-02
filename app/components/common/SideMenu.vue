@@ -49,9 +49,39 @@
 
       <!-- Editor Menu -->
       <div v-if="editorMenu.length > 0" class="menu-section">
-        <div class="menu-section-title">Editorial</div>
+        <div class="menu-section-title">Copy Desk</div>
         <div 
           v-for="item in editorMenu"
+          :key="item.path"
+          class="menu-item"
+          :class="{ active: $route.path === item.path }"
+          @click="navigateTo(item.path)"
+        >
+          <span class="menu-icon">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+        </div>
+      </div>
+
+      <!-- Invoicing Menu (workflow re-order) -->
+      <div v-if="invoicingMenu.length > 0" class="menu-section">
+        <div class="menu-section-title">Invoicing</div>
+        <div
+          v-for="item in invoicingMenu"
+          :key="item.path"
+          class="menu-item"
+          :class="{ active: $route.path === item.path }"
+          @click="navigateTo(item.path)"
+        >
+          <span class="menu-icon">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+        </div>
+      </div>
+
+      <!-- Reports Menu (workflow re-order) -->
+      <div v-if="reportsMenu.length > 0" class="menu-section">
+        <div class="menu-section-title">Reports</div>
+        <div
+          v-for="item in reportsMenu"
           :key="item.path"
           class="menu-item"
           :class="{ active: $route.path === item.path }"
@@ -158,7 +188,7 @@ const effectiveRole = computed(() => {
   const role = localStorageRole.value || props.role || 'clerk'
   
   // If role already matches menu format, return it
-  const menuRoles = ['clerk', 'editor', 'manager', 'design', 'finance', 'admin']
+  const menuRoles = ['clerk', 'editor', 'manager', 'design', 'finance', 'admin', 'invoicing']
   if (menuRoles.includes(role.toLowerCase())) {
     return role.toLowerCase()
   }
@@ -170,7 +200,9 @@ const effectiveRole = computed(() => {
     'advertising_manager': 'manager',
     'design_house': 'design',
     'finance_team': 'finance',
-    'administrator': 'admin'
+    'administrator': 'admin',
+    'invoicing_officer': 'invoicing',
+    'design_house_manager': 'design'
   }
   
   return roleMapping[role] || 'clerk'
@@ -196,7 +228,21 @@ const clerkMenu = computed(() =>
 
 const editorMenu = computed(() => 
   effectiveRole.value === 'editor' || effectiveRole.value === 'admin' ? [
-    { path: '/dashboard/review', icon: '✓', label: 'Review Queue' }
+    { path: '/dashboard/review', icon: '✓', label: 'Review Queue' },
+    { path: '/dashboard/editor', icon: '📰', label: 'Pager & Print Queue' }
+  ] : []
+)
+
+const invoicingMenu = computed(() =>
+  ['invoicing', 'finance', 'admin'].includes(effectiveRole.value) ? [
+    { path: '/dashboard/invoicing', icon: '🧾', label: 'Invoicing Queue' },
+    { path: '/dashboard/invoicing/register', icon: '📒', label: 'Invoice Register' }
+  ] : []
+)
+
+const reportsMenu = computed(() =>
+  ['clerk', 'editor', 'invoicing', 'finance', 'manager', 'admin'].includes(effectiveRole.value) ? [
+    { path: '/dashboard/reports/print-class', icon: '📊', label: 'Display vs Classified' }
   ] : []
 )
 

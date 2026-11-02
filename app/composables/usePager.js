@@ -238,7 +238,10 @@ export function usePager() {
   // single advert); data is the old flat list, kept for backward compat.
   async function getAvailableAdverts(pageId) {
     try {
-      const res = await $fetch(`${API}/pager-pages/${pageId}/available-adverts`)
+      // Cleared-only feed once the production gate is switched on in Strapi;
+      // same response shape as the original route.
+      const cleared = String(config.public.productionGate || '').toLowerCase() === 'cleared'
+      const res = await $fetch(`${API}/pager-pages/${pageId}/available-adverts${cleared ? '-cleared' : ''}`)
       return {
         data: res?.data || [],
         groups: res?.groups || [],

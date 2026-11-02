@@ -26,15 +26,35 @@
       <span>{{ advert.adSize }}</span>
       <span>{{ advert.platform }}</span>
     </div>
- 
+
+    <!-- Workflow re-order: class, payment and Copy Desk placement -->
+    <div class="qc-flow">
+      <span v-if="advert.printAdClass" class="qc-chip" :class="`qc-chip--${advert.printAdClass}`">
+        {{ advert.printAdClass === 'classified' ? 'Classified' : 'Display' }}
+      </span>
+      <span v-if="advert.paymentMethod" class="qc-chip">{{ paymentLabel }}</span>
+      <span v-if="placementBadge" class="qc-chip" :class="placementBadge.placed ? 'qc-chip--navy' : 'qc-chip--red'">
+        {{ placementBadge.text }}
+      </span>
+    </div>
+
+    <!-- Copy Desk clearance for the date being worked on (size Design should build to) -->
+    <div v-if="clearanceBadge" class="qc-clear" :class="`qc-clear--${clearanceBadge.kind}`" :title="clearanceBadge.title">
+      <i class="qc-clear__dot" aria-hidden="true"></i>
+      <span class="qc-clear__t">{{ clearanceBadge.text }}</span>
+      <span v-if="clearanceBadge.detail" class="qc-clear__d">{{ clearanceBadge.detail }}</span>
+    </div>
+    <div v-if="deferredNote" class="qc-deferred">{{ deferredNote }}</div>
+
     <div class="dd-date-chips">
       <span
         v-for="d in advert.publishingDates"
         :key="d"
         class="dd-chip"
-        :class="[advert.scheduledDates.includes(d) ? 'done' : 'pending', d === activeDate ? 'today' : '']"
+        :class="[advert.scheduledDates.includes(d) ? 'done' : 'pending', d === activeDate ? 'today' : '', droppedDates.has(d) ? 'qc-dropped' : '']"
+        :title="droppedDates.has(d) ? 'Artwork dropped for this date' : ''"
       >
-        {{ formatShort(d) }} {{ advert.scheduledDates.includes(d) ? '✓' : '' }}
+        {{ formatShort(d) }} {{ droppedDates.has(d) ? '✕' : (advert.scheduledDates.includes(d) ? '✓' : '') }}
       </span>
     </div>
  
@@ -47,6 +67,7 @@
       >
         {{ canAddToBoard ? '+ Add to Board' : 'Not for this date' }}
       </button>
+      <button class="dd-btn small ghost" title="Attach artwork to one or more run dates" @click="$emit('attach-artwork', advert)">Artwork</button>
       <button v-if="advert.hasBrief" class="dd-btn small ghost" @click="$emit('view-brief', advert)">View brief</button>
       <button
         v-if="attachmentsCount > 0"
@@ -85,9 +106,67 @@ const props = defineProps({
   activeDate: { type: String, default: null },
   onLayout: { type: Boolean, default: false },
   fileGroupName: { type: String, default: null }, // Name of the file group this advert belongs to
+  // Workflow re-order: useDesignHouse().fetchPlacements()[advert.id]
+  placement: { type: Object, default: null },
 })
  
-defineEmits(['add-to-board', 'view-brief', 'view-attachments'])
+defineEmits(['add-to-board', 'view-brief', 'view-attachments', 'attach-artwork'])
+
+const PAYMENT_LABELS = { credit: 'Credit', cash: 'Cash', pdc: 'PDC', bank_transfer: 'Bank transfer', mobile_money: 'Mobile money' }
+const paymentLabel = computed(() => PAYMENT_LABELS[props.advert.paymentMethod] || props.advert.paymentMethod)
+
+// "Page 7 · NV · 3 Nov" for the date being worked on, else the next placed
+// date, else "Not on layout yet" — Design works in parallel with Copy Desk.
+const placementBadge = computed(() => {
+  const p = props.placement
+  if (!p) return null
+  const runDates = p.runDates || []
+  const forDate = props.activeDate ? runDates.find(s => s.date === props.activeDate) : null
+  const hit = forDate?.placed ? forDate : (forDate ? null : p.nextPlacement)
+  if (hit?.placed) {
+    return { placed: true, text: `Page ${hit.pageNumber}${hit.masthead ? ` · ${hit.masthead}` : ''} · ${formatShort(hit.date)}` }
+  }
+  return { placed: false, text: 'Not on layout yet' }
+})
+
+// Copy Desk clearance for the active date, else the next upcoming run date.
+//   Cleared for design · Quarter page (4 col × 26 cm) · Page 5
+//   Changed · Moved from page 5 to page 7
+//   Awaiting Copy Desk
+const clearanceBadge = computed(() => {
+  const runDates = props.placement?.runDates
+  if (!runDates?.length) return null
+  const today = new Date().toISOString().slice(0, 10)
+  const s = props.activeDate
+    ? runDates.find(r => r.date === props.activeDate)
+    : runDates.find(r => r.date >= today)
+  if (!s) return null
+  const c = s.clearance
+  const when = formatShort(s.date)
+  if (!c || c.status === 'withdrawn') {
+    return c?.status === 'withdrawn'
+      ? { kind: 'red', text: `Withdrawn · ${when}`, detail: c.withdrawnReason || '', title: 'Copy Desk withdrew the clearance — check before designing' }
+      : { kind: 'amber', text: `Awaiting Copy Desk · ${when}`, detail: '', title: 'You can start designing; Copy Desk has not set the size yet' }
+  }
+  const size = c.sizeLabel || (props.advert.printAdClass === 'classified' ? 'No size (classified)' : '')
+  const page = c.pageNumber || s.pageNumber
+  const detail = [size, page ? `Page ${page}` : '', c.position || ''].filter(Boolean).join(' · ')
+  if (c.status === 'changed') {
+    return { kind: 'amber', text: `Changed · ${when}`, detail: [c.changeNote, detail].filter(Boolean).join(' · '), title: 'Copy Desk changed this advert after clearing it' }
+  }
+  return { kind: 'green', text: `Cleared for design · ${when}`, detail, title: c.clearedBy ? `Cleared by ${c.clearedBy}` : '' }
+})
+
+// "Deferred 3 Nov → 5 Nov" for the latest move of a run date
+const deferredNote = computed(() => {
+  const h = props.placement?.runDateHistory || props.advert.runDateHistory || []
+  const last = h[h.length - 1]
+  return last ? `Deferred ${formatShort(last.from)} → ${formatShort(last.to)}${last.reason ? ` · ${last.reason}` : ''}` : ''
+})
+
+const droppedDates = computed(() =>
+  new Set((props.placement?.runDates || []).filter(s => s.artwork === 'dropped').map(s => s.date))
+)
 
 const attachmentsCount = computed(() =>
   props.advert.attachmentsCount ?? props.advert.attachments?.length ?? 0
@@ -504,4 +583,23 @@ function spawnRipple(e) {
   .dd-ripple { display: none; }
   .dd-fade { animation: none; opacity: 1; }
 }
+
+/* ── Workflow re-order: class / payment / placement chips ─────────────── */
+.qc-flow { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.qc-chip { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 2px; font-family: 'IBM Plex Sans', sans-serif; font-size: 10.5px; font-weight: 600; border: 1px solid #D1D9E0; background: #F8FAFC; color: #334155; white-space: nowrap; }
+.qc-chip--display { background: #E8F0F8; border-color: #9DC3E6; color: #003366; }
+.qc-chip--classified { background: #F3EEF9; border-color: #C9B5E4; color: #4B2A7A; }
+.qc-chip--navy { background: #003366; border-color: #003366; color: #fff; }
+.qc-chip--red { background: #FDECEC; border-color: #F0A3A5; color: #8A1014; }
+.qc-dropped { text-decoration: line-through; opacity: .6; }
+
+/* ── Copy Desk clearance ──────────────────────────────────────────────── */
+.qc-clear { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0 8px; padding: 6px 9px; border-radius: 2px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; border: 1px solid; }
+.qc-clear__dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: currentColor; }
+.qc-clear__t { font-weight: 700; }
+.qc-clear__d { color: #334155; }
+.qc-clear--green { background: #ECFDF3; border-color: #86D9A8; color: #14532D; }
+.qc-clear--amber { background: #FFF7E6; border-color: #F2C46D; color: #7A4A00; }
+.qc-clear--red { background: #FDECEC; border-color: #F0A3A5; color: #8A1014; }
+.qc-deferred { margin: -2px 0 8px; font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; color: #7A4A00; }
 </style>

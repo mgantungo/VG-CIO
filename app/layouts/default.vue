@@ -1,6 +1,35 @@
 <!-- layouts/default.vue -->
+<!--
+  Two shells behind one flag (runtimeConfig.public.workspaceShell /
+  NUXT_PUBLIC_WORKSPACE_SHELL):
+
+    off (default) — the original AppHeader + grey SideMenu, unchanged.
+    on            — the workspace shell every role shares: navy RoleRail
+                    (same look as the Admin Hub), WorkspaceTopbar and the
+                    print PipelineStrip. Menu items come from config/roles.js.
+
+  Every page that uses the default layout switches together, so all roles get
+  the same menu at the same time and one env change rolls it back.
+-->
 <template>
-  <div class="default-layout">
+  <div v-if="shellOn" class="ws-layout">
+    <template v-if="isReady">
+      <RoleRail :role="role" :user="user" />
+      <div class="ws-main">
+        <WorkspaceTopbar :role="role" />
+        <PipelineStrip
+          v-if="pipelineForPage"
+          :counts="pipelineForPage.counts"
+          :current="pipelineForPage.current"
+        />
+        <main class="ws-content">
+          <slot />
+        </main>
+      </div>
+    </template>
+  </div>
+
+  <div v-else class="default-layout">
     <AppHeader />
     <div class="layout-container">
       <SideMenu v-if="isReady" :role="userRoleProp" />
@@ -14,40 +43,56 @@
 <script setup>
 import AppHeader from '~/components/common/AppHeader.vue'
 import SideMenu from '~/components/common/SideMenu.vue'
+import RoleRail from '~/components/common/RoleRail.vue'
+import WorkspaceTopbar from '~/components/common/WorkspaceTopbar.vue'
+import PipelineStrip from '~/components/common/PipelineStrip.vue'
 import { useAuth } from '~/composables/useAuth'
-import { ref, onMounted } from 'vue'
+import { useWorkspace } from '~/composables/useWorkspace'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from '#app'
 
 const { initAuth } = useAuth()
+const ws = useWorkspace()
+const route = useRoute()
+
+const shellOn = computed(() => ws.flags.workspaceShell)
+
 const userRoleProp = ref('clerk')
+const role = ref('booking_clerk')
+const user = ref(null)
 const isReady = ref(false)
 
+const pipelineForPage = computed(() => {
+  const p = ws.pipeline.value
+  return p && p.counts && p.path === route.path ? p : null
+})
+
 onMounted(() => {
-  console.log('🔄 Layout mounting...')
-  
-  // Get role directly from localStorage first (immediate)
+  // Role straight from localStorage first (Pinia hydration timing — see
+  // engineering notes: auth checks run client-side in onMounted)
   if (process.client) {
     try {
       const storedUser = localStorage.getItem('vgams_user')
       if (storedUser) {
         const userData = JSON.parse(storedUser)
         userRoleProp.value = userData.role || 'clerk'
-        console.log('✅ Got role from localStorage:', userRoleProp.value)
+        role.value = userData.role || 'booking_clerk'
+        user.value = { name: userData.name, email: userData.email }
       }
     } catch (error) {
       console.error('Error reading localStorage:', error)
     }
   }
-  
-  // Then initialize auth (async)
+
   setTimeout(() => {
     initAuth()
     isReady.value = true
-    console.log('✅ Layout ready')
   }, 0)
 })
 </script>
 
 <style scoped>
+/* ── Original shell (flag off) — unchanged ─────────────────────────────── */
 .default-layout {
   display: flex;
   flex-direction: column;
@@ -74,5 +119,32 @@ onMounted(() => {
   .main-content {
     margin-left: 0;
   }
+}
+
+/* ── Workspace shell (flag on) ─────────────────────────────────────────── */
+.ws-layout {
+  min-height: 100vh;
+  background: #F0F4F8;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.ws-main {
+  margin-left: 204px;
+  min-width: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-content {
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
+  padding: 20px 24px 32px;
+}
+
+@media (max-width: 900px) {
+  .ws-main { margin-left: 0; }
+  .ws-content { padding: 14px 12px 24px; }
 }
 </style>

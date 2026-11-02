@@ -56,8 +56,11 @@
 
         <p class="rail__grp">Workflow</p>
 
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'copy_desk' }" @click="go('copy_desk')">
+          <span v-html="ic.grid"></span>Copy Desk — Day's Layout
+        </button>
         <button class="rail__item" :class="{ 'rail__item--on': s === 'sub_editor' }" @click="go('sub_editor')">
-          <span v-html="ic.grid"></span>Sub-Editor
+          <span v-html="ic.grid"></span>Copy Desk — Pager
         </button>
         <!----
         <button class="rail__item" :class="{ 'rail__item--on': s === 'advertising_manager' }" @click="go('advertising_manager')">
@@ -70,6 +73,18 @@
         </button>
         <button class="rail__item" :class="{ 'rail__item--on': s === 'design_house_manager' }" @click="go('design_house_manager')">
           <span v-html="ic.bar"></span>Design House Reports
+        </button>
+
+        <p class="rail__grp">Invoicing</p>
+
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'invoicing_queue' }" @click="go('invoicing_queue')">
+          <span v-html="ic.tick"></span>Invoicing Queue
+        </button>
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'invoicing_register' }" @click="go('invoicing_register')">
+          <span v-html="ic.list"></span>Invoice Register
+        </button>
+        <button class="rail__item" :class="{ 'rail__item--on': s === 'print_class_report' }" @click="go('print_class_report')">
+          <span v-html="ic.bar"></span>Display vs Classified
         </button>
 
         <p class="rail__grp">Finance</p>
@@ -181,6 +196,21 @@
           <EditorIndex />
         </div>
 
+        <!-- ── WORKFLOW RE-ORDER (mounted only when opened: v-if, so the
+             Hub does not load every day's bookings on first paint) ──── -->
+        <div v-if="s === 'copy_desk'" class="bare padded">
+          <CopyDeskWorkspace />
+        </div>
+        <div v-if="s === 'invoicing_queue'" class="bare padded">
+          <InvoicingWorkspace mode="queue" />
+        </div>
+        <div v-if="s === 'invoicing_register'" class="bare padded">
+          <InvoicingWorkspace mode="register" />
+        </div>
+        <div v-if="s === 'print_class_report'" class="bare padded">
+          <PrintClassReport />
+        </div>
+
 
         <!-- ── ADVERTISING MANAGER ──────────────────────────────────── -->
         <div v-show="s === 'advertising_manager'" class="nav-panel">
@@ -272,6 +302,9 @@ import New            from '~/components/clerk/New.vue'          // new booking
 
 // editor
 import EditorIndex from '~/components/editor/Index.vue'          // sub-editor
+import CopyDeskWorkspace  from '~/components/copydesk/CopyDeskWorkspace.vue'     // copy desk (workflow re-order)
+import InvoicingWorkspace from '~/components/invoicing/InvoicingWorkspace.vue'   // invoicing officer
+import PrintClassReport   from '~/components/reports/PrintClassReport.vue'       // display vs classified
 
 // finance
 import FinanceIndex   from '~/components/finance/Indexpage.vue'  // finance dashboard
@@ -331,7 +364,11 @@ const titles = {
   overview:            'Administrator Overview',
   booking_list:        'Booking Clerk — Booking List',
   booking_new:         'Booking Clerk — New Booking',
-  sub_editor:          'Sub-Editor — Schedule Queue',
+  sub_editor:          'Copy Desk — Pager & Print Queue',
+  copy_desk:           "Copy Desk — Day's Layout",
+  invoicing_queue:     'Invoicing — Confirm & Invoice',
+  invoicing_register:  'Invoicing — Invoice Register',
+  print_class_report:  'Reports — Display vs Classified',
   advertising_manager: 'Advertising Manager — Approval',
   design_house:        'Design House — Creatives',
   design_house_manager: 'Design House — Handled Report',

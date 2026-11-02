@@ -34,6 +34,11 @@ export const useAdverts = () => {
         revenueStream: advert.product?.revenue_stream ?? null,
         costStream:    advert.product?.cost_stream    ?? null,
         createdAt:     advert.createdAt,
+        // Workflow re-order (additive)
+        printAdClass:      advert.print_ad_class ?? advert.printAdClass ?? null,
+        productionCleared: !!(advert.production_cleared ?? advert.productionCleared),
+        invoiceStage:      advert.invoice_stage || advert.invoiceStage || 'not_ready',
+        paymentMethod:     advert.payment_method ?? advert.paymentMethod ?? null,
       }))
     } catch (err) {
       error.value = err.message || 'Failed to load adverts'
@@ -64,6 +69,8 @@ export const useAdverts = () => {
         marketSector:      advertData.marketSector  || '',
         advertTitle:       advertData.advertTitle,
         platformCategory:  advertData.platformCategory || '',
+        // Display vs Classified — required for print; ignored server-side otherwise
+        printAdClass:      advertData.platformCategory === 'print' ? (advertData.printAdClass || null) : null,
         product:           advertData.product          || null,
         rateCard:          advertData.rateCard         || null,
         adSize:            advertData.adSize           || '',

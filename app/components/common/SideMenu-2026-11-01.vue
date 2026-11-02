@@ -2,6 +2,7 @@
 <template>
   <aside class="side-menu">
     <!-- Main Dashboard - Hidden for design-only and finance-only users -->
+    <!----
     <div v-if="showMainDashboard" class="menu-section">
       <div class="menu-section-title">Main</div>
       <div 
@@ -14,6 +15,7 @@
         
       </div>
     </div>
+  -->
 
     <!-- DESIGN USERS: Show ONLY this section -->
     <div v-if="isDesignOnly" class="menu-section">
@@ -208,8 +210,8 @@ const managerMenu = computed(() =>
 const financeMenu = computed(() => 
   effectiveRole.value === 'finance' || effectiveRole.value === 'admin' ? [
     { path: '/dashboard/finance', icon: '🏠', label: 'Finance Dashboard' },
-    { path: '/dashboard/finance/payments', icon: '💰', label: 'Payment Collection' },
-    { path: '/dashboard/finance/reports', icon: '📊', label: 'Billing Reports' }
+    { path: '/dashboard/finance/payments', icon: '💰', label: 'Payment Collection' }
+    /*{ path: '/dashboard/finance/reports', icon: '📊', label: 'Billing Reports' }*/
   ] : []
 )
 

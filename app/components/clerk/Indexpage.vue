@@ -95,6 +95,15 @@
             <option value="unpaid">Unpaid only</option>
           </select>
         </div>
+        <div class="tb-field">
+          <label class="tb-label" for="printClassFilter">Print type</label>
+          <select id="printClassFilter" v-model="selectedPrintClass" class="tb-input tb-select">
+            <option value="">All types</option>
+            <option value="display">Display ads</option>
+            <option value="classified">Classifieds</option>
+            <option value="none">Not print</option>
+          </select>
+        </div>
         <div class="tb-field tb-field--search">
           <label class="tb-label" for="searchQuery">Search</label>
           <div class="tb-search-wrap">
@@ -468,6 +477,7 @@
                 <th v-if="isColVisible('title')" class="th-cell"><div class="th-inner"><span class="th-label">Advert Title</span></div></th>
                 <th v-if="isColVisible('capturedBy')" class="th-cell"><div class="th-inner"><span class="th-label">Captured By</span></div></th>
                 <th v-if="isColVisible('product')" class="th-cell"><div class="th-inner"><span class="th-label">Product / Size</span></div></th>
+                <th v-if="isColVisible('printClass')" class="th-cell"><div class="th-inner"><span class="th-label">Print Type</span></div></th>
                 <th v-if="isColVisible('office')" class="th-cell"><div class="th-inner"><span class="th-label">Office / Ref</span></div></th>
                 <th class="th-cell text-right" @click="toggleSort('amount')">
                   <div class="th-inner"><span class="th-label">Amount</span><SortMark :active="sortKey==='amount'" :dir="sortDir" /></div>
@@ -515,6 +525,20 @@
                   <td v-if="isColVisible('product')" class="td-cell">
                     <span class="cell-primary">{{ advert.product?.name || 'N/A' }}</span>
                     <span v-if="advert.adSize" class="mini-chip chip-gray">{{ advert.adSize }}</span>
+                  </td>
+
+                  <td v-if="isColVisible('printClass')" class="td-cell">
+                    <span v-if="advert.printAdClass" class="pc-chip" :class="`pc-chip--${advert.printAdClass}`">
+                      {{ advert.printAdClass === 'classified' ? 'Classified' : 'Display' }}
+                    </span>
+                    <span v-else class="cell-secondary">—</span>
+                    <span
+                      v-if="advert.runDateHistory?.length"
+                      class="pc-deferred"
+                      :title="advert.runDateHistory.map(h => `${formatDate(h.from)} → ${formatDate(h.to)}${h.reason ? ' — ' + h.reason : ''}`).join('\n')"
+                    >
+                      Deferred: {{ formatDate(advert.runDateHistory[advert.runDateHistory.length - 1].from) }} → {{ formatDate(advert.runDateHistory[advert.runDateHistory.length - 1].to) }}
+                    </span>
                   </td>
 
                   <td v-if="isColVisible('office')" class="td-cell">
@@ -597,6 +621,14 @@
                         <div class="detail-files">
                           <span v-for="(d, i) in getPublishingDates(advert)" :key="i" class="date-chip">{{ formatDate(d) }}</span>
                         </div>
+                      </div>
+                      <div v-if="advert.runDateHistory?.length" class="detail-deferred">
+                        <span class="dis-label">Run dates moved by Copy Desk — tell the client</span>
+                        <ul>
+                          <li v-for="(h, i) in advert.runDateHistory" :key="i">
+                            {{ formatDate(h.from) }} → <b>{{ formatDate(h.to) }}</b><template v-if="h.reason"> · {{ h.reason }}</template><template v-if="h.by"> · {{ h.by }}</template>
+                          </li>
+                        </ul>
                       </div>
                       <p v-if="advert.specialInstructions" class="detail-notes"><strong>Special instructions:</strong> {{ advert.specialInstructions }}</p>
                       <div v-if="advert.attachments?.length" class="detail-files">
@@ -708,6 +740,7 @@ const dateFieldMode = ref('created')
 const selectedUserId = ref('')
 const selectedStatus = ref('')
 const selectedPayment = ref('') // '', 'paid', 'unpaid'
+const selectedPrintClass = ref('') // '', 'display', 'classified', 'none' — client-side filter
 const searchQuery = ref('')
 const activeQuickRange = ref('thisMonth')
 const quickRanges = [
@@ -727,6 +760,7 @@ const COLUMN_DEFS = [
   { key: 'title',       label: 'Advert Title' },
   { key: 'capturedBy',  label: 'Captured By' },
   { key: 'product',     label: 'Product / Size' },
+  { key: 'printClass',  label: 'Print Type' },
   { key: 'office',      label: 'Office / Ref' },
   { key: 'payment',     label: 'Payment' },
   { key: 'status',      label: 'Status' },
@@ -749,7 +783,7 @@ const showAllColumns = () => { hiddenColumnKeys.value = new Set(); persistHidden
 // Column count either side of the always-visible Amount column, used to keep
 // the detail row and the page-totals footer row spanning correctly however
 // many optional columns are currently shown.
-const BEFORE_AMOUNT_KEYS = ['client', 'title', 'capturedBy', 'product', 'office']
+const BEFORE_AMOUNT_KEYS = ['client', 'title', 'capturedBy', 'product', 'printClass', 'office']
 const AFTER_AMOUNT_KEYS = ['payment', 'status']
 const beforeAmountColspan = computed(() => 2 + BEFORE_AMOUNT_KEYS.filter(isColVisible).length) // row#, Ref#
 const afterAmountColspan = computed(() => 2 + AFTER_AMOUNT_KEYS.filter(isColVisible).length)   // Date, Actions
@@ -851,6 +885,9 @@ const filteredAdverts = computed(() => {
 
   if (selectedPayment.value === 'paid') filtered = filtered.filter(a => a.isPaid === true)
   else if (selectedPayment.value === 'unpaid') filtered = filtered.filter(a => a.isPaid !== true)
+
+  if (selectedPrintClass.value === 'none') filtered = filtered.filter(a => !a.printAdClass)
+  else if (selectedPrintClass.value) filtered = filtered.filter(a => a.printAdClass === selectedPrintClass.value)
 
   return filtered
 })
@@ -1038,7 +1075,21 @@ const kpis = computed(() => [
   { title: 'Average',       subtitle: 'per advert',         display: formatCurrency(overallStats.value.averageAmount), icon: 'chart', color: 'primary', spark: sparkSeries(b => b.count ? b.total / b.count : 0) },
   { title: 'Paid Value',    subtitle: `${paymentBreakdown.value.paid} advert${paymentBreakdown.value.paid !== 1 ? 's' : ''}`, display: formatCurrency(paymentBreakdown.value.paidValue), icon: 'check', color: 'success', spark: sparkSeries(b => b.paidValue) },
   { title: 'Unpaid Value',  subtitle: `${paymentBreakdown.value.unpaid} advert${paymentBreakdown.value.unpaid !== 1 ? 's' : ''}`, display: formatCurrency(paymentBreakdown.value.unpaidValue), icon: 'hourglass', color: 'danger', spark: sparkSeries(b => b.unpaidValue) },
+  { title: 'Display Ads',   subtitle: `${printClassBreakdown.value.display.count} advert${printClassBreakdown.value.display.count !== 1 ? 's' : ''}`, display: formatCurrency(printClassBreakdown.value.display.value), icon: 'list', color: 'primary', spark: null },
+  { title: 'Classifieds',   subtitle: `${printClassBreakdown.value.classified.count} advert${printClassBreakdown.value.classified.count !== 1 ? 's' : ''}`, display: formatCurrency(printClassBreakdown.value.classified.value), icon: 'list', color: 'info', spark: null },
 ])
+
+// Display vs Classified split of the loaded range (print adverts only)
+const printClassBreakdown = computed(() => {
+  const out = { display: { count: 0, value: 0 }, classified: { count: 0, value: 0 } }
+  for (const a of adverts.value) {
+    const bucket = out[a.printAdClass]
+    if (!bucket) continue
+    bucket.count += 1
+    bucket.value += Number(a.totalAmount) || 0
+  }
+  return out
+})
 
 // ── Initialize with this month's date range ──
 const initializeDates = () => {
@@ -2186,6 +2237,12 @@ onMounted(() => {
 
 .mini-chip { display: inline-block; margin-top: 3px; margin-right: 3px; font-size: 0.5625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 3px; letter-spacing: .02em; white-space: normal; }
 .chip-gray { color: var(--muted); background: var(--page-bg); border: 1px solid var(--border); }
+.pc-chip { display: inline-block; font-size: 0.6875rem; font-weight: 700; padding: 0.125rem 0.5rem; border-radius: 2px; letter-spacing: .02em; white-space: nowrap; }
+.pc-chip--display { color: #003366; background: #E8F0F8; border: 1px solid #9DC3E6; }
+.pc-chip--classified { color: #4B2A7A; background: #F3EEF9; border: 1px solid #C9B5E4; }
+.pc-deferred { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; color: #7A4A00; white-space: nowrap; }
+.detail-deferred { margin: 8px 0; padding: 8px 10px; background: #FFF7E6; border: 1px solid #F2C46D; border-radius: 2px; font-size: 12px; color: #7A4A00; }
+.detail-deferred ul { margin: 4px 0 0; padding-left: 18px; }
 .chip-red { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
 
 .td-num { text-align: right; }

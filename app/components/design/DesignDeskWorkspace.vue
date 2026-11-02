@@ -124,12 +124,28 @@
           <div class="dd-col-heading">
             <h2>Bookings — {{ currentDayMonth }}</h2>
             <span class="hint">
-              {{ searchQuery ? `${filteredBookings.length} of ${bookings.length}` : `${bookings.length} total` }}
+              {{ (searchQuery || clearFilter) ? `${filteredBookings.length} of ${bookings.length}` : `${bookings.length} total` }}
+              <span class="dd-live" :title="live.lastRefreshed.value ? `Updated ${clockLabel(live.lastRefreshed.value)}` : ''">
+                <i :class="{ on: !anyModalOpen }"></i>{{ anyModalOpen ? 'Paused' : 'Live' }}<template v-if="live.lastRefreshed.value"> · {{ clockLabel(live.lastRefreshed.value) }}</template>
+              </span>
             </span>
           </div>
+
+          <!-- Copy Desk clearance filter -->
+          <div class="dd-clearseg" role="group" aria-label="Copy Desk clearance">
+            <button v-for="f in clearFilters" :key="f.value" type="button" :class="{ on: clearFilter === f.value }" @click="clearFilter = f.value">
+              {{ f.label }} <b>{{ f.count }}</b>
+            </button>
+          </div>
+          <div v-if="newlyCleared.size > 0" class="dd-newclear" role="status">
+            <span><b>{{ newlyCleared.size }}</b> advert{{ newlyCleared.size === 1 ? '' : 's' }} cleared or changed by Copy Desk since you opened this day.</span>
+            <button class="dd-btn small ghost" type="button" @click="clearFilter = 'cleared'; ackCleared()">Show</button>
+            <button class="dd-btn small ghost" type="button" @click="ackCleared">Dismiss</button>
+          </div>
+
           <div v-if="loadingDay" class="dd-empty">Loading…</div>
           <div v-else-if="bookings.length === 0" class="dd-empty">No bookings touch this day.</div>
-          <div v-else-if="filteredBookings.length === 0" class="dd-empty">No matches for "{{ searchQuery }}".</div>
+          <div v-else-if="filteredBookings.length === 0" class="dd-empty">{{ searchQuery ? `No matches for "${searchQuery}".` : 'Nothing matches this filter.' }}</div>
           <QueueCard
             v-for="(advert, qi) in filteredBookings"
             :key="advert.id"
@@ -142,6 +158,8 @@
             @add-to-board="onAddToBoard"
             @view-brief="briefAdvert = $event"
             @view-attachments="attachmentsAdvert = $event"
+            :placement="placements[advert.id] || null"
+            @attach-artwork="artworkAdvert = $event"
           />
         </template>
 
@@ -239,6 +257,14 @@
       @confirm="onAttachConfirm"
     />
 
+    <!-- Workflow re-order: artwork per run date for any booking -->
+    <ArtworkModal
+      :advert="artworkAdvert"
+      :placement="artworkAdvert ? (placements[artworkAdvert.id] || null) : null"
+      @close="artworkAdvert = null"
+      @saved="onArtworkSaved"
+    />
+
     <BatchDetailModal
       :batch="detailBatch"
       @close="detailBatch = null"
@@ -285,6 +311,9 @@ import AttachScheduleModal from './AttachScheduleModal.vue'
 import BatchDetailModal from './BatchDetailModal.vue'
 import AssignBar from './ext/AssignBar.vue'
 import QueueSheetModal from './ext/QueueSheetModal.vue'
+import ArtworkModal from './ArtworkModal.vue'
+import { useWorkspace } from '~/composables/useWorkspace'
+import { useLivePoll } from '~/composables/useLivePoll'
 
 
 const {
@@ -306,7 +335,33 @@ const {
   markDesignComplete,
   fetchProducts,
   fetchProductCategories,
+  fetchPlacements,
+  attachBatchMulti,
 } = useDesignHouse()
+
+// ── Workflow re-order: Copy Desk placement per advert + artwork modal ────
+const ws = useWorkspace()
+const placements = ref({})      // advertId → { runDates, placed, nextPlacement, nextUnplaced }
+const artworkAdvert = ref(null)
+
+async function refreshPlacements() {
+  const ids = (bookings.value || []).map(a => a.id)
+  placements.value = await fetchPlacements(ids)
+  const notPlaced = (bookings.value || []).filter(a => {
+    const p = placements.value[a.id]
+    const forDay = p?.runDates?.find(s => s.date === selectedDate.value)
+    return !forDay?.placed
+  }).length
+  ws.setBadges({ notPlaced })
+}
+
+async function onArtworkSaved() {
+  await loadDay()
+  // keep the modal open on the same advert with fresh dates
+  if (artworkAdvert.value) {
+    artworkAdvert.value = (bookings.value || []).find(a => a.id === artworkAdvert.value.id) || artworkAdvert.value
+  }
+}
 
 const { user: currentUser } = useAuth()
 const designerEmail = computed(() => currentUser.value?.email || '')
@@ -366,10 +421,61 @@ function getFileGroupName(advertId) {
 }
 
 const searchQuery = ref('')
+// ── Copy Desk clearance per advert for the working date ──────────────────
+const workDate = computed(() => activeBatch.value?.targetRunDate || selectedDate.value)
+function clearanceOf(advertId) {
+  const s = placements.value[advertId]?.runDates?.find(r => r.date === workDate.value)
+  return s?.clearance || null
+}
+const isClearedNow = (c) => !!c && (c.status === 'cleared' || c.status === 'changed')
+const clearFilter = ref('')   // '' | 'cleared' | 'awaiting' | 'changed'
+const clearFilters = computed(() => {
+  const all = bookings.value || []
+  const cs = all.map(a => clearanceOf(a.id))
+  return [
+    { value: '', label: 'All', count: all.length },
+    { value: 'cleared', label: 'Cleared for design', count: cs.filter(isClearedNow).length },
+    { value: 'changed', label: 'Changed', count: cs.filter(c => c?.status === 'changed').length },
+    { value: 'awaiting', label: 'Awaiting Copy Desk', count: cs.filter(c => !isClearedNow(c)).length },
+  ]
+})
+
+// Cleared/changed since the day was opened: key = id + status + changedAt
+const seenClearKeys = ref(null)
+const newlyCleared = ref(new Set())
+function clearKey(advertId) {
+  const c = clearanceOf(advertId)
+  return isClearedNow(c) ? `${advertId}:${c.status}:${c.changedAt || c.clearedAt || ''}` : null
+}
+function trackClearances() {
+  const keys = (bookings.value || []).map(a => clearKey(a.id)).filter(Boolean)
+  if (seenClearKeys.value === null) {
+    seenClearKeys.value = new Set(keys)
+    newlyCleared.value = new Set()
+    return
+  }
+  newlyCleared.value = new Set(keys.filter(k => !seenClearKeys.value.has(k)))
+}
+function ackCleared() {
+  for (const k of newlyCleared.value) seenClearKeys.value?.add(k)
+  newlyCleared.value = new Set()
+}
+
+const anyModalOpen = computed(() => !!(artworkAdvert.value || briefAdvert.value || attachmentsAdvert.value
+  || unmarkTargetAdvert.value || attachTarget.value || detailBatch.value || showSheetModal.value || pendingAssignAdvert.value))
+const clockLabel = (d) => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+
 const filteredBookings = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
-  if (!q) return bookings.value
-  return bookings.value.filter(a => {
+  const byClear = (bookings.value || []).filter(a => {
+    if (!clearFilter.value) return true
+    const c = clearanceOf(a.id)
+    if (clearFilter.value === 'cleared') return isClearedNow(c)
+    if (clearFilter.value === 'changed') return c?.status === 'changed'
+    return !isClearedNow(c)
+  })
+  if (!q) return byClear
+  return byClear.filter(a => {
     const bcRef    = (a.bcReference    || '').toLowerCase()
     const person   = (a.contactPerson  || '').toLowerCase()
     const number   = (a.contactNumber  || '').toLowerCase()
@@ -435,14 +541,31 @@ async function refreshBatchesList() {
   batchesForDate.value = res.batches || []
 }
 
-async function loadDay() {
-  loadingDay.value = true
+// quiet: background refresh from useLivePoll — no "Loading…" flash, and the
+// active batch is only re-read (never swapped) so work in progress stays put.
+let loadedKey = null
+async function loadDay({ quiet = false } = {}) {
+  const key = `${selectedDate.value}|${selectedProductId.value}|${selectedScope.value}`
+  if (key !== loadedKey) {
+    loadedKey = key
+    seenClearKeys.value = null
+    newlyCleared.value = new Set()
+  }
+  if (!quiet) loadingDay.value = true
   try {
     const [bookingsRes] = await Promise.all([
       fetchBookingsByDate(selectedDate.value, selectedProductId.value || null, selectedScope.value),
       refreshBatchesList(),
     ])
     bookings.value = bookingsRes.adverts || []
+    await refreshPlacements()
+    trackClearances()
+    live.markRefreshed()
+
+    if (quiet) {
+      if (activeBatch.value) await refreshActiveBatch()
+      return
+    }
 
     const draft = batchesForDate.value.find(b => b.status === 'draft')
     if (draft) {
@@ -456,9 +579,13 @@ async function loadDay() {
       batchLabel.value = ''
     }
   } finally {
-    loadingDay.value = false
+    if (!quiet) loadingDay.value = false
   }
 }
+
+// Bookings and Copy Desk clearances change all day — refresh every minute
+// while the tab is visible and no modal is open.
+const live = useLivePoll(() => loadDay({ quiet: true }), { intervalMs: 60000, isPaused: () => anyModalOpen.value || loadingDay.value })
 
 async function onScopeChange() {
   await loadProducts()
@@ -616,8 +743,14 @@ function openAttach() {
   attachTarget.value = activeBatch.value
 }
 
-async function onAttachConfirm(runTime) {
-  await attachBatch(attachTarget.value.id, runTime)
+async function onAttachConfirm(runTime, opts = {}) {
+  // "All remaining run dates" carries the batch's artwork to every later
+  // date its adverts are booked for (POST /design-batches/:id/attach-multi)
+  if (opts.carryForward) {
+    await attachBatchMulti(attachTarget.value.id, 'all_pending', runTime)
+  } else {
+    await attachBatch(attachTarget.value.id, runTime)
+  }
   attachTarget.value = null
   await loadDay()
   await loadStats()
@@ -1275,4 +1408,15 @@ onMounted(() => {
   .dd-batch-row:hover{ transform:none; }
   .dd-day-nav{ transition: box-shadow .1s ease; }
 }
+/* ── Workflow re-order: live refresh + Copy Desk clearance filter ───── */
+.dd-live{ display:inline-flex; align-items:center; gap:5px; margin-left:10px; font-size:11px; color:var(--dd-ink-soft); }
+.dd-live i{ width:7px; height:7px; border-radius:50%; background:#CBD5E1; display:inline-block; }
+.dd-live i.on{ background:#2E8B57; box-shadow:0 0 0 3px rgba(46,139,87,.15); }
+.dd-clearseg{ display:flex; flex-wrap:wrap; border:1px solid var(--dd-metal-300); border-radius:3px; overflow:hidden; margin:-6px 0 12px; }
+.dd-clearseg button{ flex:1 1 auto; min-height:32px; padding:0 10px; border:none; border-right:1px solid var(--dd-metal-300); background:#fff; color:var(--dd-ink-soft); font:600 11.5px 'IBM Plex Sans', sans-serif; cursor:pointer; }
+.dd-clearseg button:last-child{ border-right:none; }
+.dd-clearseg button.on{ background:var(--dd-navy); color:#fff; }
+.dd-clearseg b{ font-family:'IBM Plex Mono', monospace; font-weight:600; }
+.dd-newclear{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 12px; padding:8px 10px; border:1px solid #86D9A8; background:#ECFDF3; color:#14532D; border-radius:3px; font-size:12px; }
+.dd-newclear span{ flex:1 1 180px; }
 </style>

@@ -25,9 +25,20 @@
             </div>
           </div>
 
+          <label class="dd-carry">
+            <input v-model="carryForward" type="checkbox" />
+            Also use this artwork for every later run date these adverts are booked for
+          </label>
+
           <div class="dd-note-box">
-            Attaching finds or creates the schedule row for {{ formatDate(batch.targetRunDate) }} and merges this batch's files and adverts into it.
-            Each advert's remaining dates stay in the queue until every booked date is covered.
+            <template v-if="carryForward">
+              Attaches {{ formatDate(batch.targetRunDate) }} and carries the same files to each later booked date (one schedule row per date, marked as carried).
+              Any single date can still be dropped from the Artwork panel on the advert.
+            </template>
+            <template v-else>
+              Attaching finds or creates the schedule row for {{ formatDate(batch.targetRunDate) }} and merges this batch's files and adverts into it.
+              Each advert's remaining dates stay in the queue until every booked date is covered.
+            </template>
           </div>
         </div>
         <div class="dd-modal-foot">
@@ -51,8 +62,9 @@ const emit = defineEmits(['close', 'confirm'])
 
 const runTime = ref('00:00 AM')
 const attaching = ref(false)
+const carryForward = ref(true)
 
-watch(() => props.batch, (b) => { if (!b) attaching.value = false })
+watch(() => props.batch, (b) => { if (!b) { attaching.value = false; carryForward.value = true } })
 
 function formatDate(d) {
   if (!d) return '—'
@@ -61,7 +73,7 @@ function formatDate(d) {
 
 function confirm() {
   attaching.value = true
-  emit('confirm', runTime.value)
+  emit('confirm', runTime.value, { carryForward: carryForward.value })
 }
 </script>
 
@@ -98,5 +110,7 @@ function confirm() {
   border:1px solid #b7ae97;border-radius:2px;background:#fffdf8;color:#1c1b18;
 }
 .dd-field input:disabled{color:#6b6658;background:#efeade;}
+.dd-carry{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;font-weight:600;color:#1c1b18;cursor:pointer;}
+.dd-carry input{width:16px;height:16px;}
 .dd-note-box{background:#e7ebf8;color:#1c3fa8;font-size:12px;padding:10px 12px;border-radius:2px;margin-top:12px;}
 </style>

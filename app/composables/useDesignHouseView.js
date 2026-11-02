@@ -40,6 +40,11 @@ export function useDesignHouseView() {
 // same ad_type/size_dimension signal used everywhere else classified
 // detection already happens in this codebase.
 export function isClassifiedAdvert(advert) {
+  // The stored Display / Classified value wins (set at booking or by the
+  // backfill); the rate-card rule below stays as the fallback.
+  const stored = advert?.printAdClass ?? advert?.print_ad_class
+  if (stored === 'classified') return true
+  if (stored === 'display') return false
   const rc = advert?.rateCard
   if (!rc) return false
   const adType = (rc.adType || '').toString().toLowerCase()

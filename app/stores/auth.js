@@ -1,6 +1,7 @@
 // stores/auth.js
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { roleCan, roleLabel } from '~/config/roles'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -17,7 +18,7 @@ export const useAuthStore = defineStore('auth', () => {
       email: userData.email
     }
     userRole.value = userData.role
-    displayRole.value = userData.displayRole || userData.role
+    displayRole.value = userData.displayRole || roleLabel(userData.role)
     isAuthenticated.value = true
   }
 
@@ -37,21 +38,10 @@ export const useAuthStore = defineStore('auth', () => {
     return roles.includes(userRole.value)
   }
 
-  // Check if user has permission for specific actions
-  const can = (permission) => {
-    const rolePermissions = {
-      'booking_clerk': ['create_advert', 'view_adverts', 'edit_adverts'],
-      'sub_editor': ['review_adverts', 'approve_adverts', 'assign_adverts'],
-      'advertising_manager': ['approve_adverts', 'financial_oversight', 'view_reports'],
-      'design_house': ['view_attachments', 'upload_creatives', 'version_control'],
-      'design_house_manager': ['view_attachments', 'view_design_reports', 'view_reports'],
-      'finance_team': ['process_payments', 'view_financials', 'generate_reports'],
-      'administrator': ['manage_users', 'system_settings', 'all_permissions']
-    }
-
-    const permissions = rolePermissions[userRole.value] || []
-    return permissions.includes(permission) || userRole.value === 'administrator'
-  }
+  // Check if user has permission for specific actions.
+  // Permissions now live with each role in config/roles.js (single source
+  // shared with the rail menu); administrator still passes everything.
+  const can = (permission) => roleCan(userRole.value, permission)
 
   // Getters (computed properties)
   const userName = computed(() => {

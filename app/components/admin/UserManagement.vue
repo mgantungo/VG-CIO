@@ -457,6 +457,7 @@ onMounted(() => { refresh() })
 .um-role--booking_clerk      { background: #EEF4FF; color: #0066CC; border-color: #BFDBFE; }
 .um-role--sales_team         { background: #FDF2F8; color: #BE185D; border-color: #FBCFE8; }
 .um-role--hr_team            { background: #ECFEFF; color: #0E7490; border-color: #A5F3FC; }
+.um-role--invoicing_officer  { background: #F0FDF4; color: #14532D; border-color: #86D9A8; }
 
 .um-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; }
 .um-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
